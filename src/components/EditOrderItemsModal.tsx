@@ -16,6 +16,7 @@ import {
   FileText,
   Clock,
   User,
+  Lock,
 } from 'lucide-react';
 import { Order, OrderItem, ProductVariant } from '@/types/database';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -300,86 +301,171 @@ export default function EditOrderItemsModal({
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div className="text-xs font-bold uppercase text-slate-500 tracking-wider flex items-center space-x-1.5">
                   <History className="w-4 h-4 text-purple-600" />
-                  <span>Order Audit Trail & Original Record</span>
+                  <span>Order Modification Timeline</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowHistoryView(false)}
                   className="text-xs text-brand-600 font-bold hover:underline"
                 >
-                  ← Back to Product Editor
+                  &larr; Back to Product Editor
                 </button>
               </div>
 
-              {/* Original Order Snapshot */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2">
-                <div className="font-bold text-slate-900 flex items-center space-x-2">
-                  <FileText className="w-4 h-4 text-slate-500" />
-                  <span>Original Order as Placed:</span>
-                  <span className="text-slate-400 font-normal">({formatDate(order.created_at)})</span>
-                </div>
-                {order.order_items && (
-                  <div className="space-y-1 pl-6">
-                    {order.order_items.map((it, i) => (
-                      <div key={i} className="text-slate-600 flex justify-between">
-                        <span>
-                          <b>{it.quantity}×</b> {it.title} {it.variant_title ? `(${it.variant_title})` : ''}
-                          {it.is_upsell && (
-                            <span className="ml-1 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded">
-                              UPSELL
+              {/* Timeline Container */}
+              <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                {/* 1. EDITED ORDERS (NEWEST AT TOP, PREVIOUS BELOW) */}
+                {editHistoryList.length > 0 ? (
+                  [...editHistoryList].reverse().map((entry: any, index: number) => {
+                    const editNumber = editHistoryList.length - index;
+                    const isLatest = index === 0;
+
+                    return (
+                      <div key={entry.id || index} className="relative group">
+                        {/* Timeline node icon */}
+                        <div
+                          className={`absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center border-2 bg-white ${
+                            isLatest
+                              ? 'border-purple-600 text-purple-600 shadow-xs'
+                              : 'border-slate-400 text-slate-400'
+                          }`}
+                        >
+                          <Clock className="w-2.5 h-2.5" />
+                        </div>
+
+                        <div
+                          className={`p-4 rounded-xl border bg-white space-y-2 shadow-2xs transition-all ${
+                            isLatest ? 'border-purple-200 ring-1 ring-purple-100' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                  isLatest
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                Edit #{editNumber} {isLatest && '(Latest)'}
+                              </span>
+                              <span className="font-bold text-slate-900 flex items-center space-x-1">
+                                <User className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{entry.edited_by}</span>
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {formatDate(entry.timestamp)}
                             </span>
+                          </div>
+
+                          {/* Reasoning Box */}
+                          <div className="bg-amber-50 text-amber-900 p-2.5 rounded-lg border border-amber-200 text-xs font-medium">
+                            <span className="font-bold text-amber-950">Reason:</span> &ldquo;{entry.reason}&rdquo;
+                          </div>
+
+                          {/* Item changes summary */}
+                          {entry.new_items && entry.new_items.length > 0 && (
+                            <div className="pt-1.5 border-t border-slate-100 text-xs space-y-1">
+                              <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                Items in this revision:
+                              </span>
+                              <div className="space-y-0.5 pl-1">
+                                {entry.new_items.map((it: any, i: number) => (
+                                  <div key={i} className="text-slate-600 flex justify-between text-[11px]">
+                                    <span>
+                                      <b>{it.quantity}&times;</b> {it.title}{' '}
+                                      {it.variant_title ? `(${it.variant_title})` : ''}
+                                      {it.is_upsell && (
+                                        <span className="ml-1 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded">
+                                          UPSELL
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="font-mono text-slate-700">
+                                      {formatCurrency(Number(it.price) * Number(it.quantity))}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
-                        </span>
-                        <span className="font-mono">{formatCurrency(it.price * it.quantity)}</span>
+
+                          <div className="text-[11px] text-slate-500 flex justify-between items-center pt-1 border-t border-slate-100 font-mono">
+                            <span>
+                              Total changed: {formatCurrency(entry.previous_total)} &rarr;{' '}
+                              <b className="text-slate-900">{formatCurrency(entry.new_total)}</b>
+                            </span>
+                            <span>{entry.new_items?.length || 0} items updated</span>
+                          </div>
+                        </div>
                       </div>
-                    ))}
+                    );
+                  })
+                ) : (
+                  <div className="p-4 bg-slate-50 rounded-xl text-slate-400 text-xs text-center border border-dashed border-slate-200">
+                    No modifications made yet. Original order is active below.
+                  </div>
+                )}
+
+                {/* 2. ORIGINAL ORDER AS PLACED (ANCHORED AT THE VERY BOTTOM - IMMUTABLE) */}
+                <div className="relative group">
+                  {/* Timeline node icon */}
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-emerald-600 bg-white text-emerald-600 shadow-xs">
+                    <Lock className="w-2.5 h-2.5" />
+                  </div>
+
+                  <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-200 text-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-emerald-950 flex items-center space-x-2">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        <span>Original Order as Placed</span>
+                        <span className="text-emerald-700/70 font-normal">
+                          ({formatDate(order.created_at)})
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <Lock className="w-2.5 h-2.5 mr-1" />
+                        Original &middot; Locked
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-emerald-800/80">
+                      Baseline customer order as initially received. This record is permanent and cannot be modified.
+                    </p>
+
+                    {/* Original items list */}
+                    <div className="space-y-1 pl-3 border-l-2 border-emerald-300 pt-1">
+                      {((order as any).original_items || order.order_items || []).map((it: any, i: number) => (
+                        <div key={i} className="text-slate-700 flex justify-between text-[11px]">
+                          <span>
+                            <b>{it.quantity}&times;</b> {it.title}{' '}
+                            {it.variant_title ? `(${it.variant_title})` : ''}
+                            {it.is_upsell && (
+                              <span className="ml-1 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded">
+                                UPSELL
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-mono text-slate-800">
+                            {formatCurrency(Number(it.price) * Number(it.quantity))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Note string fallback history */}
+                {order.note && (
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span className="font-bold text-slate-700 block mb-1">Legacy Order Notes & Log:</span>
+                    <pre className="whitespace-pre-wrap font-sans text-slate-600 text-[11px] leading-relaxed">
+                      {order.note}
+                    </pre>
                   </div>
                 )}
               </div>
-
-              {/* Edit History Timeline */}
-              {editHistoryList.length === 0 && !order.note ? (
-                <div className="p-8 text-center text-slate-400 text-xs">
-                  No prior modifications recorded for this order.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {editHistoryList.map((entry: any, index: number) => (
-                    <div key={index} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1.5 shadow-2xs">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-900 flex items-center space-x-1">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{entry.edited_by}</span>
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {formatDate(entry.timestamp)}
-                        </span>
-                      </div>
-
-                      <div className="bg-amber-50 text-amber-900 p-2.5 rounded-lg border border-amber-200 text-xs font-medium">
-                        <span className="font-bold">Reason:</span> &ldquo;{entry.reason}&rdquo;
-                      </div>
-
-                      <div className="text-[11px] text-slate-500 flex justify-between items-center pt-1 border-t border-slate-100 font-mono">
-                        <span>
-                          Total changed: {formatCurrency(entry.previous_total)} ➔ {formatCurrency(entry.new_total)}
-                        </span>
-                        <span>{entry.new_items?.length || 0} items updated</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Note string fallback history */}
-                  {order.note && (
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                      <span className="font-bold text-slate-700 block mb-1">Order Notes & History:</span>
-                      <pre className="whitespace-pre-wrap font-sans text-slate-600 text-[11px] leading-relaxed">
-                        {order.note}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <>

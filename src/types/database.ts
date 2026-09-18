@@ -22,6 +22,15 @@ export type InventoryReason =
   | 'manual_adjustment'
   | 'restock';
 
+export interface PaymentInfo {
+  method?: 'bkash' | 'nagad' | 'rocket' | 'bank' | string;
+  account_number?: string;
+  account_name?: string;
+  bank_name?: string;
+  branch_name?: string;
+  routing_number?: string;
+}
+
 export interface Profile {
   id: string;
   email: string;
@@ -32,8 +41,27 @@ export interface Profile {
   coupon_code: string | null;
   bio: string | null;
   is_active: boolean;
+  payment_info?: PaymentInfo | null;
+  last_seen_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PayoutRequest {
+  id: string;
+  staff_id: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  payment_method: string;
+  account_number: string;
+  staff_note?: string | null;
+  admin_screenshot_url?: string | null;
+  admin_note?: string | null;
+  processed_by?: string | null;
+  processed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+  staff?: Profile;
 }
 
 export interface Product {

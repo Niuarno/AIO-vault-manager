@@ -19,6 +19,11 @@ import {
   ShieldCheck,
   Truck,
   TrendingUp,
+  Upload,
+  Camera,
+  Wallet,
+  CreditCard,
+  Building2,
 } from 'lucide-react';
 import { Profile, UpsellReward } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
@@ -40,6 +45,16 @@ export default function UniversalProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [couponCode, setCouponCode] = useState('');
 
+  // Payment Information fields
+  const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'rocket' | 'bank'>('bkash');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [branchName, setBranchName] = useState('');
+  const [routingNumber, setRoutingNumber] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   // Password fields
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -51,14 +66,61 @@ export default function UniversalProfilePage() {
   const [rewards, setRewards] = useState<UpsellReward[]>([]);
   const [copiedCoupon, setCopiedCoupon] = useState(false);
 
-  // Avatar presets
-  const avatarPresets = [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+  // Colorful Cat Avatar Presets
+  const catAvatarPresets = [
+    { name: 'Orange Tabby', url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=160&auto=format&fit=crop&q=80' },
+    { name: 'Calico Cat', url: 'https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=160&auto=format&fit=crop&q=80' },
+    { name: 'Cool Cat', url: 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=160&auto=format&fit=crop&q=80' },
+    { name: 'Ginger Kitten', url: 'https://images.unsplash.com/photo-1543852786-1cf6624b9987?w=160&auto=format&fit=crop&q=80' },
+    { name: 'White Fluff', url: 'https://images.unsplash.com/photo-1561948955-570b270e7c36?w=160&auto=format&fit=crop&q=80' },
+    { name: 'Striped Cat', url: 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=160&auto=format&fit=crop&q=80' },
+    { name: 'Grey Persian', url: 'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=160&auto=format&fit=crop&q=80' },
+    { name: 'British Blue', url: 'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=160&auto=format&fit=crop&q=80' },
   ];
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image file must be under 5MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 256;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          setAvatarUrl(compressed);
+        }
+        setUploadingImage(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -85,6 +147,16 @@ export default function UniversalProfilePage() {
         setBio(userProfile.bio || '');
         setAvatarUrl(userProfile.avatar_url || '');
         setCouponCode(userProfile.coupon_code || '');
+
+        if (userProfile.payment_info) {
+          const pi = userProfile.payment_info as any;
+          setPaymentMethod(pi.method || 'bkash');
+          setAccountNumber(pi.account_number || '');
+          setAccountName(pi.account_name || '');
+          setBankName(pi.bank_name || '');
+          setBranchName(pi.branch_name || '');
+          setRoutingNumber(pi.routing_number || '');
+        }
 
         // Fetch rewards if sales rep
         if (userProfile.role === 'sales') {
@@ -118,6 +190,14 @@ export default function UniversalProfilePage() {
         phone: phone.trim() || null,
         bio: bio.trim() || null,
         avatar_url: avatarUrl.trim() || null,
+        payment_info: {
+          method: paymentMethod,
+          account_number: accountNumber.trim(),
+          account_name: accountName.trim(),
+          bank_name: bankName.trim(),
+          branch_name: branchName.trim(),
+          routing_number: routingNumber.trim(),
+        },
         updated_at: new Date().toISOString(),
       };
 
@@ -452,31 +532,78 @@ export default function UniversalProfilePage() {
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                    Avatar Image URL
-                  </label>
-                  <input
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
-                  />
-                  <div className="flex items-center space-x-2 mt-2">
-                    <span className="text-xs text-slate-400">Presets:</span>
-                    {avatarPresets.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setAvatarUrl(preset)}
-                        className={`w-7 h-7 rounded-full overflow-hidden border-2 transition-all ${
-                          avatarUrl === preset ? 'border-brand-600 scale-110' : 'border-transparent hover:border-slate-300'
-                        }`}
-                      >
-                        <img src={preset} alt={`Preset ${idx + 1}`} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                {/* Avatar Selection: Cat Avatars & Custom Upload */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Profile Avatar
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{uploadingImage ? 'Processing...' : 'Upload Custom Picture'}</span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageFileChange}
+                    />
+                  </div>
+
+                  {/* Colorful Cat Avatars Grid */}
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-semibold block mb-2">
+                      Select a Cat Avatar:
+                    </span>
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
+                      {catAvatarPresets.map((cat, idx) => {
+                        const isSelected = avatarUrl === cat.url;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setAvatarUrl(cat.url)}
+                            className={`flex flex-col items-center p-1.5 rounded-xl border-2 transition-all ${
+                              isSelected
+                                ? 'border-brand-600 bg-brand-50/50 shadow-xs ring-2 ring-brand-100 scale-105'
+                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                            }`}
+                            title={cat.name}
+                          >
+                            <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-100">
+                              <img
+                                src={cat.url}
+                                alt={cat.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span className="text-[9px] text-slate-600 font-medium truncate w-full text-center mt-1">
+                              {cat.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Optional Custom Image URL Input */}
+                  <div className="pt-2">
+                    <label className="block text-[11px] text-slate-400 mb-1 font-medium">
+                      Or paste an external Image URL:
+                    </label>
+                    <input
+                      type="url"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
+                    />
                   </div>
                 </div>
 
@@ -501,6 +628,135 @@ export default function UniversalProfilePage() {
                   >
                     <Save className="w-4 h-4" />
                     <span>{saving ? 'Saving changes...' : 'Save Profile'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Section 2: Payout & Banking Information (for commission earnings) */}
+            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+              <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Payout & Banking Information</h2>
+                  <p className="text-xs text-slate-500">
+                    Configure your wallet or bank account where your daily commission payouts will be sent
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="space-y-5">
+                {/* Method selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                    Preferred Payout Method *
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { id: 'bkash', label: 'bKash', icon: Wallet },
+                      { id: 'nagad', label: 'Nagad', icon: Wallet },
+                      { id: 'rocket', label: 'Rocket', icon: Wallet },
+                      { id: 'bank', label: 'Bank Transfer', icon: Building2 },
+                    ].map((m) => {
+                      const Icon = m.icon;
+                      const isSel = paymentMethod === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setPaymentMethod(m.id as any)}
+                          className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center space-y-1.5 ${
+                            isSel
+                              ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-100 font-bold text-emerald-900'
+                              : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 ${isSel ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span className="text-xs">{m.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Account / Mobile number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    {paymentMethod === 'bank' ? 'Bank Account Number *' : `${paymentMethod.toUpperCase()} Personal Number *`}
+                  </label>
+                  <input
+                    type="text"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    placeholder={paymentMethod === 'bank' ? '1234567890123' : '017XXXXXXXX'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Bank Details (Conditional) */}
+                {paymentMethod === 'bank' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Account Holder Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={accountName}
+                        onChange={(e) => setAccountName(e.target.value)}
+                        placeholder="e.g. Saheduzzaman Nour"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Bank Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        placeholder="e.g. Dutch-Bangla Bank"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Branch Name
+                      </label>
+                      <input
+                        type="text"
+                        value={branchName}
+                        onChange={(e) => setBranchName(e.target.value)}
+                        placeholder="e.g. Dhanmondi Branch"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Routing Number
+                      </label>
+                      <input
+                        type="text"
+                        value={routingNumber}
+                        onChange={(e) => setRoutingNumber(e.target.value)}
+                        placeholder="e.g. 090270000"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-200 transition-all disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{saving ? 'Saving...' : 'Save Payment Information'}</span>
                   </button>
                 </div>
               </form>

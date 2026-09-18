@@ -220,18 +220,21 @@ export default function Navbar({ currentProfile }: NavbarProps) {
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                     className="flex items-center space-x-2.5 p-1 rounded-xl hover:bg-slate-100 transition-colors text-left"
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-tr from-brand-600 to-emerald-400 p-0.5 shadow-2xs">
-                      {currentProfile.avatar_url ? (
-                        <img
-                          src={currentProfile.avatar_url}
-                          alt={currentProfile.full_name || 'Avatar'}
-                          className="w-full h-full rounded-full object-cover bg-white"
-                        />
-                      ) : (
-                        <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-slate-700 font-bold text-xs">
-                          {(currentProfile.full_name || currentProfile.email || 'U')[0].toUpperCase()}
-                        </div>
-                      )}
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-tr from-brand-600 to-emerald-400 p-0.5 shadow-2xs">
+                        {currentProfile.avatar_url ? (
+                          <img
+                            src={currentProfile.avatar_url}
+                            alt={currentProfile.full_name || 'Avatar'}
+                            className="w-full h-full rounded-full object-cover bg-white"
+                          />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-slate-700 font-bold text-xs">
+                            {(currentProfile.full_name || currentProfile.email || 'U')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Online" />
                     </div>
                     <div className="hidden sm:block">
                       <div className="text-xs font-bold text-slate-900 leading-tight">
