@@ -76,9 +76,15 @@ CREATE TABLE IF NOT EXISTS public.orders (
   coupon_used TEXT,
   note TEXT,
   external_id TEXT,
+  original_items JSONB,
+  edit_history JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Migration support for existing orders table
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS original_items JSONB;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS edit_history JSONB DEFAULT '[]'::jsonb;
 
 -- 5. Order Items Table
 CREATE TABLE IF NOT EXISTS public.order_items (

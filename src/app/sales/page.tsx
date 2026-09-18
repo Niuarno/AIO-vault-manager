@@ -21,6 +21,7 @@ import {
   Tag,
   TrendingUp,
   PackageOpen,
+  History,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import {
@@ -152,6 +153,30 @@ export default function SalesDashboard() {
     fetchOrders();
     fetchInventory();
     fetchRewards();
+
+    // Auto-refresh polling every 12 seconds
+    const timer = setInterval(() => {
+      fetchOrders();
+      fetchInventory();
+    }, 12000);
+
+    // Supabase Realtime channel subscription for instant pushes
+    const channel = supabase
+      .channel('sales-realtime-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          fetchOrders();
+          fetchInventory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Add Item to Current Order
@@ -427,27 +452,80 @@ export default function SalesDashboard() {
                         <div className="text-slate-500 truncate mt-1">{order.shipping_address}</div>
                       </div>
 
-                      {/* Line Items Preview */}
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
-                        <div className="text-[10px] uppercase font-bold text-slate-400">
-                          Products ({order.order_items?.length || 0})
-                        </div>
-                        {order.order_items?.map((item) => (
-                          <div key={item.id} className="flex justify-between items-center text-slate-700">
-                            <span className="truncate">
-                              <b>{item.quantity}×</b> {item.title}
-                              {item.is_upsell && (
-                                <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
-                                  UPSELL
-                                </span>
+                      {/* Line Items Preview: Main Products & Upsell Products Partitioned */}
+                      {(() => {
+                        const mainItems = (order.order_items || []).filter((i) => !i.is_upsell);
+                        const upsellItems = (order.order_items || []).filter((i) => i.is_upsell);
+                        const hasEdits = Boolean(
+                          (order.edit_history && order.edit_history.length > 0) ||
+                          (order.note && order.note.includes('[Items Modified:'))
+                        );
+                        const editCount =
+                          (order.edit_history && order.edit_history.length) ||
+                          (order.note ? (order.note.match(/\[Items Modified:/g) || []).length : 0);
+
+                        return (
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-2">
+                            {/* Main Products */}
+                            <div>
+                              <div className="text-[10px] uppercase font-bold text-slate-400 mb-1 flex items-center justify-between">
+                                <span>Main Products ({mainItems.length})</span>
+                                {hasEdits && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingOrderForItems(order)}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  >
+                                    <History className="w-2.5 h-2.5" />
+                                    <span>Edited {editCount > 0 ? `(${editCount})` : ''}</span>
+                                  </button>
+                                )}
+                              </div>
+                              {mainItems.length === 0 ? (
+                                <div className="text-slate-400 italic text-[11px]">No base items</div>
+                              ) : (
+                                <div className="space-y-1">
+                                  {mainItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-slate-700">
+                                      <span className="truncate">
+                                        <b>{item.quantity}×</b> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
+                                      </span>
+                                      <span className="font-mono text-slate-500 ml-2 shrink-0">
+                                        {formatCurrency(item.price * item.quantity, order.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                            </span>
-                            <span className="font-mono text-slate-500 ml-2">
-                              {formatCurrency(item.price * item.quantity, order.currency)}
-                            </span>
+                            </div>
+
+                            {/* Upsell Items Section */}
+                            {upsellItems.length > 0 && (
+                              <div className="pt-2 border-t border-purple-100 bg-purple-50/50 -mx-3 -mb-3 p-2.5 rounded-b-xl">
+                                <div className="text-[10px] uppercase font-black text-purple-700 flex items-center space-x-1 mb-1">
+                                  <Sparkles className="w-3 h-3 text-purple-600" />
+                                  <span>Upsell Items & Add-Ons ({upsellItems.length})</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {upsellItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-purple-950 font-medium text-[11px]">
+                                      <span className="truncate flex items-center space-x-1">
+                                        <span className="px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 text-[9px] font-black shrink-0">
+                                          UPSELL
+                                        </span>
+                                        <span><b>{item.quantity}×</b> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}</span>
+                                      </span>
+                                      <span className="font-mono font-bold text-purple-700 ml-2 shrink-0">
+                                        {formatCurrency(item.price * item.quantity, order.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
 
                       {/* Amount & Actions */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
@@ -507,7 +585,7 @@ export default function SalesDashboard() {
                       <th className="py-3 px-4">Source</th>
                       <th className="py-3 px-4">Customer Details</th>
                       <th className="py-3 px-4">Address</th>
-                      <th className="py-3 px-4">Items</th>
+                      <th className="py-3 px-4">Items (Main & Upsell)</th>
                       <th className="py-3 px-4">Amount</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4 text-right">Actions</th>
@@ -526,6 +604,15 @@ export default function SalesDashboard() {
                       orders.map((order) => {
                         const badge = getStatusBadgeInfo(order.status);
                         const sourceBadge = getSourceBadge(order.source);
+                        const mainItems = (order.order_items || []).filter((i) => !i.is_upsell);
+                        const upsellItems = (order.order_items || []).filter((i) => i.is_upsell);
+                        const hasEdits = Boolean(
+                          (order.edit_history && order.edit_history.length > 0) ||
+                          (order.note && order.note.includes('[Items Modified:'))
+                        );
+                        const editCount =
+                          (order.edit_history && order.edit_history.length) ||
+                          (order.note ? (order.note.match(/\[Items Modified:/g) || []).length : 0);
 
                         return (
                           <tr key={order.id} className="hover:bg-slate-50/80">
@@ -545,17 +632,47 @@ export default function SalesDashboard() {
                             <td className="py-3.5 px-4 max-w-xs truncate text-slate-600" title={order.shipping_address}>
                               {order.shipping_address}
                             </td>
-                            <td className="py-3.5 px-4">
-                              {order.order_items?.map((item) => (
-                                <div key={item.id} className="text-slate-700">
-                                  <b>{item.quantity}×</b> {item.title}
-                                  {item.is_upsell && (
-                                    <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
-                                      UPSELL
+                            <td className="py-3.5 px-4 min-w-[200px]">
+                              {/* Main base items */}
+                              <div className="space-y-0.5">
+                                {mainItems.map((item) => (
+                                  <div key={item.id} className="text-slate-700 flex items-center justify-between">
+                                    <span className="truncate">
+                                      <b>{item.quantity}×</b> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
                                     </span>
-                                  )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Upsell Items Highlighted */}
+                              {upsellItems.length > 0 && (
+                                <div className="mt-1.5 pt-1 border-t border-purple-100 bg-purple-50/70 p-1.5 rounded-lg">
+                                  <div className="text-[9px] uppercase font-black text-purple-700 flex items-center space-x-1 mb-0.5">
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    <span>Upsell Add-Ons:</span>
+                                  </div>
+                                  {upsellItems.map((item) => (
+                                    <div key={item.id} className="text-purple-950 flex items-center justify-between text-[11px]">
+                                      <span className="truncate">
+                                        <span className="font-black text-purple-800">{item.quantity}×</span> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
+
+                              {hasEdits && (
+                                <div className="mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingOrderForItems(order)}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                                  >
+                                    <History className="w-2.5 h-2.5" />
+                                    <span>Edited {editCount > 0 ? `(${editCount})` : ''}</span>
+                                  </button>
+                                </div>
+                              )}
                             </td>
                             <td className="py-3.5 px-4 font-bold text-slate-900 font-mono">
                               {formatCurrency(order.total_amount, order.currency)}

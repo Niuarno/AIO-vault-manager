@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Square,
   Box,
+  Sparkles,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile } from '@/types/database';
 import { formatCurrency, formatDate, getStatusBadgeInfo } from '@/lib/utils';
@@ -89,6 +90,28 @@ export default function PackingDashboard() {
 
   useEffect(() => {
     fetchPackingOrders();
+
+    // Auto-refresh polling every 12 seconds for packing queue
+    const timer = setInterval(() => {
+      fetchPackingOrders();
+    }, 12000);
+
+    // Supabase Realtime channel subscription for instant dispatch on status changes
+    const channel = supabase
+      .channel('packing-realtime-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          fetchPackingOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Update Status Progression
@@ -348,39 +371,85 @@ export default function PackingDashboard() {
                     </div>
                   </div>
 
-                  {/* Order Line Items (Checklist Style) */}
-                  <div className="py-4">
-                    <div className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2">
-                      Items to Pack ({order.order_items?.length || 0} items)
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {order.order_items?.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-start space-x-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80"
-                        >
-                          <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-sm flex items-center justify-center flex-shrink-0">
-                            {item.quantity}x
+                  {/* Order Line Items (Checklist Style: Partitioned Main vs Upsell) */}
+                  {(() => {
+                    const mainItems = (order.order_items || []).filter((i) => !i.is_upsell);
+                    const upsellItems = (order.order_items || []).filter((i) => i.is_upsell);
+
+                    return (
+                      <div className="py-4 space-y-3">
+                        {/* Main Products */}
+                        <div>
+                          <div className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2 flex items-center justify-between">
+                            <span>Main Order Items ({mainItems.length})</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-slate-900 truncate">
-                              {item.title}
+                          {mainItems.length === 0 ? (
+                            <div className="text-xs text-slate-400 italic">No base items</div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {mainItems.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-start space-x-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80"
+                                >
+                                  <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-sm flex items-center justify-center flex-shrink-0">
+                                    {item.quantity}x
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-slate-900 truncate">
+                                      {item.title}
+                                    </div>
+                                    {item.variant_title && (
+                                      <div className="text-[11px] text-slate-500 font-medium">
+                                        Variant: {item.variant_title}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                            {item.variant_title && (
-                              <div className="text-[11px] text-slate-500 font-medium">
-                                Variant: {item.variant_title}
-                              </div>
-                            )}
-                            {item.is_upsell && (
-                              <span className="inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-700">
-                                UPSELL ITEM
-                              </span>
-                            )}
-                          </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+
+                        {/* Upsell Items Highlighted */}
+                        {upsellItems.length > 0 && (
+                          <div className="pt-2 border-t border-purple-100 bg-purple-50/40 p-3 rounded-xl">
+                            <div className="text-xs font-black uppercase text-purple-700 tracking-wider mb-2 flex items-center space-x-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Upsell Items & Add-Ons ({upsellItems.length}) - Verify Separately</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {upsellItems.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-start space-x-3 p-3 rounded-xl bg-white border border-purple-200 shadow-xs"
+                                >
+                                  <div className="w-7 h-7 rounded-lg bg-purple-600 text-white font-black text-sm flex items-center justify-center flex-shrink-0">
+                                    {item.quantity}x
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center space-x-1.5">
+                                      <span className="text-xs font-bold text-slate-900 truncate">
+                                        {item.title}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 text-[9px] font-black shrink-0">
+                                        UPSELL
+                                      </span>
+                                    </div>
+                                    {item.variant_title && (
+                                      <div className="text-[11px] text-slate-500 font-medium">
+                                        Variant: {item.variant_title}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Actions & Next Step Progressions */}
                   <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -479,29 +548,68 @@ export default function PackingDashboard() {
                 </div>
               </div>
 
-              {/* Items Table */}
-              <table className="w-full text-xs text-left mb-6 border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
-                    <th className="py-2 px-3">Pack [✓]</th>
-                    <th className="py-2 px-3">Item Description</th>
-                    <th className="py-2 px-3">Variant / Spec</th>
-                    <th className="py-2 px-3 text-center">Qty</th>
-                    <th className="py-2 px-3 text-right">Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedOrderForSlip.order_items?.map((item, idx) => (
-                    <tr key={idx} className="border-b border-slate-200">
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">[ &nbsp; ]</td>
-                      <td className="py-2.5 px-3 font-bold">{item.title}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{item.variant_title || '-'}</td>
-                      <td className="py-2.5 px-3 text-center font-bold text-sm">{item.quantity}</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(item.price)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* Items Table: Partitioned Main vs Upsell */}
+              {(() => {
+                const mainItems = (selectedOrderForSlip.order_items || []).filter((i) => !i.is_upsell);
+                const upsellItems = (selectedOrderForSlip.order_items || []).filter((i) => i.is_upsell);
+
+                return (
+                  <table className="w-full text-xs text-left mb-6 border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+                        <th className="py-2 px-3">Pack [✓]</th>
+                        <th className="py-2 px-3">Item Description</th>
+                        <th className="py-2 px-3">Variant / Spec</th>
+                        <th className="py-2 px-3 text-center">Qty</th>
+                        <th className="py-2 px-3 text-right">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Main Products Section */}
+                      {mainItems.length > 0 && (
+                        <>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <td colSpan={5} className="py-1 px-3 font-bold text-[10px] uppercase text-slate-500 tracking-wider">
+                              Main Order Products ({mainItems.length})
+                            </td>
+                          </tr>
+                          {mainItems.map((item, idx) => (
+                            <tr key={`main-${idx}`} className="border-b border-slate-200">
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-400">[ &nbsp; ]</td>
+                              <td className="py-2.5 px-3 font-bold">{item.title}</td>
+                              <td className="py-2.5 px-3 text-slate-600">{item.variant_title || '-'}</td>
+                              <td className="py-2.5 px-3 text-center font-bold text-sm">{item.quantity}</td>
+                              <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(item.price)}</td>
+                            </tr>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Upsell Add-Ons Section */}
+                      {upsellItems.length > 0 && (
+                        <>
+                          <tr className="bg-purple-50 border-b border-purple-200">
+                            <td colSpan={5} className="py-1 px-3 font-black text-[10px] uppercase text-purple-700 tracking-wider">
+                              ★ Upsell Items & Add-Ons ({upsellItems.length})
+                            </td>
+                          </tr>
+                          {upsellItems.map((item, idx) => (
+                            <tr key={`upsell-${idx}`} className="border-b border-purple-100 bg-purple-50/30">
+                              <td className="py-2.5 px-3 font-mono font-bold text-purple-600">[ &nbsp; ]</td>
+                              <td className="py-2.5 px-3 font-bold text-purple-950">
+                                {item.title} <span className="font-normal text-[10px] text-purple-700 bg-purple-100 px-1 py-0.5 rounded ml-1">[UPSELL]</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600">{item.variant_title || '-'}</td>
+                              <td className="py-2.5 px-3 text-center font-black text-sm text-purple-900">{item.quantity}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-purple-700">{formatCurrency(item.price)}</td>
+                            </tr>
+                          ))}
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                );
+              })()}
 
               {/* Summary */}
               <div className="flex justify-between items-end border-t border-slate-300 pt-4 text-xs">

@@ -23,6 +23,16 @@ export async function PATCH(
       is_upsell?: boolean;
     }> = body.items;
 
+    const reason: string = body.reason || '';
+    const editedBy: string = body.edited_by || 'Staff Member';
+
+    if (!reason.trim()) {
+      return NextResponse.json(
+        { error: 'Please enter a reasoning note explaining why this order was edited.' },
+        { status: 400 }
+      );
+    }
+
     if (!Array.isArray(newItems) || newItems.length === 0) {
       return NextResponse.json(
         { error: 'An order must have at least one line item.' },
@@ -133,7 +143,7 @@ export async function PATCH(
     // Delete old items
     await supabase.from('order_items').delete().eq('order_id', orderId);
 
-    // Insert new items
+    // Insert new items preserving is_upsell distinction
     const itemsToInsert = newItems.map((item) => ({
       order_id: orderId,
       product_id: item.product_id || null,
@@ -156,19 +166,90 @@ export async function PATCH(
       0
     );
 
-    // 7. Update order record
-    const { data: updatedOrder, error: updateOrderErr } = await supabase
+    // 7. Prepare Edit History Entry and preserve Original Order snapshot
+    const nowIso = new Date().toISOString();
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const editLogEntry = {
+      id: crypto.randomUUID(),
+      timestamp: nowIso,
+      edited_by: editedBy,
+      reason: reason.trim(),
+      previous_total: order.total_amount,
+      new_total: recalculatedTotal,
+      previous_items: (oldItems || []).map((i) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: i.is_upsell,
+      })),
+      new_items: newItems.map((i) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: Boolean(i.is_upsell),
+      })),
+    };
+
+    const originalItems =
+      order.original_items ||
+      (oldItems || []).map((i) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: i.is_upsell,
+      }));
+
+    const existingHistory = Array.isArray(order.edit_history) ? order.edit_history : [];
+    const updatedHistory = [...existingHistory, editLogEntry];
+
+    // Note log fallback string
+    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedTotal} BDT.`;
+    const updatedNote = (order.note || '').trim() + noteLog;
+
+    let updatedOrder: any = null;
+
+    // Try updating with JSONB history columns
+    const { data: fullUpdateData, error: fullUpdateErr } = await supabase
       .from('orders')
       .update({
         total_amount: recalculatedTotal,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
+        note: updatedNote,
+        edit_history: updatedHistory,
+        original_items: originalItems,
       })
       .eq('id', orderId)
       .select('*, order_items(*)')
       .single();
 
-    if (updateOrderErr) {
-      return NextResponse.json({ error: 'Failed to update order total' }, { status: 500 });
+    if (fullUpdateErr) {
+      // Graceful fallback without JSONB columns if not yet created in Supabase schema
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from('orders')
+        .update({
+          total_amount: recalculatedTotal,
+          updated_at: nowIso,
+          note: updatedNote,
+        })
+        .eq('id', orderId)
+        .select('*, order_items(*)')
+        .single();
+
+      if (fallbackErr) {
+        return NextResponse.json({ error: 'Failed to update order: ' + fallbackErr.message }, { status: 500 });
+      }
+      updatedOrder = fallbackData;
+    } else {
+      updatedOrder = fullUpdateData;
     }
 
     return NextResponse.json({ success: true, order: updatedOrder });

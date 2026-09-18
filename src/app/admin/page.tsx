@@ -24,6 +24,7 @@ import {
   Sparkles,
   PackageOpen,
   Phone,
+  History,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import {
@@ -145,6 +146,37 @@ export default function AdminDashboard() {
     if (activeTab === 'inventory') fetchInventory();
     if (activeTab === 'team') fetchTeam();
     if (activeTab === 'rewards') fetchRules();
+
+    // Auto-refresh polling every 12 seconds for active tab
+    const timer = setInterval(() => {
+      if (activeTab === 'orders') fetchOrders();
+      if (activeTab === 'inventory') fetchInventory();
+    }, 12000);
+
+    // Supabase Realtime channel subscription for instant pushes
+    const channel = supabase
+      .channel('admin-realtime-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          if (activeTab === 'orders') fetchOrders();
+          if (activeTab === 'inventory') fetchInventory();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'product_variants' },
+        () => {
+          if (activeTab === 'inventory') fetchInventory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
   }, [activeTab, statusFilter, sourceFilter]);
 
   // Order Status Change Handler
@@ -428,35 +460,90 @@ export default function AdminDashboard() {
                         <div className="text-slate-500 truncate mt-1">{order.shipping_address}</div>
                       </div>
 
-                      {/* Products Preview */}
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
-                        <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center justify-between">
-                          <span>Products ({order.order_items?.length || 0})</span>
-                          <button
-                            type="button"
-                            onClick={() => setEditingOrderForItems(order)}
-                            className="text-brand-600 font-bold hover:underline flex items-center space-x-1"
-                          >
-                            <PackageOpen className="w-3 h-3" />
-                            <span>Edit Items</span>
-                          </button>
-                        </div>
-                        {order.order_items?.map((item) => (
-                          <div key={item.id} className="flex justify-between items-center text-slate-700">
-                            <span className="truncate">
-                              <b>{item.quantity}×</b> {item.title}
-                              {item.is_upsell && (
-                                <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
-                                  UPSELL
-                                </span>
+                      {/* Products Preview: Split into Main and Upsell */}
+                      {(() => {
+                        const mainItems = (order.order_items || []).filter((i) => !i.is_upsell);
+                        const upsellItems = (order.order_items || []).filter((i) => i.is_upsell);
+                        const hasEdits = Boolean(
+                          (order.edit_history && order.edit_history.length > 0) ||
+                          (order.note && order.note.includes('[Items Modified:'))
+                        );
+                        const editCount =
+                          (order.edit_history && order.edit_history.length) ||
+                          (order.note ? (order.note.match(/\[Items Modified:/g) || []).length : 0);
+
+                        return (
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-2">
+                            {/* Main Products */}
+                            <div>
+                              <div className="text-[10px] uppercase font-bold text-slate-400 mb-1 flex items-center justify-between">
+                                <span>Main Products ({mainItems.length})</span>
+                                <div className="flex items-center space-x-1.5">
+                                  {hasEdits && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingOrderForItems(order)}
+                                      className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                    >
+                                      <History className="w-2.5 h-2.5" />
+                                      <span>Edited {editCount > 0 ? `(${editCount})` : ''}</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingOrderForItems(order)}
+                                    className="text-brand-600 font-bold hover:underline flex items-center space-x-1 text-[11px]"
+                                  >
+                                    <PackageOpen className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                </div>
+                              </div>
+                              {mainItems.length === 0 ? (
+                                <div className="text-slate-400 italic text-[11px]">No base items</div>
+                              ) : (
+                                <div className="space-y-1">
+                                  {mainItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-slate-700">
+                                      <span className="truncate">
+                                        <b>{item.quantity}×</b> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
+                                      </span>
+                                      <span className="font-mono text-slate-500 ml-2 shrink-0">
+                                        {formatCurrency(item.price * item.quantity, order.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                            </span>
-                            <span className="font-mono text-slate-500 ml-2">
-                              {formatCurrency(item.price * item.quantity, order.currency)}
-                            </span>
+                            </div>
+
+                            {/* Upsell Items Section */}
+                            {upsellItems.length > 0 && (
+                              <div className="pt-2 border-t border-purple-100 bg-purple-50/50 -mx-3 -mb-3 p-2.5 rounded-b-xl">
+                                <div className="text-[10px] uppercase font-black text-purple-700 flex items-center space-x-1 mb-1">
+                                  <Sparkles className="w-3 h-3 text-purple-600" />
+                                  <span>Upsell Items & Add-Ons ({upsellItems.length})</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {upsellItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-purple-950 font-medium text-[11px]">
+                                      <span className="truncate flex items-center space-x-1">
+                                        <span className="px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 text-[9px] font-black shrink-0">
+                                          UPSELL
+                                        </span>
+                                        <span><b>{item.quantity}×</b> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}</span>
+                                      </span>
+                                      <span className="font-mono font-bold text-purple-700 ml-2 shrink-0">
+                                        {formatCurrency(item.price * item.quantity, order.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
 
                       {/* Total, Attribution & Status Changer */}
                       <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
@@ -508,7 +595,7 @@ export default function AdminDashboard() {
                       <th className="py-3.5 px-4">Channel</th>
                       <th className="py-3.5 px-4">Customer & Phone</th>
                       <th className="py-3.5 px-4">Address</th>
-                      <th className="py-3.5 px-4">Items</th>
+                      <th className="py-3.5 px-4">Items (Main & Upsell)</th>
                       <th className="py-3.5 px-4">Total</th>
                       <th className="py-3.5 px-4">Status & Action</th>
                       <th className="py-3.5 px-4">Sales Rep / Coupon</th>
@@ -531,6 +618,15 @@ export default function AdminDashboard() {
                       filteredOrders.map((order) => {
                         const badge = getStatusBadgeInfo(order.status);
                         const source = getSourceBadge(order.source);
+                        const mainItems = (order.order_items || []).filter((i) => !i.is_upsell);
+                        const upsellItems = (order.order_items || []).filter((i) => i.is_upsell);
+                        const hasEdits = Boolean(
+                          (order.edit_history && order.edit_history.length > 0) ||
+                          (order.note && order.note.includes('[Items Modified:'))
+                        );
+                        const editCount =
+                          (order.edit_history && order.edit_history.length) ||
+                          (order.note ? (order.note.match(/\[Items Modified:/g) || []).length : 0);
 
                         return (
                           <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
@@ -552,27 +648,57 @@ export default function AdminDashboard() {
                             <td className="py-3.5 px-4 max-w-xs truncate text-slate-600" title={order.shipping_address}>
                               {order.shipping_address}
                             </td>
-                            <td className="py-3.5 px-4">
-                              <div className="space-y-1">
-                                {order.order_items?.map((item) => (
-                                  <div key={item.id} className="text-slate-700">
-                                    <span className="font-bold">{item.quantity}×</span> {item.title}
-                                    {item.is_upsell && (
-                                      <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
-                                        UPSELL
-                                      </span>
-                                    )}
+                            <td className="py-3.5 px-4 min-w-[210px]">
+                              {/* Main base items */}
+                              <div className="space-y-0.5">
+                                {mainItems.map((item) => (
+                                  <div key={item.id} className="text-slate-700 flex items-center justify-between">
+                                    <span className="truncate">
+                                      <span className="font-bold">{item.quantity}×</span> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
+                                    </span>
                                   </div>
                                 ))}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setEditingOrderForItems(order)}
-                                className="mt-2 inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition-colors"
-                              >
-                                <PackageOpen className="w-3 h-3" />
-                                <span>Edit Items</span>
-                              </button>
+
+                              {/* Upsell Items Highlighted */}
+                              {upsellItems.length > 0 && (
+                                <div className="mt-1.5 pt-1 border-t border-purple-100 bg-purple-50/70 p-1.5 rounded-lg">
+                                  <div className="text-[9px] uppercase font-black text-purple-700 flex items-center space-x-1 mb-0.5">
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    <span>Upsell Add-Ons:</span>
+                                  </div>
+                                  {upsellItems.map((item) => (
+                                    <div key={item.id} className="text-purple-950 flex items-center justify-between text-[11px]">
+                                      <span className="truncate">
+                                        <span className="font-black text-purple-800">{item.quantity}×</span> {item.title} {item.variant_title ? `(${item.variant_title})` : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="mt-2 flex items-center space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingOrderForItems(order)}
+                                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition-colors"
+                                >
+                                  <PackageOpen className="w-3 h-3" />
+                                  <span>Edit Items</span>
+                                </button>
+
+                                {hasEdits && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingOrderForItems(order)}
+                                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                                    title="View edit history"
+                                  >
+                                    <History className="w-2.5 h-2.5" />
+                                    <span>Edited {editCount > 0 ? `(${editCount})` : ''}</span>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4 font-black text-slate-900">
                               {formatCurrency(order.total_amount, order.currency)}

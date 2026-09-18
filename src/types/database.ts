@@ -95,6 +95,8 @@ export interface Order {
   updated_at: string;
   order_items?: OrderItem[];
   sales_rep?: Profile | null;
+  original_items?: any;
+  edit_history?: any[];
 }
 
 export interface RewardRule {
