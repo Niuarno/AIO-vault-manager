@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('payout_requests')
-      .select('*, staff:profiles(id, full_name, email, phone, avatar_url, payment_info)')
+      .select('*, staff:profiles!staff_id(id, full_name, email, phone, avatar_url, payment_info)')
       .order('created_at', { ascending: false });
 
     if (staffId) {
