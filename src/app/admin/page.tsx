@@ -30,7 +30,9 @@ import {
   ArchiveRestore,
   Image as ImageIcon,
   User,
-  X
+  X,
+  Pencil,
+  Lock,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -82,6 +84,9 @@ export default function AdminDashboard() {
   const [showManualModal, setShowManualModal] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [editingCostId, setEditingCostId] = useState<string | null>(null);
+  const [editingCostVal, setEditingCostVal] = useState<string>('');
+  const [savingCostId, setSavingCostId] = useState<string | null>(null);
 
   // Sales Team & Performance State
   const [salesTeam, setSalesTeam] = useState<Profile[]>([]);
@@ -360,6 +365,44 @@ export default function AdminDashboard() {
     }
   };
 
+  // Save / Update Buying Price (Cost Price) for Variant
+  const handleSaveBuyingPrice = async (variantId: string) => {
+    const costPriceNum = parseFloat(editingCostVal);
+    if (isNaN(costPriceNum) || costPriceNum < 0) {
+      alert('Please enter a valid non-negative buying price.');
+      return;
+    }
+
+    setSavingCostId(variantId);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant_id: variantId,
+          cost_price: costPriceNum,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.variant) {
+        setVariants((prev) =>
+          prev.map((v) =>
+            v.id === variantId ? { ...v, cost_price: json.variant.cost_price } : v
+          )
+        );
+        setEditingCostId(null);
+        setEditingCostVal('');
+      } else {
+        alert(json.error || 'Failed to update buying price');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating buying price');
+    } finally {
+      setSavingCostId(null);
+    }
+  };
+
   // Assign Coupon Code Handler
   const handleAssignCoupon = async (profileId: string) => {
     const code = newCouponCode[profileId]?.trim().toUpperCase();
@@ -585,6 +628,38 @@ export default function AdminDashboard() {
       return !q || matchName || matchSku || matchVariant;
     });
   }, [variants, inventorySearch, showArchived]);
+
+  // Inventory Analytics (Admin-Only Financial Overview)
+  const inventoryAnalytics = useMemo(() => {
+    let totalUnits = 0;
+    let totalCostVal = 0;
+    let totalRetailVal = 0;
+    let variantsWithCost = 0;
+
+    variants.forEach((v) => {
+      const stock = Math.max(0, v.stock_quantity || 0);
+      const cost = v.cost_price != null ? Number(v.cost_price) : 0;
+      const price = Number(v.price) || 0;
+
+      totalUnits += stock;
+      totalCostVal += cost * stock;
+      totalRetailVal += price * stock;
+      if (cost > 0) variantsWithCost++;
+    });
+
+    const projectedProfit = totalRetailVal - totalCostVal;
+    const overallMargin = totalRetailVal > 0 ? (projectedProfit / totalRetailVal) * 100 : 0;
+
+    return {
+      totalUnits,
+      totalCostVal,
+      totalRetailVal,
+      projectedProfit,
+      overallMargin: Math.round(overallMargin),
+      variantsWithCost,
+      totalVariants: variants.length,
+    };
+  }, [variants]);
 
   // Get Clean Status Badge Dot
   const getCleanStatusBadge = (status: OrderStatus) => {
@@ -843,6 +918,67 @@ export default function AdminDashboard() {
         {/* TAB 2: INVENTORY */}
         {activeTab === 'inventory' && (
           <div className="space-y-6">
+            {/* Inventory Valuation & Financial Overview (Admin Only) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Total Stock</span>
+                  <Boxes className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-black text-slate-900 font-mono">
+                  {inventoryAnalytics.totalUnits}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Across {inventoryAnalytics.totalVariants} variants ({filteredVariants.length} shown)
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider">Cost Valuation</span>
+                    <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5" title="Strictly confidential to admin">
+                      <Lock className="w-2.5 h-2.5" />
+                      Admin
+                    </span>
+                  </div>
+                  <DollarSign className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-black text-slate-900 font-mono">
+                  {formatCurrency(inventoryAnalytics.totalCostVal)}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  {inventoryAnalytics.variantsWithCost} of {inventoryAnalytics.totalVariants} items cost-priced
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Retail Value</span>
+                  <Tag className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-black text-slate-900 font-mono">
+                  {formatCurrency(inventoryAnalytics.totalRetailVal)}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Total selling inventory value
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Est. Gross Profit</span>
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-2xl font-black text-emerald-700 font-mono">
+                  +{formatCurrency(inventoryAnalytics.projectedProfit)}
+                </div>
+                <div className="text-[11px] text-emerald-700/80 font-medium mt-1">
+                  {inventoryAnalytics.overallMargin}% projected margin
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white border border-slate-200/80 p-3.5 rounded-2xl shadow-2xs">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative w-72">
@@ -894,7 +1030,17 @@ export default function AdminDashboard() {
                     <tr>
                       <th className="p-4">Product & Variant</th>
                       <th className="p-4">SKU</th>
-                      <th className="p-4">Price</th>
+                      <th className="p-4">
+                        <div className="flex items-center gap-1.5">
+                          <span>Buying Price</span>
+                          <span className="text-[9px] font-bold text-slate-700 bg-slate-200/80 px-1.5 py-0.5 rounded border border-slate-300 flex items-center gap-0.5">
+                            <ShieldCheck className="w-2.5 h-2.5" />
+                            Admin Only
+                          </span>
+                        </div>
+                      </th>
+                      <th className="p-4">Selling Price</th>
+                      <th className="p-4">Unit Margin</th>
                       <th className="p-4">Current Stock</th>
                       <th className="p-4 text-center">Quick Stock Adjust</th>
                       <th className="p-4 text-right">Status</th>
@@ -903,13 +1049,13 @@ export default function AdminDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {loadingInventory ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                        <td colSpan={8} className="p-8 text-center text-slate-400">
                           Loading inventory...
                         </td>
                       </tr>
                     ) : filteredVariants.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                        <td colSpan={8} className="p-8 text-center text-slate-400">
                           No product variants found.
                         </td>
                       </tr>
@@ -937,11 +1083,120 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4 font-mono text-xs text-slate-500">
-                              {variant.sku}
+                              {variant.sku || '—'}
                             </td>
 
-                            <td className="p-4 font-semibold text-slate-900 font-mono">
+                            {/* Buying Price (Cost Price) - Admin Only Editable */}
+                            <td className="p-4">
+                              {editingCostId === variant.id ? (
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      autoFocus
+                                      disabled={savingCostId === variant.id}
+                                      value={editingCostVal}
+                                      onChange={(e) => setEditingCostVal(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleSaveBuyingPrice(variant.id);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingCostId(null);
+                                          setEditingCostVal('');
+                                        }
+                                      }}
+                                      className="w-24 pl-5 pr-2 py-1 text-xs font-mono font-semibold text-slate-900 bg-white border-2 border-emerald-500 rounded-lg shadow-xs focus:outline-none"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={savingCostId === variant.id}
+                                    onClick={() => handleSaveBuyingPrice(variant.id)}
+                                    className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-2xs disabled:opacity-50"
+                                    title="Save buying price"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingCostId === variant.id}
+                                    onClick={() => {
+                                      setEditingCostId(null);
+                                      setEditingCostVal('');
+                                    }}
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="group flex items-center gap-1.5">
+                                  <div className="font-mono text-xs">
+                                    {variant.cost_price != null && Number(variant.cost_price) > 0 ? (
+                                      <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-1 rounded-md border border-slate-200/80">
+                                        {formatCurrency(variant.cost_price)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-200 text-[11px] font-semibold">
+                                        Set Price
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCostId(variant.id);
+                                      setEditingCostVal(
+                                        variant.cost_price != null && Number(variant.cost_price) > 0
+                                          ? String(variant.cost_price)
+                                          : ''
+                                      );
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                                    title="Click to set/edit buying price"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Selling Price */}
+                            <td className="p-4 font-semibold text-slate-900 font-mono text-xs">
                               {formatCurrency(variant.price)}
+                            </td>
+
+                            {/* Unit Margin / Profit */}
+                            <td className="p-4">
+                              {variant.cost_price != null && Number(variant.cost_price) > 0 ? (
+                                (() => {
+                                  const cost = Number(variant.cost_price);
+                                  const price = Number(variant.price);
+                                  const profit = price - cost;
+                                  const marginPct = price > 0 ? Math.round((profit / price) * 100) : 0;
+                                  const isPositive = profit >= 0;
+
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                        isPositive
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                          : 'bg-rose-50 text-rose-800 border-rose-200'
+                                      }`}
+                                    >
+                                      {isPositive ? `+${formatCurrency(profit)}` : `-${formatCurrency(Math.abs(profit))}`}
+                                      <span className="text-[10px] opacity-75">({marginPct}%)</span>
+                                    </span>
+                                  );
+                                })()
+                              ) : (
+                                <span className="text-xs text-slate-400">—</span>
+                              )}
                             </td>
 
                             <td className="p-4">

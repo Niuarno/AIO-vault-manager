@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
-import { Package, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Package, X, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 
 interface ManualProductModalProps {
   isOpen: boolean;
@@ -122,9 +122,15 @@ export default function ManualProductModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Cost Price (BDT)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  Buying Price (BDT)
+                </label>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Admin Only</span>
+                </span>
+              </div>
               <input
                 type="number"
                 step="0.01"

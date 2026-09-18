@@ -168,16 +168,16 @@ export default function SalesDashboard() {
     setLoadingOrders(false);
   };
 
-  // Fetch Live Inventory
+  // Fetch Live Inventory (Excluding confidential cost_price)
   const fetchInventory = async () => {
     setLoadingInventory(true);
     const { data, error } = await supabase
       .from('product_variants')
-      .select('*, product:products(*)')
+      .select('id, product_id, title, sku, price, stock_quantity, created_at, updated_at, product:products(*)')
       .order('stock_quantity', { ascending: true });
 
     if (!error && data) {
-      setVariants(data as ProductVariant[]);
+      setVariants((data as unknown) as ProductVariant[]);
     }
     setLoadingInventory(false);
   };

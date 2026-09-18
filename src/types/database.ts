@@ -82,7 +82,7 @@ export interface ProductVariant {
   title: string;
   sku: string | null;
   price: number;
-  cost_price: number | null;
+  cost_price?: number | null;
   stock_quantity: number;
   created_at: string;
   updated_at: string;

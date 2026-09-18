@@ -114,11 +114,11 @@ export default function EditOrderItemsModal({
       setLoadingCatalog(true);
       const { data, error } = await supabase
         .from('product_variants')
-        .select('*, product:products(*)')
+        .select('id, product_id, title, sku, price, stock_quantity, created_at, updated_at, product:products(*)')
         .order('title', { ascending: true });
 
       if (!error && data) {
-        setCatalogVariants(data as ProductVariant[]);
+        setCatalogVariants((data as unknown) as ProductVariant[]);
       }
       setLoadingCatalog(false);
     }

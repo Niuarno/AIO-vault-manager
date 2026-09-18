@@ -1,11 +1,29 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
     const supabase = createAdminClient();
     const { searchParams } = new URL(req.url);
     const includeArchived = searchParams.get('include_archived') === 'true';
+
+    // Verify if requester is an admin
+    let isAdmin = false;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        isAdmin = profile?.role === 'admin';
+      }
+    } catch {
+      isAdmin = false;
+    }
 
     let query = supabase
       .from('products')
@@ -19,7 +37,19 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ success: true, products: data });
+    // Strict privacy: if not admin, sanitize and completely remove cost_price
+    const sanitizedProducts = (data || []).map((product: any) => ({
+      ...product,
+      variants: (product.variants || []).map((variant: any) => {
+        if (!isAdmin) {
+          const { cost_price, ...publicVariant } = variant;
+          return publicVariant;
+        }
+        return variant;
+      }),
+    }));
+
+    return NextResponse.json({ success: true, products: sanitizedProducts, is_admin: isAdmin });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -142,11 +172,43 @@ export async function PATCH(req: NextRequest) {
   try {
     const supabase = createAdminClient();
     const body = await req.json();
+
+    // Mode 1: Update Variant Buying Price (cost_price) or Selling Price
+    if (body.variant_id) {
+      const { variant_id, cost_price, price } = body;
+      const updates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (cost_price !== undefined) {
+        updates.cost_price = parseFloat(cost_price) || 0;
+      }
+      if (price !== undefined) {
+        updates.price = parseFloat(price) || 0;
+      }
+
+      const { data, error } = await supabase
+        .from('product_variants')
+        .update(updates)
+        .eq('id', variant_id)
+        .select('*, product:products(*)')
+        .single();
+
+      if (error) throw error;
+
+      return NextResponse.json({
+        success: true,
+        variant: data,
+        message: 'Product pricing updated successfully.',
+      });
+    }
+
+    // Mode 2: Archive / Unarchive Product
     const { product_id, is_active } = body;
 
     if (!product_id || typeof is_active !== 'boolean') {
       return NextResponse.json(
-        { error: 'product_id and boolean is_active are required' },
+        { error: 'Invalid payload: variant_id or (product_id and is_active) required' },
         { status: 400 }
       );
     }
