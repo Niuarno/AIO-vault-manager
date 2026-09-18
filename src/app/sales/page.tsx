@@ -20,7 +20,9 @@ import {
   Search,
   Tag,
   TrendingUp,
+  PackageOpen,
 } from 'lucide-react';
+import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import {
   Order,
   ProductVariant,
@@ -40,6 +42,7 @@ export default function SalesDashboard() {
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
 
   // Live Inventory State
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -372,104 +375,235 @@ export default function SalesDashboard() {
           </button>
         </div>
 
-        {/* TAB 1: ORDERS TABLE */}
+        {/* TAB 1: ORDERS LIST (RESPONSIVE: MOBILE CARDS + DESKTOP TABLE) */}
         {activeTab === 'orders' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4">Order #</th>
-                    <th className="py-3 px-4">Source</th>
-                    <th className="py-3 px-4">Customer Details</th>
-                    <th className="py-3 px-4">Address</th>
-                    <th className="py-3 px-4">Items</th>
-                    <th className="py-3 px-4">Amount</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loadingOrders ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">Loading orders...</td>
-                    </tr>
-                  ) : orders.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">No orders recorded yet.</td>
-                    </tr>
-                  ) : (
-                    orders.map((order) => {
-                      const badge = getStatusBadgeInfo(order.status);
-                      const sourceBadge = getSourceBadge(order.source);
+          <div>
+            {/* MOBILE VIEW (< sm) */}
+            <div className="block sm:hidden space-y-3">
+              {loadingOrders ? (
+                <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600 mb-2"></div>
+                  <p>Loading orders...</p>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200">
+                  No orders recorded yet.
+                </div>
+              ) : (
+                orders.map((order) => {
+                  const badge = getStatusBadgeInfo(order.status);
+                  const sourceBadge = getSourceBadge(order.source);
 
-                      return (
-                        <tr key={order.id} className="hover:bg-slate-50/80">
-                          <td className="py-3.5 px-4 font-bold text-slate-900">
-                            <code>{order.order_number}</code>
-                            <div className="text-[10px] text-slate-400 font-normal">{formatDate(order.created_at)}</div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sourceBadge.color}`}>
-                              {sourceBadge.label}
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3"
+                    >
+                      {/* Top Row: Order #, Source, Status */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-bold text-slate-900 text-sm">
+                            {order.order_number}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sourceBadge.color}`}>
+                            {sourceBadge.label}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center space-x-1 ${badge.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                          <span>{badge.label}</span>
+                        </span>
+                      </div>
+
+                      {/* Customer Details */}
+                      <div className="text-xs">
+                        <div className="font-bold text-slate-900">{order.customer_name}</div>
+                        <div className="text-slate-500 font-mono flex items-center space-x-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          <a href={`tel:${order.customer_phone}`} className="hover:underline text-brand-600">
+                            {order.customer_phone}
+                          </a>
+                        </div>
+                        <div className="text-slate-500 truncate mt-1">{order.shipping_address}</div>
+                      </div>
+
+                      {/* Line Items Preview */}
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">
+                          Products ({order.order_items?.length || 0})
+                        </div>
+                        {order.order_items?.map((item) => (
+                          <div key={item.id} className="flex justify-between items-center text-slate-700">
+                            <span className="truncate">
+                              <b>{item.quantity}×</b> {item.title}
+                              {item.is_upsell && (
+                                <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
+                                  UPSELL
+                                </span>
+                              )}
                             </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-slate-900">{order.customer_name}</div>
-                            <code className="text-slate-500">{order.customer_phone}</code>
-                          </td>
-                          <td className="py-3.5 px-4 max-w-xs truncate text-slate-600" title={order.shipping_address}>
-                            {order.shipping_address}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {order.order_items?.map((item) => (
-                              <div key={item.id} className="text-slate-700">
-                                <b>{item.quantity}×</b> {item.title}
-                                {item.is_upsell && (
-                                  <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
-                                    UPSELL
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-slate-900">
+                            <span className="font-mono text-slate-500 ml-2">
+                              {formatCurrency(item.price * item.quantity, order.currency)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Amount & Actions */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <div>
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Total</div>
+                          <div className="text-sm font-black text-slate-900 font-mono">
                             {formatCurrency(order.total_amount, order.currency)}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center w-fit space-x-1 ${badge.bg}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-                              <span>{badge.label}</span>
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {order.status === 'pending' && (
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrderForItems(order)}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1"
+                          >
+                            <PackageOpen className="w-3.5 h-3.5" />
+                            <span>Edit Items</span>
+                          </button>
+
+                          {order.status === 'pending' && (
+                            <button
+                              onClick={() => handleStatusChange(order.id, 'confirmed')}
+                              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs"
+                            >
+                              Confirm
+                            </button>
+                          )}
+
+                          {order.status !== 'canceled' && order.status !== 'shipped' && (
+                            <button
+                              onClick={() => {
+                                if (confirm('Cancel this order? Stock will be restocked automatically.')) {
+                                  handleStatusChange(order.id, 'canceled');
+                                }
+                              }}
+                              className="px-2 py-1.5 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* DESKTOP TABLE (>= sm) */}
+            <div className="hidden sm:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Order #</th>
+                      <th className="py-3 px-4">Source</th>
+                      <th className="py-3 px-4">Customer Details</th>
+                      <th className="py-3 px-4">Address</th>
+                      <th className="py-3 px-4">Items</th>
+                      <th className="py-3 px-4">Amount</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingOrders ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">Loading orders...</td>
+                      </tr>
+                    ) : orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">No orders recorded yet.</td>
+                      </tr>
+                    ) : (
+                      orders.map((order) => {
+                        const badge = getStatusBadgeInfo(order.status);
+                        const sourceBadge = getSourceBadge(order.source);
+
+                        return (
+                          <tr key={order.id} className="hover:bg-slate-50/80">
+                            <td className="py-3.5 px-4 font-bold text-slate-900">
+                              <code>{order.order_number}</code>
+                              <div className="text-[10px] text-slate-400 font-normal">{formatDate(order.created_at)}</div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sourceBadge.color}`}>
+                                {sourceBadge.label}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-slate-900">{order.customer_name}</div>
+                              <code className="text-slate-500">{order.customer_phone}</code>
+                            </td>
+                            <td className="py-3.5 px-4 max-w-xs truncate text-slate-600" title={order.shipping_address}>
+                              {order.shipping_address}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {order.order_items?.map((item) => (
+                                <div key={item.id} className="text-slate-700">
+                                  <b>{item.quantity}×</b> {item.title}
+                                  {item.is_upsell && (
+                                    <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
+                                      UPSELL
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-slate-900 font-mono">
+                              {formatCurrency(order.total_amount, order.currency)}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center w-fit space-x-1 ${badge.bg}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                                <span>{badge.label}</span>
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
                               <button
-                                onClick={() => handleStatusChange(order.id, 'confirmed')}
-                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold mr-1.5 shadow-sm"
+                                type="button"
+                                onClick={() => setEditingOrderForItems(order)}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold mr-1.5 transition-colors"
+                                title="Add or deduct products"
                               >
-                                Confirm Order
+                                Edit Products
                               </button>
-                            )}
-                            {order.status !== 'canceled' && order.status !== 'shipped' && (
-                              <button
-                                onClick={() => {
-                                  if (confirm('Are you sure you want to cancel this order? Live stock will be restocked automatically.')) {
-                                    handleStatusChange(order.id, 'canceled');
-                                  }
-                                }}
-                                className="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-[11px] font-semibold"
-                              >
-                                Cancel
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+
+                              {order.status === 'pending' && (
+                                <button
+                                  onClick={() => handleStatusChange(order.id, 'confirmed')}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold mr-1.5 shadow-sm"
+                                >
+                                  Confirm
+                                </button>
+                              )}
+                              {order.status !== 'canceled' && order.status !== 'shipped' && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Are you sure you want to cancel this order? Live stock will be restocked automatically.')) {
+                                      handleStatusChange(order.id, 'canceled');
+                                    }
+                                  }}
+                                  className="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-[11px] font-semibold"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -851,6 +985,31 @@ export default function SalesDashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* MOBILE FLOATING ACTION BUTTON (FAB) FOR RAPID ORDER ENTRY */}
+      <div className="sm:hidden fixed bottom-6 right-6 z-40">
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center space-x-2 px-5 py-3.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-xl shadow-brand-500/40 active:scale-95 transition-all"
+        >
+          <PlusCircle className="w-5 h-5" />
+          <span>New Order</span>
+        </button>
+      </div>
+
+      {/* EDIT ORDER ITEMS MODAL (ADD / DEDUCT PRODUCTS) */}
+      {editingOrderForItems && (
+        <EditOrderItemsModal
+          order={editingOrderForItems}
+          isOpen={Boolean(editingOrderForItems)}
+          onClose={() => setEditingOrderForItems(null)}
+          onUpdated={(updated) => {
+            setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+            fetchInventory();
+          }}
+        />
       )}
     </div>
   );

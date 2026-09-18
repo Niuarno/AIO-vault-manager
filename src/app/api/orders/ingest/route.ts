@@ -73,20 +73,48 @@ export async function POST(req: NextRequest) {
     const currency = orderData.currency || orderData.presentment_currency || 'BDT';
 
     // Coupons & Sales Rep Attribution
-    const discountCode = orderData.discount_codes?.[0]?.code || null;
-    let salesRepId: string | null = null;
+    // Check multiple potential Shopify coupon locations:
+    // 1. discount_codes array
+    // 2. discount_applications array
+    // 3. note_attributes (Releasit COD forms, custom checkout attributes)
+    const extractedCodes: string[] = [];
+    if (Array.isArray(orderData.discount_codes)) {
+      orderData.discount_codes.forEach((d: any) => {
+        if (d?.code && typeof d.code === 'string') extractedCodes.push(d.code.trim());
+      });
+    }
+    if (Array.isArray(orderData.discount_applications)) {
+      orderData.discount_applications.forEach((d: any) => {
+        if (d?.code && typeof d.code === 'string') extractedCodes.push(d.code.trim());
+      });
+    }
+    if (Array.isArray(orderData.note_attributes)) {
+      orderData.note_attributes.forEach((attr: any) => {
+        if (/coupon|discount|promo|referral|sales_rep|rep_code/i.test(attr?.name || '') && attr?.value) {
+          extractedCodes.push(String(attr.value).trim());
+        }
+      });
+    }
 
-    if (discountCode) {
+    let salesRepId: string | null = null;
+    let matchedCoupon: string | null = null;
+
+    for (const code of extractedCodes) {
+      if (!code) continue;
       const { data: rep } = await supabase
         .from('profiles')
-        .select('id')
-        .ilike('coupon_code', discountCode)
+        .select('id, coupon_code')
+        .ilike('coupon_code', code)
         .maybeSingle();
 
       if (rep) {
         salesRepId = rep.id;
+        matchedCoupon = rep.coupon_code || code;
+        break;
       }
     }
+
+    const finalCouponUsed = matchedCoupon || extractedCodes[0] || null;
 
     // 2. Insert Order
     const { data: newOrder, error: orderError } = await supabase
@@ -104,7 +132,7 @@ export async function POST(req: NextRequest) {
         total_amount: totalAmount,
         currency: currency,
         sales_rep_id: salesRepId,
-        coupon_used: discountCode,
+        coupon_used: finalCouponUsed,
         note: orderData.note || null,
         external_id: String(orderData.id),
       })
@@ -179,6 +207,9 @@ export async function POST(req: NextRequest) {
           bonusAmount = (totalAmount * (activeRule.value / 100));
         } else if (activeRule.rule_type === 'fixed_per_order') {
           bonusAmount = activeRule.value;
+        } else if (activeRule.rule_type === 'fixed_per_item') {
+          const totalQty = itemsToInsert.reduce((sum, it) => sum + (it.quantity || 1), 0);
+          bonusAmount = activeRule.value * totalQty;
         }
 
         if (bonusAmount > 0) {
@@ -187,7 +218,7 @@ export async function POST(req: NextRequest) {
             order_id: newOrder.id,
             bonus_amount: bonusAmount,
             status: 'pending',
-            note: `Reward via coupon ${discountCode} (${activeRule.name})`,
+            note: `Reward via coupon ${finalCouponUsed || 'matched'} (${activeRule.name})`,
           });
         }
       }

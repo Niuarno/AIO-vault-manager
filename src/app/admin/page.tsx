@@ -22,7 +22,10 @@ import {
   Tag,
   AlertCircle,
   Sparkles,
+  PackageOpen,
+  Phone,
 } from 'lucide-react';
+import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import {
   Order,
   ProductVariant,
@@ -41,6 +44,7 @@ export default function AdminDashboard() {
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
+  const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -375,8 +379,127 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Orders Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* MOBILE VIEW (< sm) */}
+            <div className="block sm:hidden space-y-3">
+              {loadingOrders ? (
+                <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600 mb-2"></div>
+                  <p>Loading orders...</p>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200">
+                  No orders match the selected filters.
+                </div>
+              ) : (
+                filteredOrders.map((order) => {
+                  const badge = getStatusBadgeInfo(order.status);
+                  const source = getSourceBadge(order.source);
+
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3"
+                    >
+                      {/* Top Row: Order #, Channel, Status */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-bold text-slate-900 text-sm">
+                            {order.order_number}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${source.color}`}>
+                            {source.label}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center space-x-1 ${badge.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                          <span>{badge.label}</span>
+                        </span>
+                      </div>
+
+                      {/* Customer Details */}
+                      <div className="text-xs">
+                        <div className="font-bold text-slate-900">{order.customer_name}</div>
+                        <div className="text-slate-500 font-mono flex items-center space-x-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          <a href={`tel:${order.customer_phone}`} className="hover:underline text-brand-600">
+                            {order.customer_phone}
+                          </a>
+                        </div>
+                        <div className="text-slate-500 truncate mt-1">{order.shipping_address}</div>
+                      </div>
+
+                      {/* Products Preview */}
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center justify-between">
+                          <span>Products ({order.order_items?.length || 0})</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrderForItems(order)}
+                            className="text-brand-600 font-bold hover:underline flex items-center space-x-1"
+                          >
+                            <PackageOpen className="w-3 h-3" />
+                            <span>Edit Items</span>
+                          </button>
+                        </div>
+                        {order.order_items?.map((item) => (
+                          <div key={item.id} className="flex justify-between items-center text-slate-700">
+                            <span className="truncate">
+                              <b>{item.quantity}×</b> {item.title}
+                              {item.is_upsell && (
+                                <span className="ml-1 px-1.5 py-0.2 text-[9px] bg-purple-100 text-purple-700 rounded font-bold">
+                                  UPSELL
+                                </span>
+                              )}
+                            </span>
+                            <span className="font-mono text-slate-500 ml-2">
+                              {formatCurrency(item.price * item.quantity, order.currency)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total, Attribution & Status Changer */}
+                      <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <div>
+                            <span className="text-slate-400">Total: </span>
+                            <span className="font-black text-slate-900 font-mono">
+                              {formatCurrency(order.total_amount, order.currency)}
+                            </span>
+                          </div>
+
+                          {order.coupon_used && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-800 font-mono font-bold">
+                              <Tag className="w-2.5 h-2.5 mr-1 text-emerald-600" />
+                              {order.coupon_used}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
+                            className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700"
+                          >
+                            <option value="pending">Status: Pending</option>
+                            <option value="confirmed">Status: Confirmed</option>
+                            <option value="ready_to_ship">Status: Ready to Ship</option>
+                            <option value="on_the_way">Status: On the Way</option>
+                            <option value="shipped">Status: Shipped</option>
+                            <option value="delivered">Status: Delivered</option>
+                            <option value="canceled">Status: Canceled (Auto-Restock)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* DESKTOP TABLE (>= sm) */}
+            <div className="hidden sm:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
@@ -442,6 +565,14 @@ export default function AdminDashboard() {
                                   </div>
                                 ))}
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setEditingOrderForItems(order)}
+                                className="mt-2 inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition-colors"
+                              >
+                                <PackageOpen className="w-3 h-3" />
+                                <span>Edit Items</span>
+                              </button>
                             </td>
                             <td className="py-3.5 px-4 font-black text-slate-900">
                               {formatCurrency(order.total_amount, order.currency)}
@@ -832,6 +963,19 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* EDIT ORDER ITEMS MODAL (ADD / DEDUCT PRODUCTS) */}
+        {editingOrderForItems && (
+          <EditOrderItemsModal
+            order={editingOrderForItems}
+            isOpen={Boolean(editingOrderForItems)}
+            onClose={() => setEditingOrderForItems(null)}
+            onUpdated={(updated) => {
+              setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+              fetchInventory();
+            }}
+          />
         )}
       </main>
     </div>

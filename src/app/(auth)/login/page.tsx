@@ -26,28 +26,33 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        // Sign up new staff member
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-              role: role,
-            },
-          },
+        // Register new staff member via Admin API (auto-confirmed, zero email rate limits!)
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            fullName,
+            role,
+          }),
         });
 
-        if (error) throw error;
-
-        if (data.session) {
-          // Direct login
-          router.push('/');
-          router.refresh();
-        } else {
-          setSuccessMsg('Account created successfully! Check your email to confirm or log in.');
-          setIsSignUp(false);
+        const regData = await res.json();
+        if (!res.ok) {
+          throw new Error(regData.error || 'Failed to create account.');
         }
+
+        // Instantly sign in the newly confirmed user
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInErr) throw signInErr;
+
+        router.push('/onboarding');
+        router.refresh();
       } else {
         // Sign in existing user
         const { error } = await supabase.auth.signInWithPassword({
