@@ -17,17 +17,25 @@ import {
   Menu,
   X,
   ChevronDown,
-  Settings,
-  Sparkles,
+  DollarSign,
+  Layers,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile, UserRole } from '@/types/database';
 
 interface NavbarProps {
   currentProfile?: Profile | null;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+  tabBadges?: Record<string, number | string | undefined>;
 }
 
-export default function Navbar({ currentProfile }: NavbarProps) {
+export default function Navbar({
+  currentProfile,
+  activeTab,
+  onTabChange,
+  tabBadges = {},
+}: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -45,7 +53,9 @@ export default function Navbar({ currentProfile }: NavbarProps) {
   useEffect(() => {
     if (
       currentProfile &&
-      (!currentProfile.full_name?.trim() || !currentProfile.phone?.trim() || currentProfile.phone.trim().length < 8) &&
+      (!currentProfile.full_name?.trim() ||
+        !currentProfile.phone?.trim() ||
+        currentProfile.phone.trim().length < 8) &&
       pathname !== '/onboarding' &&
       !pathname.startsWith('/login')
     ) {
@@ -61,24 +71,24 @@ export default function Navbar({ currentProfile }: NavbarProps) {
     router.refresh();
   };
 
-  const getRoleBadge = (role: UserRole) => {
-    switch (role) {
+  const getRoleBadge = (userRole: UserRole) => {
+    switch (userRole) {
       case 'admin':
         return {
-          label: 'Admin Director',
-          classes: 'bg-purple-100 text-purple-800 border-purple-200',
+          label: 'Admin',
+          classes: 'bg-slate-100 text-slate-800 border-slate-200/80',
           icon: ShieldCheck,
         };
       case 'sales':
         return {
-          label: 'Sales Executive',
-          classes: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          label: 'Sales',
+          classes: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
           icon: TrendingUp,
         };
       case 'packing':
         return {
-          label: 'Packing Team',
-          classes: 'bg-amber-100 text-amber-800 border-amber-200',
+          label: 'Warehouse',
+          classes: 'bg-amber-50 text-amber-800 border-amber-200/80',
           icon: Truck,
         };
     }
@@ -87,13 +97,32 @@ export default function Navbar({ currentProfile }: NavbarProps) {
   const badge = getRoleBadge(role);
   const BadgeIcon = badge.icon;
 
+  // Admin Navigation Items
+  const adminNavItems = [
+    { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/admin' },
+    { key: 'inventory', label: 'Inventory & Stock', icon: Boxes, href: '/admin?tab=inventory' },
+    { key: 'team', label: 'Staff & Performance', icon: Users, href: '/admin?tab=team' },
+    { key: 'payouts', label: 'Payout Requests', icon: DollarSign, href: '/admin?tab=payouts' },
+    { key: 'rewards', label: 'Commission Rules', icon: Award, href: '/admin?tab=rewards' },
+  ];
+
+  // Sales Navigation Items
+  const salesNavItems = [
+    { key: 'orders', label: 'Orders Queue', icon: ShoppingBag, href: '/sales' },
+    { key: 'inventory', label: 'Stock Lookup', icon: Boxes, href: '/sales?tab=inventory' },
+    { key: 'rewards', label: 'My Commissions', icon: Award, href: '/sales?tab=rewards' },
+    { key: 'payouts', label: 'Payout History', icon: DollarSign, href: '/sales?tab=payouts' },
+  ];
+
+  const navItems = role === 'admin' ? adminNavItems : salesNavItems;
+
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs no-print transition-all">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs no-print transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            {/* Left: Brand & Mobile Toggle */}
-            <div className="flex items-center space-x-3 sm:space-x-6">
+            {/* Left: Brand & Nav */}
+            <div className="flex items-center space-x-4 sm:space-x-8">
               {/* Mobile hamburger button */}
               <button
                 type="button"
@@ -104,108 +133,87 @@ export default function Navbar({ currentProfile }: NavbarProps) {
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
 
-              <Link href="/" className="flex items-center space-x-2.5 group">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center text-white font-black shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform">
-                  B
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-tight">
-                    Boyon <span className="text-brand-600 text-sm font-semibold">OMS</span>
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-medium tracking-wide hidden sm:block">
-                    Omni-Channel Operations
-                  </span>
-                </div>
+              {/* Minimal Brand */}
+              <Link href="/" className="flex items-center space-x-2 group">
+                <span className="text-xl font-black tracking-tight text-slate-900">
+                  Boyon
+                </span>
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  OMS
+                </span>
               </Link>
 
-              {/* Role indicator (Desktop) */}
+              {/* Role Indicator Pill */}
               <div
-                className={`hidden md:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badge.classes}`}
+                className={`hidden md:inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${badge.classes}`}
               >
-                <BadgeIcon className="w-3.5 h-3.5 mr-1.5" />
+                <BadgeIcon className="w-3.5 h-3.5 mr-1 text-slate-500" />
                 {badge.label}
               </div>
 
-              {/* Desktop Navigation */}
+              {/* Desktop Tabs (Unified & Clean) */}
               <nav className="hidden lg:flex items-center space-x-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isCurrentActive =
+                    activeTab !== undefined
+                      ? activeTab === item.key
+                      : pathname === item.href || pathname.startsWith(`${item.href}?`);
+                  const badgeCount = tabBadges[item.key];
+
+                  return onTabChange && (pathname === '/admin' || pathname === '/sales') ? (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => onTabChange(item.key)}
+                      className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        isCurrentActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span>{item.label}</span>
+                      {badgeCount !== undefined && badgeCount !== 0 && (
+                        <span
+                          className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                            isCurrentActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {badgeCount}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        isCurrentActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+
+                {/* Warehouse Packing Link for Admin */}
                 {role === 'admin' && (
-                  <>
-                    <Link
-                      href="/admin"
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        pathname === '/admin' && !pathname.includes('tab=')
-                          ? 'bg-slate-100 text-slate-900 font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5 inline mr-1.5" />
-                      All Orders
-                    </Link>
-                    <Link
-                      href="/admin?tab=inventory"
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-                    >
-                      <Boxes className="w-3.5 h-3.5 inline mr-1.5" />
-                      Live Stock
-                    </Link>
-                    <Link
-                      href="/admin?tab=team"
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-                    >
-                      <Users className="w-3.5 h-3.5 inline mr-1.5" />
-                      Team & Coupons
-                    </Link>
-                    <Link
-                      href="/admin?tab=rewards"
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-                    >
-                      <Award className="w-3.5 h-3.5 inline mr-1.5" />
-                      Reward Rules
-                    </Link>
-                    <Link
-                      href="/packing"
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-800 hover:bg-amber-50 transition-colors"
-                    >
-                      <Truck className="w-3.5 h-3.5 inline mr-1.5" />
-                      Packing View
-                    </Link>
-                  </>
-                )}
-
-                {role === 'sales' && (
-                  <>
-                    <Link
-                      href="/sales"
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        pathname === '/sales'
-                          ? 'bg-slate-100 text-slate-900 font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5 inline mr-1.5" />
-                      Sales Workspace
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        pathname === '/profile' || pathname === '/sales/profile'
-                          ? 'bg-slate-100 text-slate-900 font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                    >
-                      <User className="w-3.5 h-3.5 inline mr-1.5" />
-                      My Profile & Coupon
-                    </Link>
-                  </>
-                )}
-
-                {role === 'packing' && (
                   <Link
                     href="/packing"
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200"
+                    className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      pathname === '/packing'
+                        ? 'bg-amber-100 text-amber-900 font-bold'
+                        : 'text-amber-800 hover:bg-amber-50'
+                    }`}
                   >
-                    <Package className="w-3.5 h-3.5 inline mr-1.5 text-amber-600" />
-                    Confirmed Orders Queue
+                    <Truck className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                    <span>Packing Queue</span>
                   </Link>
                 )}
               </nav>
@@ -221,20 +229,23 @@ export default function Navbar({ currentProfile }: NavbarProps) {
                     className="flex items-center space-x-2.5 p-1 rounded-xl hover:bg-slate-100 transition-colors text-left"
                   >
                     <div className="relative">
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-tr from-brand-600 to-emerald-400 p-0.5 shadow-2xs">
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
                         {currentProfile.avatar_url ? (
                           <img
                             src={currentProfile.avatar_url}
                             alt={currentProfile.full_name || 'Avatar'}
-                            className="w-full h-full rounded-full object-cover bg-white"
+                            className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-slate-700 font-bold text-xs">
+                          <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs">
                             {(currentProfile.full_name || currentProfile.email || 'U')[0].toUpperCase()}
                           </div>
                         )}
                       </div>
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Online" />
+                      <span
+                        className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
+                        title="Online"
+                      />
                     </div>
                     <div className="hidden sm:block">
                       <div className="text-xs font-bold text-slate-900 leading-tight">
@@ -249,47 +260,37 @@ export default function Navbar({ currentProfile }: NavbarProps) {
 
                   {/* Desktop Dropdown */}
                   {profileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95">
                       <div className="px-4 py-2 border-b border-slate-100">
-                        <div className="text-xs font-bold text-slate-900">
+                        <p className="text-xs font-bold text-slate-900 truncate">
                           {currentProfile.full_name || 'Staff User'}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono truncate">
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">
                           {currentProfile.email}
-                        </div>
-                        {currentProfile.phone && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            {currentProfile.phone}
-                          </div>
-                        )}
+                        </p>
                       </div>
 
-                      <Link
-                        href="/profile"
-                        onClick={() => setProfileDropdownOpen(false)}
-                        className="flex items-center space-x-2 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                      >
-                        <Settings className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Profile & Settings</span>
-                      </Link>
+                      <div className="py-1">
+                        <Link
+                          href="/profile"
+                          onClick={() => setProfileDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          <User className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                          Profile, Avatars & Banking
+                        </Link>
+                      </div>
 
-                      {currentProfile.role === 'sales' && currentProfile.coupon_code && (
-                        <div className="px-4 py-1.5 mx-2 my-1 rounded-lg bg-emerald-50 text-emerald-800 text-[11px] font-mono font-bold flex items-center justify-between">
-                          <span>Coupon:</span>
-                          <span>{currentProfile.coupon_code}</span>
-                        </div>
-                      )}
-
-                      <div className="border-t border-slate-100 my-1"></div>
-
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        className="w-full flex items-center space-x-2 px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 font-medium text-left"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        <span>Sign Out</span>
-                      </button>
+                      <div className="pt-1 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={handleSignOut}
+                          className="flex items-center w-full px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+                        >
+                          <LogOut className="w-3.5 h-3.5 mr-2" />
+                          Sign out
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -299,169 +300,81 @@ export default function Navbar({ currentProfile }: NavbarProps) {
         </div>
       </header>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Menu Drawer */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-            onClick={() => setMobileMenuOpen(false)}
-          ></div>
-
-          {/* Drawer Content */}
-          <div className="relative w-80 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
-            {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center text-white font-black text-sm">
-                  B
-                </div>
-                <span className="font-extrabold text-slate-900 text-sm">Boyon OMS</span>
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-xs flex justify-start">
+          <div className="w-64 bg-white h-full shadow-2xl p-5 flex flex-col justify-between animate-in slide-in-from-left">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-lg font-black text-slate-900">Boyon OMS</span>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* User Profile Card in Drawer */}
-            {currentProfile && (
-              <div className="p-4 border-b border-slate-100 bg-white">
-                <div className="flex items-center space-x-3">
-                  <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-tr from-brand-600 to-emerald-400 p-0.5 flex-shrink-0">
-                    {currentProfile.avatar_url ? (
-                      <img
-                        src={currentProfile.avatar_url}
-                        alt="Avatar"
-                        className="w-full h-full rounded-full object-cover bg-white"
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-700 text-sm">
-                        {(currentProfile.full_name || currentProfile.email || 'U')[0].toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-slate-900 truncate">
-                      {currentProfile.full_name || 'Staff User'}
-                    </div>
-                    <div className="text-xs text-slate-500 truncate">{currentProfile.email}</div>
-                    <div
-                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border mt-1 ${badge.classes}`}
+              <div className="space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isCurrentActive =
+                    activeTab !== undefined ? activeTab === item.key : pathname === item.href;
+
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        if (onTabChange) {
+                          onTabChange(item.key);
+                        } else {
+                          router.push(item.href);
+                        }
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex items-center w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                        isCurrentActive
+                          ? 'bg-slate-900 text-white font-bold'
+                          : 'text-slate-700 hover:bg-slate-100'
+                      }`}
                     >
-                      <BadgeIcon className="w-3 h-3 mr-1" />
-                      {badge.label}
-                    </div>
-                  </div>
-                </div>
+                      <Icon className="w-4 h-4 mr-2.5 text-slate-500" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
 
-                {currentProfile.role === 'sales' && currentProfile.coupon_code && (
-                  <div className="mt-3 p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold flex justify-between items-center">
-                    <span>Coupon:</span>
-                    <span>{currentProfile.coupon_code}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Mobile Nav Links */}
-            <div className="flex-1 p-4 space-y-1 overflow-y-auto">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-3">
-                Workspace Menu
-              </div>
-
-              {role === 'admin' && (
-                <>
-                  <Link
-                    href="/admin"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <ShoppingBag className="w-4 h-4 text-brand-600" />
-                    <span>All Orders</span>
-                  </Link>
-                  <Link
-                    href="/admin?tab=inventory"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <Boxes className="w-4 h-4 text-brand-600" />
-                    <span>Live Stock & Restock</span>
-                  </Link>
-                  <Link
-                    href="/admin?tab=team"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <Users className="w-4 h-4 text-brand-600" />
-                    <span>Sales Team & Coupons</span>
-                  </Link>
-                  <Link
-                    href="/admin?tab=rewards"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <Award className="w-4 h-4 text-brand-600" />
-                    <span>Reward Rules</span>
-                  </Link>
+                {role === 'admin' && (
                   <Link
                     href="/packing"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-amber-800 hover:bg-amber-50"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-800 hover:bg-amber-50"
                   >
-                    <Truck className="w-4 h-4 text-amber-600" />
-                    <span>Packing Portal</span>
+                    <Truck className="w-4 h-4 mr-2.5 text-amber-600" />
+                    <span>Packing Queue</span>
                   </Link>
-                </>
-              )}
-
-              {role === 'sales' && (
-                <>
-                  <Link
-                    href="/sales"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <ShoppingBag className="w-4 h-4 text-brand-600" />
-                    <span>Sales Workspace</span>
-                  </Link>
-                  <Link
-                    href="/profile"
-                    className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    <User className="w-4 h-4 text-brand-600" />
-                    <span>My Profile & Coupon</span>
-                  </Link>
-                </>
-              )}
-
-              {role === 'packing' && (
-                <Link
-                  href="/packing"
-                  className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200"
-                >
-                  <Truck className="w-4 h-4 text-amber-600" />
-                  <span>Confirmed Orders Queue</span>
-                </Link>
-              )}
-
-              <div className="pt-3 mt-3 border-t border-slate-100">
-                <Link
-                  href="/profile"
-                  className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                >
-                  <Settings className="w-4 h-4 text-slate-500" />
-                  <span>My Account & Settings</span>
-                </Link>
+                )}
               </div>
             </div>
 
-            {/* Drawer Footer / Sign Out */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <Link
+                href="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <User className="w-4 h-4 mr-2 text-slate-400" />
+                Profile Settings
+              </Link>
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-colors"
+                className="flex items-center w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
               </button>
             </div>
           </div>

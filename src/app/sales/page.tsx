@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
 import confetti from 'canvas-confetti';
@@ -9,31 +9,32 @@ import {
   PlusCircle,
   Boxes,
   Award,
-  Sparkles,
   Phone,
-  MessageSquare,
-  MessageCircle,
-  Store,
   CheckCircle2,
   Clock,
   X,
   Search,
   Tag,
-  TrendingUp,
   PackageOpen,
-  History,
   DollarSign,
-  CreditCard,
   Image as ImageIcon,
-  ArrowUpRight,
   ShieldCheck,
   AlertCircle,
   Plus,
-  Minus
+  Trash2,
+  User,
+  Filter
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
+import ModernProductSelect from '@/components/ModernProductSelect';
+import {
+  WhatsAppFlatIcon,
+  MessengerFlatIcon,
+  PhoneCallFlatIcon,
+  WalkInFlatIcon
+} from '@/components/SourceIcons';
 import {
   Order,
   ProductVariant,
@@ -43,7 +44,7 @@ import {
   OrderSource,
   PayoutRequest,
 } from '@/types/database';
-import { formatCurrency, formatDate, getStatusBadgeInfo, getSourceBadge } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function SalesDashboard() {
   const supabase = createClient();
@@ -54,6 +55,8 @@ export default function SalesDashboard() {
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
 
   // Live Inventory State
@@ -128,7 +131,7 @@ export default function SalesDashboard() {
           }
         }
 
-        // Track presence on online-staff channel
+        // Single presence channel
         const presenceChannel = supabase.channel('online-staff', {
           config: { presence: { key: user.id } },
         });
@@ -215,7 +218,7 @@ export default function SalesDashboard() {
     setLoadingPayouts(false);
   };
 
-  // Realtime Sync (NO 12s POLLING INTERVAL)
+  // Single Stable Realtime Subscription on mount (NO reconnect loops)
   useEffect(() => {
     fetchOrders();
     fetchInventory();
@@ -223,7 +226,7 @@ export default function SalesDashboard() {
     fetchPayouts();
 
     const channel = supabase
-      .channel('sales-realtime-events')
+      .channel('sales-realtime-singleton')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
@@ -320,10 +323,9 @@ export default function SalesDashboard() {
         throw new Error(data.error || 'Failed to submit order');
       }
 
-      // Celebrate with confetti
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 70,
+        spread: 60,
         origin: { y: 0.6 },
       });
 
@@ -335,7 +337,6 @@ export default function SalesDashboard() {
       setNote('');
       setOrderItems([]);
 
-      // Refresh Data
       fetchOrders();
       fetchInventory();
       fetchRewards();
@@ -368,6 +369,39 @@ export default function SalesDashboard() {
     }
   };
 
+  // Calculations:
+  // Today's Earnings (resets at 12:00 AM midnight)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayEarnings = useMemo(() => {
+    return rewards
+      .filter((r) => r.created_at.startsWith(todayStr))
+      .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
+  }, [rewards, todayStr]);
+
+  // Total Pending Commissions from Rewards
+  const totalPendingRewards = useMemo(() => {
+    return rewards
+      .filter((r) => r.status === 'pending')
+      .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
+  }, [rewards]);
+
+  // Pending Payout Requests
+  const totalPendingPayouts = useMemo(() => {
+    return myPayouts
+      .filter((p) => p.status === 'pending')
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }, [myPayouts]);
+
+  // Available Piggybank = Pending Rewards minus pending requested payouts
+  const availablePiggybank = Math.max(0, totalPendingRewards - totalPendingPayouts);
+
+  // Total Settled (Approved Payouts)
+  const settledEarnings = useMemo(() => {
+    return myPayouts
+      .filter((p) => p.status === 'approved')
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }, [myPayouts]);
+
   // Submit Payout Request
   const handleSubmitPayoutRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -378,8 +412,8 @@ export default function SalesDashboard() {
       return;
     }
 
-    if (amountNum > piggybankBalance) {
-      alert(`Requested amount (${amountNum} BDT) exceeds pending piggybank balance (${piggybankBalance.toFixed(2)} BDT).`);
+    if (amountNum > availablePiggybank) {
+      alert(`Requested amount (${amountNum} BDT) exceeds available balance (${availablePiggybank.toFixed(2)} BDT).`);
       return;
     }
 
@@ -414,33 +448,24 @@ export default function SalesDashboard() {
     }
   };
 
-  // Calculations:
-  // Today's Earnings (resets at 12:00 AM midnight)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayEarnings = useMemo(() => {
-    return rewards
-      .filter((r) => r.created_at.startsWith(todayStr))
-      .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
-  }, [rewards, todayStr]);
-
-  // Piggybank (total pending payout)
-  const piggybankBalance = useMemo(() => {
-    return rewards
-      .filter((r) => r.status === 'pending')
-      .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
-  }, [rewards]);
-
-  // Settled Earnings
-  const settledEarnings = useMemo(() => {
-    return rewards
-      .filter((r) => r.status === 'paid')
-      .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
-  }, [rewards]);
-
   // My Orders
   const myOrders = useMemo(() => {
     return orders.filter((o) => o.sales_rep_id === currentProfile?.id);
   }, [orders, currentProfile]);
+
+  // Filtered Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+      const q = orderSearch.toLowerCase();
+      const matchQuery =
+        !q ||
+        o.order_number.toLowerCase().includes(q) ||
+        o.customer_name.toLowerCase().includes(q) ||
+        o.customer_phone.includes(q);
+      return matchStatus && matchQuery;
+    });
+  }, [orders, orderStatusFilter, orderSearch]);
 
   // Performance Graph Data (Last 7 Days)
   const performanceGraphData = useMemo(() => {
@@ -492,55 +517,88 @@ export default function SalesDashboard() {
     });
   }, [variants, inventorySearch]);
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500/30 selection:text-indigo-200">
-      <Navbar currentProfile={currentProfile} />
+  // Get Clean Status Badge Dot & Color
+  const getCleanStatusBadge = (status: OrderStatus) => {
+    switch (status) {
+      case 'pending':
+        return { dot: 'bg-amber-400', label: 'Pending' };
+      case 'confirmed':
+        return { dot: 'bg-blue-500', label: 'Confirmed' };
+      case 'ready_to_ship':
+        return { dot: 'bg-indigo-500', label: 'Ready to Ship' };
+      case 'on_the_way':
+        return { dot: 'bg-purple-500', label: 'On the Way' };
+      case 'delivered':
+        return { dot: 'bg-emerald-500', label: 'Delivered' };
+      case 'canceled':
+        return { dot: 'bg-rose-500', label: 'Canceled' };
+      default:
+        return { dot: 'bg-slate-400', label: status };
+    }
+  };
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
+      <Navbar
+        currentProfile={currentProfile}
+        activeTab={activeTab}
+        onTabChange={(tab: any) => setActiveTab(tab)}
+      />
+
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* KPI Cards: Today's Earnings & Piggybank Balance */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {/* Today's Earnings (Resets at 12am) */}
-          <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-900/40 rounded-2xl p-5 relative overflow-hidden shadow-xl shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-                Today's Earnings
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400/80 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/60">
-                <Clock className="w-3 h-3" /> Resets 12:00 AM
-              </span>
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Today's Earnings
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  <Clock className="w-3 h-3 text-emerald-600" /> Resets 12 AM
+                </span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 font-mono truncate">
+                {formatCurrency(todayEarnings)}
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-emerald-300 mt-3 font-mono">
-              {formatCurrency(todayEarnings)}
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-2">
               Commissions accrued today from upsell orders
             </p>
           </div>
 
-          {/* Piggybank (Pending Payouts) with Request Payout Button */}
-          <div className="bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-900/40 rounded-2xl p-5 relative overflow-hidden shadow-xl shadow-black/40 flex flex-col justify-between">
+          {/* Piggybank (Pending Payout Balance) */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                  Piggybank (Pending Payout)
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Piggybank Balance
                 </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400/80 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-800/60">
-                  Available
-                </span>
+                {totalPendingPayouts > 0 ? (
+                  <span className="inline-flex items-center text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                    {formatCurrency(totalPendingPayouts)} in review
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Available
+                  </span>
+                )}
               </div>
-              <div className="text-3xl font-extrabold text-amber-300 mt-3 font-mono">
-                {formatCurrency(piggybankBalance)}
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 font-mono truncate">
+                {formatCurrency(availablePiggybank)}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs text-slate-400">Withdraw pending balance</span>
               <button
-                disabled={piggybankBalance <= 0}
+                disabled={availablePiggybank <= 0}
                 onClick={() => {
-                  setPayoutAmount(piggybankBalance.toString());
+                  setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-md shadow-amber-600/20 transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>Request Payout</span>
@@ -549,20 +607,22 @@ export default function SalesDashboard() {
           </div>
 
           {/* Settled Earnings */}
-          <div className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-900/40 rounded-2xl p-5 relative overflow-hidden shadow-xl shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
-                Total Settled & Paid
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400/80 bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-800/60">
-                <ShieldCheck className="w-3 h-3" /> Paid Out
-              </span>
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Total Settled & Paid
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Paid Out
+                </span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 font-mono truncate">
+                {formatCurrency(settledEarnings)}
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-indigo-300 mt-3 font-mono">
-              {formatCurrency(settledEarnings)}
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Lifetime verified payouts received with proof
+            <p className="text-xs text-slate-400 mt-2">
+              Verified payouts received with payment proof
             </p>
           </div>
         </div>
@@ -573,70 +633,20 @@ export default function SalesDashboard() {
           dailyStats={performanceGraphData}
         />
 
-        {/* Action Header & Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl overflow-x-auto max-w-full">
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'orders'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Orders Queue</span>
-              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/50">
-                {orders.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('inventory')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'inventory'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Boxes className="w-4 h-4" />
-              <span>Live Stock Check</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('rewards')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'rewards'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Award className="w-4 h-4" />
-              <span>Upsell Rewards</span>
-              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/50">
-                {rewards.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('payouts')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'payouts'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              <span>Payout History & Receipts</span>
-              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/50">
-                {myPayouts.length}
-              </span>
-            </button>
+        {/* Primary Action Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-bold text-slate-900 capitalize">
+              {activeTab === 'orders' && 'Customer Orders'}
+              {activeTab === 'inventory' && 'Live Stock Lookup'}
+              {activeTab === 'rewards' && 'My Upsell Commissions'}
+              {activeTab === 'payouts' && 'Payout History & Receipts'}
+            </h2>
           </div>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-sm transition-all"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Create New Order</span>
@@ -645,126 +655,169 @@ export default function SalesDashboard() {
 
         {/* TAB 1: ORDERS */}
         {activeTab === 'orders' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl shadow-black/40">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950/70 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  <tr>
-                    <th className="p-4">Order ID & Source</th>
-                    <th className="p-4">Customer Details</th>
-                    <th className="p-4">Items / Total</th>
-                    <th className="p-4">Assigned Staff</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {loadingOrders ? (
+          <div className="space-y-4">
+            {/* Filter Bar */}
+            <div className="bg-white border border-slate-200/80 p-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search customer, phone, order #..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="ready_to_ship">Ready to Ship</option>
+                  <option value="on_the_way">On the Way</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="canceled">Canceled</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Orders Table */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-700">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500">
-                        Loading orders...
-                      </td>
+                      <th className="p-4">Order ID & Source</th>
+                      <th className="p-4">Customer Details</th>
+                      <th className="p-4">Items / Total</th>
+                      <th className="p-4">Assigned Staff</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
-                  ) : orders.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500">
-                        No orders recorded yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    orders.map((order) => {
-                      const statusBadge = getStatusBadgeInfo(order.status);
-                      const sourceBadge = getSourceBadge(order.source);
-                      const isMyOrder = order.sales_rep_id === currentProfile?.id;
-                      const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingOrders ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                          Loading orders...
+                        </td>
+                      </tr>
+                    ) : filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                          No orders recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((order) => {
+                        const isMyOrder = order.sales_rep_id === currentProfile?.id;
+                        const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                        const statusBadge = getCleanStatusBadge(order.status);
 
-                      return (
-                        <tr
-                          key={order.id}
-                          className={`hover:bg-slate-800/40 transition-colors ${
-                            isMyOrder ? 'bg-indigo-950/20' : ''
-                          }`}
-                        >
-                          <td className="p-4">
-                            <div className="font-mono font-bold text-indigo-400">
-                              {order.order_number}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded font-medium border ${sourceBadge.color}`}>
-                                {sourceBadge.label}
-                              </span>
-                              <span className="text-xs text-slate-500">
-                                {formatDate(order.created_at)}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="p-4">
-                            <div className="font-semibold text-slate-200">
-                              {order.customer_name}
-                            </div>
-                            <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-slate-500" />
-                              {order.customer_phone}
-                            </div>
-                          </td>
-
-                          <td className="p-4">
-                            <div className="font-semibold text-slate-100">
-                              {formatCurrency(order.total_amount)}
-                            </div>
-                            <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                              <span>{order.order_items?.length || 0} line items</span>
-                              {hasUpsell && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-semibold text-[10px]">
-                                  Upsell
+                        return (
+                          <tr
+                            key={order.id}
+                            className={`hover:bg-slate-50/70 transition-colors ${
+                              isMyOrder ? 'bg-emerald-50/20' : ''
+                            }`}
+                          >
+                            <td className="p-4">
+                              <div className="font-mono font-bold text-slate-900">
+                                {order.order_number}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-4 h-4" />}
+                                {order.source === 'messenger' && <MessengerFlatIcon className="w-4 h-4" />}
+                                {order.source === 'phone' && <PhoneCallFlatIcon className="w-4 h-4" />}
+                                {order.source === 'manual' && <WalkInFlatIcon className="w-4 h-4" />}
+                                <span className="text-xs text-slate-500 font-medium capitalize">
+                                  {order.source}
                                 </span>
+                                <span className="text-slate-300">&middot;</span>
+                                <span className="text-[11px] text-slate-400">
+                                  {formatDate(order.created_at)}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              <div className="font-semibold text-slate-900">
+                                {order.customer_name}
+                              </div>
+                              <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Phone className="w-3 h-3 text-slate-400" />
+                                {order.customer_phone}
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              <div className="font-semibold text-slate-900 font-mono">
+                                {formatCurrency(order.total_amount)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                <span>{order.order_items?.length || 0} items</span>
+                                {hasUpsell && (
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
+                                    Upsell
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              {isMyOrder ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/70 text-xs font-semibold">
+                                  Assigned to You
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">Other Staff</span>
                               )}
-                            </div>
-                          </td>
+                            </td>
 
-                          <td className="p-4">
-                            {isMyOrder ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-bold">
-                                Assigned to You
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-500">Other Rep</span>
-                            )}
-                          </td>
+                            <td className="p-4">
+                              <div className="relative inline-block">
+                                <select
+                                  value={order.status}
+                                  onChange={(e) =>
+                                    handleStatusChange(order.id, e.target.value as OrderStatus)
+                                  }
+                                  className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="confirmed">Confirmed</option>
+                                  <option value="ready_to_ship">Ready to Ship</option>
+                                  <option value="on_the_way">On the Way</option>
+                                  <option value="delivered">Delivered</option>
+                                  <option value="canceled">Canceled</option>
+                                </select>
+                                <span
+                                  className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                />
+                              </div>
+                            </td>
 
-                          <td className="p-4">
-                            <select
-                              value={order.status}
-                              onChange={(e) =>
-                                handleStatusChange(order.id, e.target.value as OrderStatus)
-                              }
-                              className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${statusBadge.bg} bg-slate-900`}
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="confirmed">Confirmed</option>
-                              <option value="ready_to_ship">Ready to Ship</option>
-                              <option value="on_the_way">On the Way</option>
-                              <option value="delivered">Delivered</option>
-                              <option value="canceled">Canceled</option>
-                            </select>
-                          </td>
-
-                          <td className="p-4 text-right">
-                            <button
-                              onClick={() => setEditingOrderForItems(order)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
-                            >
-                              <PackageOpen className="w-3.5 h-3.5 text-indigo-400" />
-                              <span>Edit & History</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => setEditingOrderForItems(order)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                              >
+                                <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Edit & History</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -779,14 +832,14 @@ export default function SalesDashboard() {
                 placeholder="Search products in stock..."
                 value={inventorySearch}
                 onChange={(e) => setInventorySearch(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
               />
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl shadow-black/40">
+            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-slate-950/70 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <table className="w-full text-left text-sm text-slate-700">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <tr>
                       <th className="p-4">Product & Variant</th>
                       <th className="p-4">SKU</th>
@@ -794,42 +847,42 @@ export default function SalesDashboard() {
                       <th className="p-4 text-right">Live Stock Available</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60">
+                  <tbody className="divide-y divide-slate-100">
                     {loadingInventory ? (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-500">
+                        <td colSpan={4} className="p-8 text-center text-slate-400">
                           Loading inventory...
                         </td>
                       </tr>
                     ) : filteredVariants.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-500">
+                        <td colSpan={4} className="p-8 text-center text-slate-400">
                           No matching inventory items found.
                         </td>
                       </tr>
                     ) : (
                       filteredVariants.map((v) => (
-                        <tr key={v.id} className="hover:bg-slate-800/40 transition-colors">
+                        <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="p-4">
-                            <div className="font-semibold text-slate-200">
+                            <div className="font-semibold text-slate-900">
                               {(v.product as any)?.name || (v.product as any)?.title || 'Product'}
                             </div>
-                            <div className="text-xs text-indigo-400 mt-0.5">
+                            <div className="text-xs text-slate-500 mt-0.5">
                               Variant: {v.title}
                             </div>
                           </td>
-                          <td className="p-4 font-mono text-xs text-slate-400">{v.sku}</td>
-                          <td className="p-4 font-semibold text-slate-200">
+                          <td className="p-4 font-mono text-xs text-slate-500">{v.sku}</td>
+                          <td className="p-4 font-semibold text-slate-900 font-mono">
                             {formatCurrency(v.price)}
                           </td>
                           <td className="p-4 text-right">
                             <span
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
                                 v.stock_quantity === 0
-                                  ? 'bg-rose-950/80 text-rose-300 border-rose-800'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
                                   : v.stock_quantity <= 5
-                                  ? 'bg-amber-950/80 text-amber-300 border-amber-800'
-                                  : 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               }`}
                             >
                               {v.stock_quantity} available
@@ -847,20 +900,20 @@ export default function SalesDashboard() {
 
         {/* TAB 3: UPSELL REWARDS */}
         {activeTab === 'rewards' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl shadow-black/40">
-            <div className="p-4 border-b border-slate-800">
-              <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-400" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Award className="w-4 h-4 text-emerald-600" />
                 <span>My Upsell Commissions</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Itemized bonuses earned when adding upsell items to customer orders
+              <p className="text-xs text-slate-500 mt-0.5">
+                Bonuses earned when adding upsell items to customer orders
               </p>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950/70 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Order Number</th>
                     <th className="p-4">Commission Amount</th>
@@ -868,39 +921,39 @@ export default function SalesDashboard() {
                     <th className="p-4 text-right">Payout Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {loadingRewards ? (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-500">
+                      <td colSpan={4} className="p-8 text-center text-slate-400">
                         Loading rewards...
                       </td>
                     </tr>
                   ) : rewards.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-500">
+                      <td colSpan={4} className="p-8 text-center text-slate-400">
                         No rewards earned yet. Upsell products to customer orders to earn bonuses!
                       </td>
                     </tr>
                   ) : (
                     rewards.map((reward) => (
-                      <tr key={reward.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 font-mono font-bold text-indigo-400">
+                      <tr key={reward.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-4 font-mono font-bold text-slate-900">
                           {(reward.order as any)?.order_number || 'Order'}
                         </td>
-                        <td className="p-4 font-bold text-emerald-400 text-base">
+                        <td className="p-4 font-bold text-emerald-700 font-mono text-base">
                           {formatCurrency(reward.bonus_amount)}
                         </td>
-                        <td className="p-4 text-xs text-slate-400">
+                        <td className="p-4 text-xs text-slate-500">
                           {formatDate(reward.created_at)}
                         </td>
                         <td className="p-4 text-right">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                               reward.status === 'paid'
-                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 : reward.status === 'approved'
-                                ? 'bg-indigo-950/80 text-indigo-300 border-indigo-800'
-                                : 'bg-amber-950/80 text-amber-300 border-amber-800'
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
                             }`}
                           >
                             {reward.status.toUpperCase()}
@@ -917,25 +970,25 @@ export default function SalesDashboard() {
 
         {/* TAB 4: PAYOUTS & RECEIPTS */}
         {activeTab === 'payouts' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl shadow-black/40">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
                   <span>Withdrawal Requests & Admin Payment Receipts</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Track payout request approvals and view uploaded payment proof screenshots
                 </p>
               </div>
 
               <button
-                disabled={piggybankBalance <= 0}
+                disabled={availablePiggybank <= 0}
                 onClick={() => {
-                  setPayoutAmount(piggybankBalance.toString());
+                  setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-md shadow-amber-600/20 transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>New Payout Request</span>
@@ -943,8 +996,8 @@ export default function SalesDashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950/70 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Amount</th>
                     <th className="p-4">Method & Account</th>
@@ -953,44 +1006,44 @@ export default function SalesDashboard() {
                     <th className="p-4">Admin Receipt Proof</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {loadingPayouts ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-500">
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
                         Loading payout requests...
                       </td>
                     </tr>
                   ) : myPayouts.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-500">
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
                         No payout requests submitted yet.
                       </td>
                     </tr>
                   ) : (
                     myPayouts.map((payout) => (
-                      <tr key={payout.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 font-bold text-emerald-400 text-base">
+                      <tr key={payout.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-4 font-bold text-slate-900 font-mono text-base">
                           {formatCurrency(payout.amount)}
                         </td>
                         <td className="p-4">
-                          <div className="font-semibold text-slate-200">
+                          <div className="font-semibold text-slate-800 capitalize">
                             {payout.payment_method}
                           </div>
-                          <div className="font-mono text-xs text-indigo-400 mt-0.5">
+                          <div className="font-mono text-xs text-slate-500 mt-0.5">
                             {payout.account_number}
                           </div>
                         </td>
-                        <td className="p-4 text-xs text-slate-400">
+                        <td className="p-4 text-xs text-slate-500">
                           {formatDate(payout.created_at)}
                         </td>
                         <td className="p-4">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                               payout.status === 'approved'
-                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 : payout.status === 'rejected'
-                                ? 'bg-rose-950/80 text-rose-300 border-rose-800'
-                                : 'bg-amber-950/80 text-amber-300 border-amber-800'
+                                ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
                             }`}
                           >
                             {payout.status.toUpperCase()}
@@ -1005,15 +1058,15 @@ export default function SalesDashboard() {
                                   title: `Payment Proof: ${formatCurrency(payout.amount)} to ${payout.account_number}`,
                                 })
                               }
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold border border-slate-700 transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors"
                             >
-                              <ImageIcon className="w-3.5 h-3.5" />
-                              <span>View Payment Receipt</span>
+                              <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
+                              <span>View Receipt</span>
                             </button>
                           ) : payout.status === 'approved' ? (
-                            <span className="text-xs text-slate-500">Paid (no screenshot)</span>
+                            <span className="text-xs text-slate-400">Paid (no screenshot)</span>
                           ) : (
-                            <span className="text-xs text-slate-500 italic">Pending payment</span>
+                            <span className="text-xs text-slate-400 italic">Pending payment</span>
                           )}
                         </td>
                       </tr>
@@ -1028,53 +1081,53 @@ export default function SalesDashboard() {
 
       {/* REQUEST PAYOUT MODAL */}
       {isPayoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-emerald-600" />
                 <span>Request Commission Payout</span>
               </h3>
               <button
                 onClick={() => setIsPayoutModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitPayoutRequest} className="p-5 space-y-4">
-              <div className="p-3 bg-amber-950/30 border border-amber-800/40 rounded-xl flex items-center justify-between">
-                <span className="text-xs text-amber-300">Pending Piggybank:</span>
-                <span className="font-bold font-mono text-amber-400">
-                  {formatCurrency(piggybankBalance)}
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between">
+                <span className="text-xs text-slate-600 font-medium">Available to Withdraw:</span>
+                <span className="font-bold font-mono text-emerald-700 text-base">
+                  {formatCurrency(availablePiggybank)}
                 </span>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Withdrawal Amount (BDT)
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Withdrawal Amount (BDT) *
                 </label>
                 <input
                   type="number"
                   required
                   min="1"
-                  max={piggybankBalance}
+                  max={availablePiggybank}
                   step="any"
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Payment Method
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Payment Method *
                 </label>
                 <select
                   value={payoutMethod}
                   onChange={(e) => setPayoutMethod(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 >
                   <option value="bKash">bKash (Personal)</option>
                   <option value="Nagad">Nagad (Personal)</option>
@@ -1084,8 +1137,8 @@ export default function SalesDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Account Number / Details
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Account Number / Details *
                 </label>
                 <input
                   type="text"
@@ -1093,12 +1146,12 @@ export default function SalesDashboard() {
                   placeholder="e.g. 017XXXXXXXX"
                   value={payoutAccount}
                   onChange={(e) => setPayoutAccount(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Note to Admin (Optional)
                 </label>
                 <input
@@ -1106,7 +1159,7 @@ export default function SalesDashboard() {
                   placeholder="e.g. Payout for this week"
                   value={payoutNote}
                   onChange={(e) => setPayoutNote(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
 
@@ -1114,14 +1167,14 @@ export default function SalesDashboard() {
                 <button
                   type="button"
                   onClick={() => setIsPayoutModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingPayout}
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-sm shadow-md transition-all disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-all disabled:opacity-50"
                 >
                   {submittingPayout ? 'Submitting...' : 'Submit Request'}
                 </button>
@@ -1131,211 +1184,310 @@ export default function SalesDashboard() {
         </div>
       )}
 
-      {/* CREATE ORDER MODAL */}
+      {/* CREATE ORDER MODAL (PREVIOUS MINIMAL WHITE + DEDICATED FLAT ICONS + MODERN PRODUCT SELECT) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl my-8">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-indigo-400" />
-                <span>Create New Customer Order</span>
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl my-6">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">
+                  Create New Order
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Enter customer information, attribution & select items
+                </p>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitOrder} className="p-5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    Order Channel Source
-                  </label>
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value as OrderSource)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="whatsapp">WhatsApp Order</option>
-                    <option value="messenger">Messenger Order</option>
-                    <option value="phone">Phone Call Order</option>
-                    <option value="website">Website Order</option>
-                    <option value="manual">Manual Direct</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    Attribution Coupon Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. REP10"
-                    value={couponUsed}
-                    onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    Customer Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Customer full name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="01XXXXXXXXX"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
+              {/* ORDER SOURCE WITH DEDICATED FLAT ICONS (Picture 2 & 3 requested!) */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Shipping Delivery Address
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Order Source
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="Detailed house, road, area, city..."
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                <div className="grid grid-cols-4 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setSource('whatsapp')}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all ${
+                      source === 'whatsapp'
+                        ? 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/10'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <WhatsAppFlatIcon className="w-6 h-6 mb-1" />
+                    <span className={`text-[11px] font-semibold ${
+                      source === 'whatsapp' ? 'text-emerald-800' : 'text-slate-600'
+                    }`}>
+                      WhatsApp
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSource('messenger')}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all ${
+                      source === 'messenger'
+                        ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/10'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <MessengerFlatIcon className="w-6 h-6 mb-1" />
+                    <span className={`text-[11px] font-semibold ${
+                      source === 'messenger' ? 'text-blue-800' : 'text-slate-600'
+                    }`}>
+                      Messenger
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSource('phone')}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all ${
+                      source === 'phone'
+                        ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/10'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <PhoneCallFlatIcon className="w-6 h-6 mb-1" />
+                    <span className={`text-[11px] font-semibold ${
+                      source === 'phone' ? 'text-amber-800' : 'text-slate-600'
+                    }`}>
+                      Phone Call
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSource('manual')}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all ${
+                      source === 'manual'
+                        ? 'border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-500/10'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <WalkInFlatIcon className="w-6 h-6 mb-1" />
+                    <span className={`text-[11px] font-semibold ${
+                      source === 'manual' ? 'text-indigo-800' : 'text-slate-600'
+                    }`}>
+                      Walk-in
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Customer Full Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Customer Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Shahajadi Farjana"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
 
-              {/* Add Order Line Item Picker */}
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
-                  Add Products to Order
-                </span>
+              {/* Customer Phone Number */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Customer Phone Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 01726640689"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  <div className="md:col-span-6">
-                    <label className="block text-[11px] text-slate-400 mb-1">Select Item</label>
-                    <select
-                      value={selectedVariantId}
-                      onChange={(e) => setSelectedVariantId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="">-- Choose Product & Variant --</option>
-                      {variants.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {(v.product as any)?.name || (v.product as any)?.title} ({v.title}) - {formatCurrency(v.price)} [Stock: {v.stock_quantity}]
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Full Delivery Address */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Full Delivery Address *
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="House #, Road #, Area, City (e.g. 264/6, Block C, Banasree, Dhaka)"
+                  value={shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                />
+              </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-[11px] text-slate-400 mb-1">Quantity</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemQuantity}
-                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              {/* ADD PRODUCTS TO ORDER (MODERN DROPDOWN replacing Picture 3!) */}
+              <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Add Products to Order
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
+                    Live Stock Protected
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] text-slate-500 font-medium mb-1">
+                      Select Product / Variant
+                    </label>
+                    <ModernProductSelect
+                      variants={variants}
+                      selectedVariantId={selectedVariantId}
+                      onSelect={(variantId) => setSelectedVariantId(variantId)}
                     />
                   </div>
 
-                  <div className="md:col-span-2 flex items-center h-9">
-                    <label className="flex items-center gap-2 text-xs text-amber-400 cursor-pointer select-none">
+                  <div className="flex items-center gap-3">
+                    <div className="w-28">
+                      <label className="block text-[11px] text-slate-500 font-medium mb-1">Quantity</label>
                       <input
-                        type="checkbox"
-                        checked={isUpsellItem}
-                        onChange={(e) => setIsUpsellItem(e.target.checked)}
-                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                        type="number"
+                        min="1"
+                        value={itemQuantity}
+                        onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                       />
-                      <span>Upsell Item</span>
-                    </label>
+                    </div>
+
+                    <div className="flex items-center pt-5">
+                      <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isUpsellItem}
+                          onChange={(e) => setIsUpsellItem(e.target.checked)}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                        />
+                        <span>Upsell Item?</span>
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="md:col-span-2">
-                    <button
-                      type="button"
-                      onClick={handleAddItem}
-                      className="w-full h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add Item</span>
+                  </button>
                 </div>
 
                 {/* Items List */}
-                {orderItems.length > 0 && (
-                  <div className="divide-y divide-slate-800/80 pt-2">
+                {orderItems.length > 0 ? (
+                  <div className="divide-y divide-slate-200/80 pt-2">
                     {orderItems.map((item, idx) => (
-                      <div key={idx} className="py-2 flex items-center justify-between text-xs">
+                      <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-200">{item.title}</span>
-                          <span className="text-slate-400">({item.variant_title})</span>
-                          <span className="text-indigo-400 font-mono">x{item.quantity}</span>
+                          <span className="font-semibold text-slate-900">{item.title}</span>
+                          <span className="text-slate-500">({item.variant_title})</span>
+                          <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
                           {item.is_upsell && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold text-[10px]">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
                               Upsell
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-slate-300">
+                          <span className="font-mono font-bold text-slate-900">
                             {formatCurrency(item.price * item.quantity)}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1 text-slate-400 hover:text-rose-400"
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
                     ))}
 
-                    <div className="pt-2 flex justify-between font-bold text-sm text-slate-100">
+                    <div className="pt-3 flex justify-between font-bold text-sm text-slate-900">
                       <span>Total Order Amount:</span>
-                      <span className="font-mono text-indigo-400">
+                      <span className="font-mono text-emerald-700 text-base">
                         {formatCurrency(
                           orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
                         )}
                       </span>
                     </div>
                   </div>
+                ) : (
+                  <p className="text-center text-xs text-slate-400 italic pt-1">
+                    No items added yet. Pick an item above to add to cart.
+                  </p>
                 )}
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3">
+              {/* Salesperson Coupon Code */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Salesperson Coupon Code (For Commission)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. NUR10"
+                  value={couponUsed}
+                  onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Payment Method
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                >
+                  <option value="Cash on Delivery (COD)">Cash on Delivery (COD)</option>
+                  <option value="bKash (Prepaid)">bKash (Prepaid)</option>
+                  <option value="Nagad (Prepaid)">Nagad (Prepaid)</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              {/* Order Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Order Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Customer requested evening delivery"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-colors"
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingOrder}
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-all disabled:opacity-50"
                 >
                   {submittingOrder ? 'Placing Order...' : 'Confirm & Create Order'}
                 </button>

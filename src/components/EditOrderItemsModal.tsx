@@ -21,6 +21,7 @@ import {
 import { Order, OrderItem, ProductVariant } from '@/types/database';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import ModernProductSelect from '@/components/ModernProductSelect';
 
 interface EditableLineItem {
   id?: string;
@@ -663,19 +664,11 @@ export default function EditOrderItemsModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
                   <div className="sm:col-span-6">
-                    <select
-                      value={selectedVariantId}
-                      onChange={(e) => setSelectedVariantId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
-                    >
-                      <option value="">-- Select product variant to add --</option>
-                      {catalogVariants.map((variant) => (
-                        <option key={variant.id} value={variant.id}>
-                          {variant.product?.title || variant.title}{' '}
-                          {variant.product ? `(${variant.title})` : ''} — {formatCurrency(variant.price)} (Stock: {variant.stock_quantity})
-                        </option>
-                      ))}
-                    </select>
+                    <ModernProductSelect
+                      variants={catalogVariants}
+                      selectedVariantId={selectedVariantId}
+                      onSelect={(variantId) => setSelectedVariantId(variantId)}
+                    />
                   </div>
 
                   <div className="sm:col-span-2">
