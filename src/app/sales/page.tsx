@@ -125,6 +125,11 @@ export default function SalesDashboard() {
   const [graphYear, setGraphYear] = useState<number>(new Date().getFullYear());
   const [graphMonth, setGraphMonth] = useState<number>(new Date().getMonth());
 
+  // Realtime Online / Away Presence State (defaults to false / Away if not toggled)
+  const [isOnline, setIsOnline] = useState<boolean>(false);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+
   // Load User Profile & Realtime Presence
   useEffect(() => {
     let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -133,6 +138,7 @@ export default function SalesDashboard() {
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted) return;
+      currentUserIdRef.current = user.id;
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -153,17 +159,24 @@ export default function SalesDashboard() {
         }
       }
 
+      // Check saved preference: if not explicitly toggled online, default to false (Away)
+      const savedPref = typeof window !== 'undefined' ? localStorage.getItem('boyon_staff_status') : null;
+      const initialOnline = savedPref !== null ? savedPref === 'online' : (profile?.is_online ?? false);
+      setIsOnline(initialOnline);
+
       // Single presence channel
       const channel = supabase.channel('online-staff', {
         config: { presence: { key: user.id } },
       });
       presenceChannel = channel;
+      presenceChannelRef.current = channel;
 
       channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && isMounted) {
           await channel.track({
             user_id: user.id,
             full_name: profile?.full_name || 'Sales Staff',
+            status: initialOnline ? 'online' : 'away',
             online_at: new Date().toISOString(),
           });
         }
@@ -179,6 +192,43 @@ export default function SalesDashboard() {
       }
     };
   }, []);
+
+  // Toggle Online / Away Status
+  const handleToggleOnline = async (nextStatus: boolean) => {
+    setIsOnline(nextStatus);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('boyon_staff_status', nextStatus ? 'online' : 'away');
+    }
+
+    // Broadcast through presence channel immediately
+    if (presenceChannelRef.current && currentUserIdRef.current) {
+      try {
+        await presenceChannelRef.current.track({
+          user_id: currentUserIdRef.current,
+          full_name: currentProfile?.full_name || 'Sales Staff',
+          status: nextStatus ? 'online' : 'away',
+          online_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Presence track error:', err);
+      }
+    }
+
+    // Persist to DB profile
+    if (currentUserIdRef.current) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            is_online: nextStatus,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq('id', currentUserIdRef.current);
+      } catch (err) {
+        console.warn('Profile is_online update error:', err);
+      }
+    }
+  };
 
   // Fetch Orders
   const fetchOrders = async () => {
@@ -702,9 +752,84 @@ export default function SalesDashboard() {
         currentProfile={currentProfile}
         activeTab={activeTab}
         onTabChange={(tab: any) => setActiveTab(tab)}
+        isOnline={isOnline}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Top Presence & Staff Identity Bar */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm overflow-hidden shrink-0">
+                {currentProfile?.avatar_url ? (
+                  <img src={currentProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  (currentProfile?.full_name || currentProfile?.email || 'S')[0].toUpperCase()
+                )}
+              </div>
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white ${
+                  isOnline ? 'bg-emerald-500' : 'bg-amber-400'
+                }`}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-extrabold text-slate-900 text-base sm:text-lg">
+                  {currentProfile?.full_name || 'Sales Staff'}
+                </h1>
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+                    isOnline
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    {isOnline && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${
+                        isOnline ? 'bg-emerald-500' : 'bg-amber-500'
+                      }`}
+                    />
+                  </span>
+                  <span>{isOnline ? 'Online' : 'Away'}</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isOnline
+                  ? 'You are active and marked as Online to the management team.'
+                  : 'You are currently set as Away. Toggle on when you are ready to work.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Set as Online Switch Toggle */}
+          <div className="flex items-center gap-3 self-end sm:self-center bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl">
+            <span className="text-xs font-bold text-slate-700 select-none">
+              Set as Online
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isOnline}
+              onClick={() => handleToggleOnline(!isOnline)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                isOnline ? 'bg-emerald-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  isOnline ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* KPI Cards: Today's Earnings & Piggybank Balance */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {/* Today's Earnings (Resets at 12am) */}

@@ -28,6 +28,7 @@ interface NavbarProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
   tabBadges?: Record<string, number | string | undefined>;
+  isOnline?: boolean;
 }
 
 export default function Navbar({
@@ -35,10 +36,13 @@ export default function Navbar({
   activeTab,
   onTabChange,
   tabBadges = {},
+  isOnline,
 }: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+
+  const userIsOnline = isOnline !== undefined ? isOnline : currentProfile?.is_online ?? true;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -243,8 +247,10 @@ export default function Navbar({
                         )}
                       </div>
                       <span
-                        className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
-                        title="Online"
+                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                          userIsOnline ? 'bg-emerald-500' : 'bg-amber-400'
+                        }`}
+                        title={userIsOnline ? 'Online' : 'Away'}
                       />
                     </div>
                     <div className="hidden sm:block">
@@ -261,13 +267,29 @@ export default function Navbar({
                   {/* Desktop Dropdown */}
                   {profileDropdownOpen && (
                     <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95">
-                      <div className="px-4 py-2 border-b border-slate-100">
-                        <p className="text-xs font-bold text-slate-900 truncate">
-                          {currentProfile.full_name || 'Staff User'}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {currentProfile.email}
-                        </p>
+                      <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {currentProfile.full_name || 'Staff User'}
+                          </p>
+                          <p className="text-[10px] text-slate-500 truncate">
+                            {currentProfile.email}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
+                            userIsOnline
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              userIsOnline ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                          />
+                          {userIsOnline ? 'Online' : 'Away'}
+                        </span>
                       </div>
 
                       <div className="py-1">

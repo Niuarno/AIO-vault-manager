@@ -42,6 +42,7 @@ export interface Profile {
   coupon_code: string | null;
   bio: string | null;
   is_active: boolean;
+  is_online?: boolean;
   payment_info?: PaymentInfo | null;
   last_seen_at?: string | null;
   created_at: string;

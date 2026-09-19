@@ -46,6 +46,7 @@ import ProcessPayoutModal from '@/components/ProcessPayoutModal';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
 import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 import ExportStaffReportModal from '@/components/ExportStaffReportModal';
+import DeleteStaffModal from '@/components/DeleteStaffModal';
 import {
   WhatsAppFlatIcon,
   MessengerFlatIcon,
@@ -104,6 +105,7 @@ export default function AdminDashboard() {
   const [adminGraphYear, setAdminGraphYear] = useState<number>(new Date().getFullYear());
   const [adminGraphMonth, setAdminGraphMonth] = useState<number>(new Date().getMonth());
   const [staffToExport, setStaffToExport] = useState<Profile | null>(null);
+  const [staffToDelete, setStaffToDelete] = useState<Profile | null>(null);
 
   // Payouts State
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
@@ -146,7 +148,13 @@ export default function AdminDashboard() {
           const state = channel.presenceState();
           const activeIds = new Set<string>();
           Object.keys(state).forEach((key) => {
-            activeIds.add(key);
+            const userPresences = state[key] as any[];
+            const isUserOnline = userPresences.some(
+              (p) => p?.status === 'online'
+            );
+            if (isUserOnline) {
+              activeIds.add(key);
+            }
           });
           setOnlineUserIds(activeIds);
         })
@@ -1630,17 +1638,21 @@ export default function AdminDashboard() {
                                   </div>
                                   <span
                                     className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
-                                      isOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                                      isOnline ? 'bg-emerald-500' : 'bg-amber-400'
                                     }`}
-                                    title={isOnline ? 'Online now' : 'Offline'}
+                                    title={isOnline ? 'Online' : 'Away'}
                                   />
                                 </div>
                                 <div>
                                   <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                                     <span>{member.full_name || 'Anonymous Staff'}</span>
-                                    {isOnline && (
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    {isOnline ? (
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                                         Online
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                        Away
                                       </span>
                                     )}
                                   </div>
@@ -1737,6 +1749,17 @@ export default function AdminDashboard() {
                                   <Download className="w-3.5 h-3.5 text-emerald-600" />
                                   <span>Export Record</span>
                                 </button>
+                                {member.id !== currentProfile?.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setStaffToDelete(member)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
+                                    title="Permanently Delete Staff Member & Associated Data"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                    <span className="hidden xl:inline">Delete</span>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2406,6 +2429,24 @@ export default function AdminDashboard() {
           staffMember={staffToExport}
           orders={orders}
           rewards={teamRewards}
+        />
+      )}
+
+      {/* Delete Staff Modal */}
+      {staffToDelete && (
+        <DeleteStaffModal
+          staff={staffToDelete}
+          isOpen={true}
+          onClose={() => setStaffToDelete(null)}
+          onDeleted={(deletedStaffId) => {
+            setStaffToDelete(null);
+            setSalesTeam((prev) => prev.filter((s) => s.id !== deletedStaffId));
+            if (selectedStaffForGraph?.id === deletedStaffId) {
+              setSelectedStaffForGraph(null);
+            }
+            fetchOrders();
+            fetchTeamAndRewards();
+          }}
         />
       )}
     </div>
