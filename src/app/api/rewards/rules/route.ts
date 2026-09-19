@@ -4,6 +4,7 @@ import {
   parseQuotaTier,
   encodeQuotaTierPayload,
   DEFAULT_WEBSITE_QUOTA_TIERS,
+  DEFAULT_NON_WEBSITE_SALES_TIERS,
 } from '@/lib/commission';
 
 export async function GET() {
@@ -18,35 +19,55 @@ export async function GET() {
 
     let rules = rawRules || [];
 
-    // Check if any quota tier exists
-    const hasQuotaTiers = rules.some(
-      (r) =>
-        (typeof r.name === 'string' && r.name.startsWith('{')) ||
-        DEFAULT_WEBSITE_QUOTA_TIERS.some((d) => d.bonus === Number(r.value))
-    );
+    // Check if website quota tiers exist
+    const hasWebsiteTiers = rules.some((r) => {
+      const parsed = parseQuotaTier(r);
+      return parsed.source === 'website';
+    });
 
-    // If only old legacy rules exist or table is empty, auto-seed the 7 tiers from Image 2
-    if (!hasQuotaTiers || rules.length === 0) {
-      // Remove old legacy sample rules
-      await supabase.from('reward_rules').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Check if non-website daily sales tiers exist
+    const hasOtherTiers = rules.some((r) => {
+      const parsed = parseQuotaTier(r);
+      return parsed.source !== 'website';
+    });
 
-      const toInsert = DEFAULT_WEBSITE_QUOTA_TIERS.map((tier) =>
-        encodeQuotaTierPayload({
-          name: tier.name,
-          min_quota: tier.min_quota,
-          bonus: tier.bonus,
-          source: 'website',
-          is_active: true,
-        })
-      );
+    const newInserts: any[] = [];
 
-      const { data: seeded, error: seedErr } = await supabase
+    if (!hasWebsiteTiers) {
+      DEFAULT_WEBSITE_QUOTA_TIERS.forEach((tier) => {
+        newInserts.push(
+          encodeQuotaTierPayload({
+            name: tier.name,
+            min_quota: tier.min_quota,
+            bonus: tier.bonus,
+            source: 'website',
+            is_active: true,
+          })
+        );
+      });
+    }
+
+    if (!hasOtherTiers) {
+      DEFAULT_NON_WEBSITE_SALES_TIERS.forEach((tier) => {
+        newInserts.push(
+          encodeQuotaTierPayload({
+            name: tier.name,
+            min_quota: tier.min_quota,
+            bonus: tier.bonus,
+            source: 'other',
+            is_active: true,
+          })
+        );
+      });
+    }
+
+    if (newInserts.length > 0) {
+      const { data: seeded } = await supabase
         .from('reward_rules')
-        .insert(toInsert)
+        .insert(newInserts)
         .select('*');
-
-      if (!seedErr && seeded) {
-        rules = seeded;
+      if (seeded) {
+        rules = [...rules, ...seeded];
       }
     }
 
@@ -64,14 +85,14 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, min_quota, bonus, is_active } = body;
+    const { name, min_quota, bonus, source, is_active } = body;
 
     const quotaNum = parseFloat(min_quota);
     const bonusNum = parseFloat(bonus);
 
     if (isNaN(quotaNum) || quotaNum <= 0) {
       return NextResponse.json(
-        { error: 'Please provide a valid positive Minimum Extra Sales (Quota) value.' },
+        { error: 'Please provide a valid positive Minimum Sales Target value.' },
         { status: 400 }
       );
     }
@@ -82,12 +103,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const tierSource = source === 'website' ? 'website' : 'other';
     const supabase = createAdminClient();
     const payload = encodeQuotaTierPayload({
       name: name || `Tier (৳${quotaNum.toLocaleString()}+)`,
       min_quota: quotaNum,
       bonus: bonusNum,
-      source: 'website',
+      source: tierSource,
       is_active: is_active ?? true,
     });
 
@@ -102,7 +124,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       rule: parseQuotaTier(newRule),
-      message: 'Website Commission Quota Tier created successfully.',
+      message: 'Commission Tier created successfully.',
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -112,7 +134,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, min_quota, bonus, is_active } = body;
+    const { id, name, min_quota, bonus, source, is_active } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Rule ID is required' }, { status: 400 });
@@ -136,12 +158,13 @@ export async function PATCH(req: NextRequest) {
     const updatedBonus = bonus !== undefined ? parseFloat(bonus) : currentTier.bonus;
     const updatedName = name !== undefined ? name : currentTier.name;
     const updatedActive = is_active !== undefined ? Boolean(is_active) : currentTier.is_active;
+    const updatedSource = source !== undefined ? (source === 'website' ? 'website' : 'other') : currentTier.source;
 
     const payload = encodeQuotaTierPayload({
       name: updatedName,
       min_quota: updatedQuota,
       bonus: updatedBonus,
-      source: 'website',
+      source: updatedSource,
       is_active: updatedActive,
     });
 
@@ -160,7 +183,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({
       success: true,
       rule: parseQuotaTier(updatedRule),
-      message: 'Website Commission Quota Tier updated successfully.',
+      message: 'Commission Tier updated successfully.',
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

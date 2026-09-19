@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
+import { syncStaffCommissionRewards } from '@/lib/commission';
 
 export async function POST(req: NextRequest) {
   try {
@@ -173,12 +173,17 @@ export async function POST(req: NextRequest) {
       throw itemsError;
     }
 
-    // 3. Website Upsell Quota Reward Processing (Strictly applies to Website orders)
+    // 3. Commission / Bonus Reward Processing (Website Upsell Quota or Other Sources Daily Sales Bonus)
     let rewardGiven = 0;
-    if (assignedSalesRepId && isWebsite) {
-      const quotaResult = await syncWebsiteUpsellQuotaRewards(supabase, assignedSalesRepId, newOrder.id);
-      if (quotaResult?.targetBonus) {
-        rewardGiven = quotaResult.targetBonus;
+    if (assignedSalesRepId) {
+      const rewardResult = await syncStaffCommissionRewards(
+        supabase,
+        assignedSalesRepId,
+        newOrder.id,
+        newOrder.source
+      );
+      if (rewardResult?.targetBonus) {
+        rewardGiven = rewardResult.targetBonus;
       }
     }
 

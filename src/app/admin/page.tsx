@@ -111,12 +111,14 @@ export default function AdminDashboard() {
   const [processingPayout, setProcessingPayout] = useState<PayoutRequest | null>(null);
   const [lightboxScreenshot, setLightboxScreenshot] = useState<{ url: string; title: string } | null>(null);
 
-  // Website Commission Quota Tiers State
+  // Commission & Daily Sales Quota Tiers State
   const [quotaTiers, setQuotaTiers] = useState<QuotaTier[]>([]);
   const [loadingRules, setLoadingRules] = useState(false);
   const [newTierName, setNewTierName] = useState('');
   const [newTierQuota, setNewTierQuota] = useState('');
   const [newTierBonus, setNewTierBonus] = useState('');
+  const [newTierSource, setNewTierSource] = useState<'other' | 'website'>('other');
+  const [rulesScopeTab, setRulesScopeTab] = useState<'all' | 'other' | 'website'>('all');
   const [editingTier, setEditingTier] = useState<QuotaTier | null>(null);
   const [deletingTierId, setDeletingTierId] = useState<string | null>(null);
 
@@ -517,6 +519,7 @@ export default function AdminDashboard() {
           name: newTierName.trim() || `Tier (৳${quota.toLocaleString()}+)`,
           min_quota: quota,
           bonus: bonus,
+          source: newTierSource,
           is_active: true,
         }),
       });
@@ -529,10 +532,10 @@ export default function AdminDashboard() {
         setNewTierQuota('');
         setNewTierBonus('');
       } else {
-        alert(json.error || 'Failed to create quota tier');
+        alert(json.error || 'Failed to create tier');
       }
     } catch (err: any) {
-      alert(err.message || 'Error creating quota tier');
+      alert(err.message || 'Error creating tier');
     }
   };
 
@@ -550,6 +553,7 @@ export default function AdminDashboard() {
           name: editingTier.name,
           min_quota: editingTier.min_quota,
           bonus: editingTier.bonus,
+          source: editingTier.source || 'other',
           is_active: editingTier.is_active,
         }),
       });
@@ -562,10 +566,10 @@ export default function AdminDashboard() {
         );
         setEditingTier(null);
       } else {
-        alert(json.error || 'Failed to update quota tier');
+        alert(json.error || 'Failed to update tier');
       }
     } catch (err: any) {
-      alert(err.message || 'Error updating quota tier');
+      alert(err.message || 'Error updating tier');
     }
   };
 
@@ -1885,13 +1889,45 @@ export default function AdminDashboard() {
                 <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
                   <h3 className="font-bold text-base text-slate-900 flex items-center gap-2 mb-1">
                     <Award className="w-4 h-4 text-emerald-600" />
-                    <span>Create Quota Milestone Tier</span>
+                    <span>Create Milestone Tier</span>
                   </h3>
                   <p className="text-xs text-slate-500 mb-4">
-                    Set bonus milestones for extra sales added on website orders
+                    {newTierSource === 'other'
+                      ? 'Set daily sales volume bonuses for non-website orders (Manual, Phone, Social)'
+                      : 'Set bonus milestones for extra sales added on website orders'}
                   </p>
 
                   <form onSubmit={handleCreateTier} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Order Source Scope *
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewTierSource('other')}
+                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                            newTierSource === 'other'
+                              ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          Other Sources (Daily Sales)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewTierSource('website')}
+                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                            newTierSource === 'website'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          Website (Upsell)
+                        </button>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
                         Tier Name / Label *
@@ -1899,7 +1935,7 @@ export default function AdminDashboard() {
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Tier 8 or High Ticket Extra"
+                        placeholder={newTierSource === 'other' ? 'e.g. Tier 6 or ৳60k Club' : 'e.g. Tier 8 or High Ticket Extra'}
                         value={newTierName}
                         onChange={(e) => setNewTierName(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -1908,7 +1944,7 @@ export default function AdminDashboard() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Min Extra Sales Added (Quota BDT) *
+                        {newTierSource === 'other' ? 'Daily Sales Target (BDT) *' : 'Min Extra Sales Added (Quota BDT) *'}
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
@@ -1917,7 +1953,7 @@ export default function AdminDashboard() {
                           required
                           min="1"
                           step="any"
-                          placeholder="3000"
+                          placeholder={newTierSource === 'other' ? '20000' : '3000'}
                           value={newTierQuota}
                           onChange={(e) => setNewTierQuota(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -1936,7 +1972,7 @@ export default function AdminDashboard() {
                           required
                           min="1"
                           step="any"
-                          placeholder="100"
+                          placeholder={newTierSource === 'other' ? '200' : '100'}
                           value={newTierBonus}
                           onChange={(e) => setNewTierBonus(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -1955,52 +1991,94 @@ export default function AdminDashboard() {
 
                     <button
                       type="submit"
-                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs flex items-center justify-center gap-2"
+                      className={`w-full py-2.5 rounded-xl text-white font-semibold text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
+                        newTierSource === 'other' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-900 hover:bg-slate-800'
+                      }`}
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Add Quota Tier</span>
+                      <span>{newTierSource === 'other' ? 'Add Daily Sales Tier' : 'Add Website Quota Tier'}</span>
                     </button>
                   </form>
                 </div>
 
                 {/* Scope Guidance Info Card */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600 space-y-2">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600 space-y-3">
                   <div className="font-bold text-slate-800 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Website Order Quota Rules</span>
+                    <span>Rule Sets Overview</span>
                   </div>
-                  <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-500">
-                    <li>Applies exclusively to <strong>Website Orders</strong> (`source = website`).</li>
-                    <li>Extra sales combine across all website orders upsold today.</li>
-                    <li>Passing a quota milestone unlocks that tier's fixed bonus.</li>
-                    <li>Daily commissions reset at 12:00 AM midnight.</li>
-                  </ul>
+                  <div className="space-y-2 text-[11px] text-slate-600">
+                    <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60">
+                      <div className="font-bold text-amber-900 mb-0.5">Every Other Order Source (Non-Website)</div>
+                      <p className="text-amber-800">
+                        Applies to all manual, phone, social & other non-website sales. Staff earn progressive daily bonuses based on total daily sales volume (৳20k: ৳200, ৳25k: ৳500, ৳30k: ৳1,000, ৳40k: ৳1,500, ৳50k+: ৳2,000).
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60">
+                      <div className="font-bold text-emerald-900 mb-0.5">Website Orders (Upsell Quota)</div>
+                      <p className="text-emerald-800">
+                        Applies strictly to website orders where staff upsell extra products. Milestones unlock at ৳3k, ৳4k, ৳6k, ৳8k, ৳12k, ৳16k, and ৳24k.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Right 2 Columns: Quota Tiers Table (From Image 2) */}
+              {/* Right 2 Columns: Quota Tiers Table */}
               <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
                 <div>
-                  <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-base text-slate-900">
-                        Website Order Upsell Commission Rules
+                        Commission & Daily Sales Bonus Rules
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Extra sales milestones required to earn progressive staff commission bonuses
+                        Performance thresholds and commission rewards configured for sales staff
                       </p>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      <WebsiteFlatIcon className="w-3.5 h-3.5" />
-                      <span>Website Only</span>
-                    </span>
+
+                    <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setRulesScopeTab('all')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          rulesScopeTab === 'all'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All ({quotaTiers.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRulesScopeTab('other')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          rulesScopeTab === 'other'
+                            ? 'bg-white text-amber-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Other Sources ({quotaTiers.filter((t) => t.source !== 'website').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRulesScopeTab('website')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          rulesScopeTab === 'website'
+                            ? 'bg-white text-emerald-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Website ({quotaTiers.filter((t) => t.source === 'website').length})
+                      </button>
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-700">
                       <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                         <tr>
-                          <th className="p-4">Tier & Quota</th>
+                          <th className="p-4">Tier & Criteria</th>
                           <th className="p-4">Bonus Reward</th>
                           <th className="p-4">Effective Rate</th>
                           <th className="p-4">Scope</th>
@@ -2018,11 +2096,17 @@ export default function AdminDashboard() {
                         ) : quotaTiers.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="p-8 text-center text-slate-400">
-                              No commission quota tiers configured.
+                              No commission tiers configured.
                             </td>
                           </tr>
                         ) : (
-                          quotaTiers.map((tier) => (
+                          quotaTiers
+                            .filter((t) => {
+                              if (rulesScopeTab === 'website') return t.source === 'website';
+                              if (rulesScopeTab === 'other') return t.source !== 'website';
+                              return true;
+                            })
+                            .map((tier) => (
                             <tr
                               key={tier.id}
                               className={`hover:bg-slate-50/70 transition-colors ${
@@ -2032,7 +2116,9 @@ export default function AdminDashboard() {
                               <td className="p-4">
                                 <div className="font-bold text-slate-900">{tier.name}</div>
                                 <div className="text-xs text-slate-500 font-mono mt-0.5">
-                                  Min Extra Sales: {formatCurrency(tier.min_quota)}+
+                                  {tier.source === 'website'
+                                    ? `Min Extra Sales: ${formatCurrency(tier.min_quota)}+`
+                                    : `Daily Sales Target: ${formatCurrency(tier.min_quota)}+`}
                                 </div>
                               </td>
 
@@ -2041,23 +2127,29 @@ export default function AdminDashboard() {
                               </td>
 
                               <td className="p-4">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200 font-mono">
                                   {tier.effective_pct}%
                                 </span>
                               </td>
 
                               <td className="p-4">
-                                <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
-                                  <WebsiteFlatIcon className="w-3.5 h-3.5" />
-                                  <span>Website Orders</span>
-                                </span>
+                                {tier.source === 'website' ? (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    <WebsiteFlatIcon className="w-3.5 h-3.5" />
+                                    <span>Website Only</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    <span>Other Sources</span>
+                                  </span>
+                                )}
                               </td>
 
                               <td className="p-4">
                                 <button
                                   type="button"
                                   onClick={() => handleToggleTierActive(tier)}
-                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                                     tier.is_active
                                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                                       : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
@@ -2072,8 +2164,8 @@ export default function AdminDashboard() {
                                   <button
                                     type="button"
                                     onClick={() => setEditingTier(tier)}
-                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
-                                    title="Edit Quota Tier"
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                                    title="Edit Tier"
                                   >
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
@@ -2081,8 +2173,8 @@ export default function AdminDashboard() {
                                     type="button"
                                     disabled={deletingTierId === tier.id}
                                     onClick={() => handleDeleteTier(tier.id)}
-                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-40"
-                                    title="Delete Quota Tier"
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-40 cursor-pointer"
+                                    title="Delete Tier"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -2105,7 +2197,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
                       <Pencil className="w-4 h-4 text-slate-600" />
-                      <span>Edit Commission Quota Tier</span>
+                      <span>Edit Commission Tier</span>
                     </h4>
                     <button
                       type="button"
@@ -2117,6 +2209,36 @@ export default function AdminDashboard() {
                   </div>
 
                   <form onSubmit={handleUpdateTier} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Scope
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTier({ ...editingTier, source: 'other' })}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                            editingTier.source !== 'website'
+                              ? 'bg-amber-500 text-white border-amber-500'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Other Sources
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingTier({ ...editingTier, source: 'website' })}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                            editingTier.source === 'website'
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Website (Upsell)
+                        </button>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
                         Tier Name / Label
@@ -2134,7 +2256,7 @@ export default function AdminDashboard() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Min Extra Sales Added (Quota BDT)
+                        {editingTier.source === 'website' ? 'Min Extra Sales Added (Quota BDT)' : 'Daily Sales Target (BDT)'}
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
@@ -2178,26 +2300,17 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {editingTier.min_quota > 0 && editingTier.bonus > 0 && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
-                        <span className="font-medium">Effective Rate:</span>
-                        <span className="font-bold font-mono">
-                          {((editingTier.bonus / editingTier.min_quota) * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-2">
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                       <button
                         type="button"
                         onClick={() => setEditingTier(null)}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
                       >
                         Save Changes
                       </button>

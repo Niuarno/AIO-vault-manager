@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
+import { syncStaffCommissionRewards } from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -331,9 +331,14 @@ export async function PATCH(
       updatedOrder = fullUpdateData;
     }
 
-    // 9. If this order is from website and attributed to a staff member, synchronize quota rewards
-    if (isWebsite && resolvedSalesRepId) {
-      await syncWebsiteUpsellQuotaRewards(supabase, resolvedSalesRepId, orderId);
+    // 9. If attributed to a staff member, synchronize quota / sales bonus rewards
+    if (resolvedSalesRepId) {
+      await syncStaffCommissionRewards(
+        supabase,
+        resolvedSalesRepId,
+        orderId,
+        updatedOrder?.source || (isWebsite ? 'website' : 'other')
+      );
     }
 
     return NextResponse.json({ success: true, order: updatedOrder });

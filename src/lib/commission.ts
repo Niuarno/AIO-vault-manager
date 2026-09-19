@@ -13,7 +13,7 @@ export interface QuotaTier {
   updated_at?: string;
 }
 
-// Default 7 Tiers from Image 2
+// Default 7 Tiers for Website Orders (Upsell Quota)
 export const DEFAULT_WEBSITE_QUOTA_TIERS = [
   { name: 'Tier 1', min_quota: 3000, bonus: 100 },
   { name: 'Tier 2', min_quota: 4000, bonus: 250 },
@@ -22,6 +22,15 @@ export const DEFAULT_WEBSITE_QUOTA_TIERS = [
   { name: 'Tier 5', min_quota: 12000, bonus: 1200 },
   { name: 'Tier 6', min_quota: 16000, bonus: 1800 },
   { name: 'Tier 7', min_quota: 24000, bonus: 3000 },
+];
+
+// Default 5 Daily Sales Bonus Tiers for All Other Order Sources (Beside Website)
+export const DEFAULT_NON_WEBSITE_SALES_TIERS = [
+  { name: 'Tier 1', min_quota: 20000, bonus: 200 },
+  { name: 'Tier 2', min_quota: 25000, bonus: 500 },
+  { name: 'Tier 3', min_quota: 30000, bonus: 1000 },
+  { name: 'Tier 4', min_quota: 40000, bonus: 1500 },
+  { name: 'Tier 5', min_quota: 50000, bonus: 2000 },
 ];
 
 /**
@@ -37,7 +46,7 @@ export function parseQuotaTier(rule: RewardRule | any): QuotaTier {
       const parsed = JSON.parse(rule.name);
       min_quota = Number(parsed.min_quota || parsed.min || 0);
       title = parsed.name || parsed.title || 'Quota Tier';
-      source = parsed.source || 'website';
+      source = parsed.source || (min_quota >= 20000 ? 'other' : 'website');
     } else if (typeof rule.name === 'string') {
       // Check if name contains a number
       const match = rule.name.match(/\d[\d,]*/);
@@ -49,14 +58,28 @@ export function parseQuotaTier(rule: RewardRule | any): QuotaTier {
     title = rule.name;
   }
 
-  // If min_quota is 0 but we have a matching default by value or title
+  // Check matching default tiers if min_quota is 0
   if (min_quota === 0) {
-    const matchedDefault = DEFAULT_WEBSITE_QUOTA_TIERS.find(
+    const matchedNonWebsite = DEFAULT_NON_WEBSITE_SALES_TIERS.find(
       (d) => d.bonus === Number(rule.value) || d.name === rule.name
     );
-    if (matchedDefault) {
-      min_quota = matchedDefault.min_quota;
-      title = matchedDefault.name;
+    if (matchedNonWebsite) {
+      min_quota = matchedNonWebsite.min_quota;
+      title = matchedNonWebsite.name;
+      source = 'other';
+    } else {
+      const matchedDefault = DEFAULT_WEBSITE_QUOTA_TIERS.find(
+        (d) => d.bonus === Number(rule.value) || d.name === rule.name
+      );
+      if (matchedDefault) {
+        min_quota = matchedDefault.min_quota;
+        title = matchedDefault.name;
+        source = 'website';
+      }
+    }
+  } else if (!rule.name?.includes('"source"')) {
+    if (DEFAULT_NON_WEBSITE_SALES_TIERS.some((d) => d.min_quota === min_quota)) {
+      source = 'other';
     }
   }
 
@@ -114,7 +137,7 @@ export async function syncWebsiteUpsellQuotaRewards(
   if (!staffId) return null;
 
   try {
-    // 1. Fetch active quota tiers sorted descending
+    // 1. Fetch active website quota tiers sorted descending
     const { data: rawRules } = await supabase
       .from('reward_rules')
       .select('*')
@@ -122,7 +145,7 @@ export async function syncWebsiteUpsellQuotaRewards(
 
     const tiers = (rawRules || [])
       .map(parseQuotaTier)
-      .filter((t) => t.is_active && t.min_quota > 0 && t.bonus > 0)
+      .filter((t) => t.is_active && t.source === 'website' && t.min_quota > 0 && t.bonus > 0)
       .sort((a, b) => b.min_quota - a.min_quota);
 
     if (tiers.length === 0) {
@@ -199,5 +222,134 @@ export async function syncWebsiteUpsellQuotaRewards(
   } catch (err) {
     console.error('Error in syncWebsiteUpsellQuotaRewards:', err);
     return null;
+  }
+}
+
+/**
+ * Synchronizes and recalculates daily sales bonus rewards for non-website orders (source !== 'website').
+ * Criteria: Daily Sales total (sum of total_amount of non-website orders today).
+ * Rules:
+ *   - ৳20,000 -> ৳200
+ *   - ৳25,000 -> ৳500
+ *   - ৳30,000 -> ৳1,000
+ *   - ৳40,000 -> ৳1,500
+ *   - ৳50,000+ -> ৳2,000
+ * Resets each day (12:00 AM).
+ */
+export async function syncNonWebsiteSalesRewards(
+  supabase: SupabaseClient,
+  staffId: string,
+  triggerOrderId?: string
+) {
+  if (!staffId) return null;
+
+  try {
+    // 1. Fetch active other-source tiers sorted descending
+    const { data: rawRules } = await supabase
+      .from('reward_rules')
+      .select('*')
+      .eq('is_active', true);
+
+    let tiers = (rawRules || [])
+      .map(parseQuotaTier)
+      .filter((t) => t.is_active && t.source !== 'website' && t.min_quota > 0 && t.bonus > 0)
+      .sort((a, b) => b.min_quota - a.min_quota);
+
+    // Fallback to default tiers if not yet configured in DB
+    if (tiers.length === 0) {
+      tiers = DEFAULT_NON_WEBSITE_SALES_TIERS.map((t, idx) => ({
+        id: `default-other-${idx}`,
+        name: t.name,
+        min_quota: t.min_quota,
+        bonus: t.bonus,
+        effective_pct: parseFloat(((t.bonus / t.min_quota) * 100).toFixed(2)),
+        source: 'other',
+        is_active: true,
+      })).sort((a, b) => b.min_quota - a.min_quota);
+    }
+
+    // 2. Fetch all qualifying non-website orders for this staff member created today
+    const today = new Date().toISOString().split('T')[0];
+    const { data: orders, error: ordersErr } = await supabase
+      .from('orders')
+      .select('id, source, sales_rep_id, status, total_amount, created_at')
+      .neq('source', 'website')
+      .eq('sales_rep_id', staffId)
+      .neq('status', 'canceled')
+      .gte('created_at', today + 'T00:00:00.000Z');
+
+    if (ordersErr) {
+      console.error('Failed to fetch non-website orders for daily sales bonus:', ordersErr);
+      return null;
+    }
+
+    // 3. Compute cumulative daily sales from non-website orders today
+    let totalNonWebsiteSalesToday = 0;
+    let mostRecentOrderId = triggerOrderId;
+
+    (orders || []).forEach((order: any) => {
+      if (!mostRecentOrderId) {
+        mostRecentOrderId = order.id;
+      }
+      totalNonWebsiteSalesToday += Number(order.total_amount || 0);
+    });
+
+    // 4. Determine highest reached milestone tier
+    const reachedTier = tiers.find((t) => totalNonWebsiteSalesToday >= t.min_quota);
+    const targetBonus = reachedTier ? reachedTier.bonus : 0;
+
+    // 5. Fetch existing daily sales bonus rewards for this staff member today (pending status)
+    const { data: existingRewards } = await supabase
+      .from('upsell_rewards')
+      .select('*')
+      .eq('sales_rep_id', staffId)
+      .gte('created_at', today + 'T00:00:00.000Z')
+      .like('note', 'Daily Sales Bonus%')
+      .neq('status', 'paid');
+
+    const currentAwardedBonus = (existingRewards || []).reduce(
+      (sum, r) => sum + Number(r.bonus_amount || 0),
+      0
+    );
+
+    // 6. Update ledger if milestone tier changed
+    if (targetBonus > currentAwardedBonus && mostRecentOrderId) {
+      const deltaBonus = targetBonus - currentAwardedBonus;
+      await supabase.from('upsell_rewards').insert({
+        sales_rep_id: staffId,
+        order_id: mostRecentOrderId,
+        bonus_amount: deltaBonus,
+        status: 'pending',
+        note: `Daily Sales Bonus: Reached ৳${reachedTier?.min_quota.toLocaleString()}+ Daily Sales tier (Total: ৳${targetBonus} BDT bonus)`,
+      });
+    }
+
+    return {
+      totalNonWebsiteSalesToday,
+      reachedTier,
+      targetBonus,
+      nextTier: [...tiers].reverse().find((t) => t.min_quota > totalNonWebsiteSalesToday) || null,
+    };
+  } catch (err) {
+    console.error('Error in syncNonWebsiteSalesRewards:', err);
+    return null;
+  }
+}
+
+/**
+ * Unified helper to synchronize commission / bonus rewards for any order based on its source.
+ */
+export async function syncStaffCommissionRewards(
+  supabase: SupabaseClient,
+  staffId: string,
+  orderId?: string,
+  orderSource?: string
+) {
+  if (!staffId) return null;
+
+  if (orderSource === 'website') {
+    return await syncWebsiteUpsellQuotaRewards(supabase, staffId, orderId);
+  } else {
+    return await syncNonWebsiteSalesRewards(supabase, staffId, orderId);
   }
 }

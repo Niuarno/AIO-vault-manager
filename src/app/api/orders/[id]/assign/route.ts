@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { syncStaffCommissionRewards } from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -70,7 +71,7 @@ export async function PATCH(
     // 2. Fetch existing order
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, order_number, sales_rep_id, note, edit_history')
+      .select('id, order_number, sales_rep_id, source, note, edit_history')
       .eq('id', orderId)
       .single();
 
@@ -143,11 +144,26 @@ export async function PATCH(
         .single();
 
       if (fallbackErr) throw fallbackErr;
+      if (sales_rep_id) {
+        try {
+          await syncStaffCommissionRewards(supabase, sales_rep_id, orderId, order.source);
+        } catch (e) {
+          console.error('Failed to sync rewards on assignment fallback:', e);
+        }
+      }
       return NextResponse.json({
         success: true,
         order: fallbackOrder,
         message: `Order assigned to ${targetStaffName}`,
       });
+    }
+
+    if (sales_rep_id) {
+      try {
+        await syncStaffCommissionRewards(supabase, sales_rep_id, orderId, order.source);
+      } catch (e) {
+        console.error('Failed to sync rewards on assignment:', e);
+      }
     }
 
     return NextResponse.json({

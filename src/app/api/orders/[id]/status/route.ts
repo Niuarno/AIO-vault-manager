@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { OrderStatus } from '@/types/database';
+import { syncStaffCommissionRewards } from '@/lib/commission';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -80,7 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // 2. Check existing order
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, sales_rep_id')
+      .select('id, status, order_number, sales_rep_id, source')
       .eq('id', id)
       .single();
 
@@ -161,6 +162,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     if (updateErr) {
       throw updateErr;
+    }
+
+    // 5. Synchronize staff commission rewards on status changes (e.g. confirmation, cancellation)
+    if (order.sales_rep_id) {
+      try {
+        await syncStaffCommissionRewards(
+          supabase,
+          order.sales_rep_id,
+          order.id,
+          order.source
+        );
+      } catch (rewardErr) {
+        console.error('Failed to sync rewards on status update:', rewardErr);
+      }
     }
 
     return NextResponse.json({
