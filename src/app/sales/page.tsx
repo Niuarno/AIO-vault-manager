@@ -23,7 +23,11 @@ import {
   Plus,
   Trash2,
   User,
-  Filter
+  Filter,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
@@ -33,7 +37,8 @@ import {
   WhatsAppFlatIcon,
   MessengerFlatIcon,
   PhoneCallFlatIcon,
-  WalkInFlatIcon
+  WalkInFlatIcon,
+  WebsiteFlatIcon,
 } from '@/components/SourceIcons';
 import {
   Order,
@@ -44,6 +49,7 @@ import {
   OrderSource,
   PayoutRequest,
 } from '@/types/database';
+import { QuotaTier } from '@/lib/commission';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function SalesDashboard() {
@@ -67,6 +73,8 @@ export default function SalesDashboard() {
   // Rewards State
   const [rewards, setRewards] = useState<UpsellReward[]>([]);
   const [loadingRewards, setLoadingRewards] = useState(false);
+  const [quotaTiers, setQuotaTiers] = useState<QuotaTier[]>([]);
+  const [showTiersModal, setShowTiersModal] = useState(false);
 
   // Payouts State
   const [myPayouts, setMyPayouts] = useState<PayoutRequest[]>([]);
@@ -218,12 +226,26 @@ export default function SalesDashboard() {
     setLoadingPayouts(false);
   };
 
+  // Fetch Active Website Upsell Quota Tiers
+  const fetchQuotaTiers = async () => {
+    try {
+      const res = await fetch('/api/rewards/rules');
+      const json = await res.json();
+      if (json.rules) {
+        setQuotaTiers(json.rules);
+      }
+    } catch (err) {
+      console.error('Failed to load quota tiers:', err);
+    }
+  };
+
   // Single Stable Realtime Subscription on mount (NO reconnect loops)
   useEffect(() => {
     fetchOrders();
     fetchInventory();
     fetchRewards();
     fetchPayouts();
+    fetchQuotaTiers();
 
     const channel = supabase
       .channel('sales-realtime-singleton')
@@ -248,6 +270,13 @@ export default function SalesDashboard() {
         () => {
           fetchPayouts();
           fetchRewards();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reward_rules' },
+        () => {
+          fetchQuotaTiers();
         }
       )
       .subscribe();
@@ -377,6 +406,47 @@ export default function SalesDashboard() {
       .filter((r) => r.created_at.startsWith(todayStr))
       .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
   }, [rewards, todayStr]);
+
+  // Website Upsells (Extra Sales) achieved today by this staff member
+  const todayWebsiteUpsells = useMemo(() => {
+    if (!currentProfile?.id) return 0;
+    return orders
+      .filter((o) => o.sales_rep_id === currentProfile.id && o.source === 'website' && o.created_at.startsWith(todayStr))
+      .reduce((sum, order) => {
+        const upsellVal = (order.order_items || [])
+          .filter((item) => item.is_upsell)
+          .reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0);
+        return sum + upsellVal;
+      }, 0);
+  }, [orders, currentProfile, todayStr]);
+
+  // Active Quota Tiers sorted ascending
+  const activeTiers = useMemo(() => {
+    return quotaTiers
+      .filter((t) => t.is_active)
+      .sort((a, b) => a.min_quota - b.min_quota);
+  }, [quotaTiers]);
+
+  // Highest unlocked tier reached today
+  const unlockedTier = useMemo(() => {
+    const reversed = [...activeTiers].reverse();
+    return reversed.find((t) => todayWebsiteUpsells >= t.min_quota) || null;
+  }, [activeTiers, todayWebsiteUpsells]);
+
+  // Next milestone tier to unlock
+  const nextTier = useMemo(() => {
+    return activeTiers.find((t) => todayWebsiteUpsells < t.min_quota) || null;
+  }, [activeTiers, todayWebsiteUpsells]);
+
+  // Progress percentage to next tier
+  const quotaProgress = useMemo(() => {
+    if (!nextTier) return 100;
+    const baseQuota = unlockedTier ? unlockedTier.min_quota : 0;
+    const range = nextTier.min_quota - baseQuota;
+    if (range <= 0) return 100;
+    const progressVal = todayWebsiteUpsells - baseQuota;
+    return Math.min(100, Math.max(0, Math.round((progressVal / range) * 100)));
+  }, [todayWebsiteUpsells, unlockedTier, nextTier]);
 
   // Total Pending Commissions from Rewards
   const totalPendingRewards = useMemo(() => {
@@ -624,6 +694,103 @@ export default function SalesDashboard() {
             <p className="text-xs text-slate-400 mt-2">
               Verified payouts received with payment proof
             </p>
+          </div>
+        </div>
+
+        {/* Website Upsell Quota Milestone Card */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shrink-0">
+                <WebsiteFlatIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Website Upsell Quota (Daily)
+                  </h3>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                    <Clock className="w-3 h-3 text-emerald-600" /> Resets 12 AM
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Unlock extra bonus commissions by upselling on website customer orders today
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowTiersModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors self-start sm:self-auto cursor-pointer"
+            >
+              <Award className="w-3.5 h-3.5 text-emerald-600" />
+              <span>View Quota Milestones</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+            {/* Metric 1: Today's Website Upsell Extra Sales */}
+            <div>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Today's Extra Sales (Website)
+              </span>
+              <div className="text-2xl font-extrabold text-slate-900 font-mono mt-1">
+                {formatCurrency(todayWebsiteUpsells)}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Cumulative upsells on website orders
+              </p>
+            </div>
+
+            {/* Metric 2: Current Unlocked Tier */}
+            <div>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Current Unlocked Tier
+              </span>
+              <div className="mt-1 flex items-center gap-2">
+                {unlockedTier ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{unlockedTier.name} (+{formatCurrency(unlockedTier.bonus)} bonus)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600 font-medium text-xs">
+                    No milestone reached yet
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {unlockedTier
+                  ? `Earned for reaching ৳${unlockedTier.min_quota.toLocaleString()} extra sales`
+                  : 'Reach ৳3,000 extra sales to unlock Tier 1'}
+              </p>
+            </div>
+
+            {/* Metric 3: Next Milestone Target */}
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-semibold text-slate-500 uppercase tracking-wider">
+                  Next Milestone
+                </span>
+                <span className="font-bold text-slate-700 font-mono">
+                  {nextTier
+                    ? `৳${Math.max(0, nextTier.min_quota - todayWebsiteUpsells).toLocaleString()} needed`
+                    : 'Max Tier Unlocked!'}
+                </span>
+              </div>
+              {/* Progress Bar */}
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200/60 mt-1.5">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${quotaProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {nextTier
+                  ? `Reach ৳${nextTier.min_quota.toLocaleString()} to unlock ${nextTier.name} (+${formatCurrency(nextTier.bonus)} bonus)`
+                  : 'You have unlocked the highest quota tier for today!'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -937,8 +1104,16 @@ export default function SalesDashboard() {
                   ) : (
                     rewards.map((reward) => (
                       <tr key={reward.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="p-4 font-mono font-bold text-slate-900">
-                          {(reward.order as any)?.order_number || 'Order'}
+                        <td className="p-4">
+                          <div className="font-mono font-bold text-slate-900">
+                            {(reward.order as any)?.order_number || 'Order'}
+                          </div>
+                          {reward.note && (
+                            <div className="text-xs text-emerald-700 font-medium mt-0.5 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-emerald-500 shrink-0" />
+                              <span className="truncate">{reward.note}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="p-4 font-bold text-emerald-700 font-mono text-base">
                           {formatCurrency(reward.bonus_amount)}
@@ -1519,6 +1694,124 @@ export default function SalesDashboard() {
           isOpen={true}
           onClose={() => setLightboxScreenshot(null)}
         />
+      )}
+
+      {/* WEBSITE UPSELL QUOTA MILESTONES MODAL */}
+      {showTiersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shrink-0">
+                  <WebsiteFlatIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Website Upsell Quota Milestones
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Extra sales commission rates for website orders (resets daily at 12:00 AM)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTiersModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="mb-4 bg-emerald-50/60 border border-emerald-200/60 rounded-xl p-3.5 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-emerald-900">
+                  <span className="font-bold">How it works:</span> When you upsell on website orders, your extra sales value accumulates across all website orders today. Crossing each quota milestone unlocks that tier's cash bonus in your earnings.
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+                <table className="w-full text-left text-sm text-slate-700">
+                  <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="p-3">Milestone Tier</th>
+                      <th className="p-3">Extra Sales Required</th>
+                      <th className="p-3">Bonus Earned</th>
+                      <th className="p-3">Effective %</th>
+                      <th className="p-3 text-right">Your Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activeTiers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-xs text-slate-400">
+                          No active quota milestones configured.
+                        </td>
+                      </tr>
+                    ) : (
+                      activeTiers.map((tier) => {
+                        const isUnlocked = todayWebsiteUpsells >= tier.min_quota;
+                        const isCurrentHighest = unlockedTier?.id === tier.id;
+                        const effectiveRate = tier.min_quota > 0 ? ((tier.bonus / tier.min_quota) * 100).toFixed(1) : '0';
+                        const deficit = tier.min_quota - todayWebsiteUpsells;
+
+                        return (
+                          <tr
+                            key={tier.id}
+                            className={`transition-colors ${
+                              isCurrentHighest
+                                ? 'bg-emerald-50/50 font-semibold'
+                                : isUnlocked
+                                ? 'bg-slate-50/40 text-slate-600'
+                                : 'hover:bg-slate-50/60'
+                            }`}
+                          >
+                            <td className="p-3">
+                              <span className="font-bold text-slate-900">{tier.name}</span>
+                            </td>
+                            <td className="p-3 font-mono font-semibold text-slate-900">
+                              {formatCurrency(tier.min_quota)}
+                            </td>
+                            <td className="p-3 font-mono font-bold text-emerald-700">
+                              +{formatCurrency(tier.bonus)}
+                            </td>
+                            <td className="p-3 font-mono text-xs text-slate-500">
+                              {effectiveRate}%
+                            </td>
+                            <td className="p-3 text-right">
+                              {isUnlocked ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Unlocked
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 font-mono">
+                                  ৳{deficit.toLocaleString()} away
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Today's Website Extra Sales: <strong className="text-slate-900 font-mono">{formatCurrency(todayWebsiteUpsells)}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowTiersModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

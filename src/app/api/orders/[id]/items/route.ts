@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -217,29 +218,41 @@ export async function PATCH(
 
     let updatedOrder: any = null;
 
+    const salesRepId = body.sales_rep_id || order.sales_rep_id;
+
     // Try updating with JSONB history columns
+    const updatePayload: Record<string, any> = {
+      total_amount: recalculatedTotal,
+      updated_at: nowIso,
+      note: updatedNote,
+      edit_history: updatedHistory,
+      original_items: originalItems,
+    };
+    if (salesRepId) {
+      updatePayload.sales_rep_id = salesRepId;
+    }
+
     const { data: fullUpdateData, error: fullUpdateErr } = await supabase
       .from('orders')
-      .update({
-        total_amount: recalculatedTotal,
-        updated_at: nowIso,
-        note: updatedNote,
-        edit_history: updatedHistory,
-        original_items: originalItems,
-      })
+      .update(updatePayload)
       .eq('id', orderId)
       .select('*, order_items(*)')
       .single();
 
     if (fullUpdateErr) {
       // Graceful fallback without JSONB columns if not yet created in Supabase schema
+      const fallbackPayload: Record<string, any> = {
+        total_amount: recalculatedTotal,
+        updated_at: nowIso,
+        note: updatedNote,
+      };
+      if (salesRepId) {
+        fallbackPayload.sales_rep_id = salesRepId;
+      }
+
       const { data: fallbackData, error: fallbackErr } = await supabase
         .from('orders')
-        .update({
-          total_amount: recalculatedTotal,
-          updated_at: nowIso,
-          note: updatedNote,
-        })
+        .update(fallbackPayload)
         .eq('id', orderId)
         .select('*, order_items(*)')
         .single();
@@ -250,6 +263,11 @@ export async function PATCH(
       updatedOrder = fallbackData;
     } else {
       updatedOrder = fullUpdateData;
+    }
+
+    // 8. If this order is from website and attributed to a staff member, synchronize quota rewards
+    if (order.source === 'website' && salesRepId) {
+      await syncWebsiteUpsellQuotaRewards(supabase, salesRepId, orderId);
     }
 
     return NextResponse.json({ success: true, order: updatedOrder });

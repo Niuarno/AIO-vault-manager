@@ -60,6 +60,7 @@ import {
   UpsellReward,
 } from '@/types/database';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { QuotaTier } from '@/lib/commission';
 
 export default function AdminDashboard() {
   const supabase = createClient();
@@ -102,12 +103,14 @@ export default function AdminDashboard() {
   const [processingPayout, setProcessingPayout] = useState<PayoutRequest | null>(null);
   const [lightboxScreenshot, setLightboxScreenshot] = useState<{ url: string; title: string } | null>(null);
 
-  // Reward Rules State
-  const [rewardRules, setRewardRules] = useState<RewardRule[]>([]);
+  // Website Commission Quota Tiers State
+  const [quotaTiers, setQuotaTiers] = useState<QuotaTier[]>([]);
   const [loadingRules, setLoadingRules] = useState(false);
-  const [newRuleName, setNewRuleName] = useState('');
-  const [newRuleType, setNewRuleType] = useState<'fixed_per_item' | 'percentage'>('fixed_per_item');
-  const [newRuleValue, setNewRuleValue] = useState('50');
+  const [newTierName, setNewTierName] = useState('');
+  const [newTierQuota, setNewTierQuota] = useState('');
+  const [newTierBonus, setNewTierBonus] = useState('');
+  const [editingTier, setEditingTier] = useState<QuotaTier | null>(null);
+  const [deletingTierId, setDeletingTierId] = useState<string | null>(null);
 
   // Load current user profile & Presence
   useEffect(() => {
@@ -233,7 +236,7 @@ export default function AdminDashboard() {
       const res = await fetch('/api/rewards/rules');
       const json = await res.json();
       if (json.rules) {
-        setRewardRules(json.rules);
+        setQuotaTiers(json.rules);
       }
     } catch (e) {
       console.error('Failed to load rules:', e);
@@ -423,32 +426,121 @@ export default function AdminDashboard() {
     }
   };
 
-  // Create Reward Rule Handler
-  const handleCreateRule = async (e: React.FormEvent) => {
+  // Add new Quota Tier
+  const handleCreateTier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRuleName.trim() || !newRuleValue) return;
+    const quota = parseFloat(newTierQuota);
+    const bonus = parseFloat(newTierBonus);
+
+    if (isNaN(quota) || quota <= 0) {
+      alert('Please enter a valid positive quota amount (Extra Sales Added).');
+      return;
+    }
+    if (isNaN(bonus) || bonus <= 0) {
+      alert('Please enter a valid positive bonus amount.');
+      return;
+    }
 
     try {
       const res = await fetch('/api/rewards/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newRuleName.trim(),
-          rule_type: newRuleType,
-          value: parseFloat(newRuleValue),
-          created_by: currentProfile?.id,
+          name: newTierName.trim() || `Tier (৳${quota.toLocaleString()}+)`,
+          min_quota: quota,
+          bonus: bonus,
+          is_active: true,
         }),
       });
       const json = await res.json();
-      if (json.rule) {
-        setRewardRules([json.rule, ...rewardRules]);
-        setNewRuleName('');
-        setNewRuleValue('50');
+      if (json.success && json.rule) {
+        setQuotaTiers((prev) =>
+          [...prev, json.rule].sort((a, b) => a.min_quota - b.min_quota)
+        );
+        setNewTierName('');
+        setNewTierQuota('');
+        setNewTierBonus('');
       } else {
-        alert(json.error || 'Failed to create rule');
+        alert(json.error || 'Failed to create quota tier');
       }
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Error creating quota tier');
+    }
+  };
+
+  // Update existing Quota Tier
+  const handleUpdateTier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTier) return;
+
+    try {
+      const res = await fetch('/api/rewards/rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingTier.id,
+          name: editingTier.name,
+          min_quota: editingTier.min_quota,
+          bonus: editingTier.bonus,
+          is_active: editingTier.is_active,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.rule) {
+        setQuotaTiers((prev) =>
+          prev
+            .map((t) => (t.id === editingTier.id ? json.rule : t))
+            .sort((a, b) => a.min_quota - b.min_quota)
+        );
+        setEditingTier(null);
+      } else {
+        alert(json.error || 'Failed to update quota tier');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating quota tier');
+    }
+  };
+
+  // Toggle Tier Active / Inactive
+  const handleToggleTierActive = async (tier: QuotaTier) => {
+    try {
+      const res = await fetch('/api/rewards/rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tier.id,
+          is_active: !tier.is_active,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.rule) {
+        setQuotaTiers((prev) =>
+          prev.map((t) => (t.id === tier.id ? json.rule : t))
+        );
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error toggling rule status');
+    }
+  };
+
+  // Delete Quota Tier
+  const handleDeleteTier = async (tierId: string) => {
+    if (!confirm('Are you sure you want to delete this commission quota tier?')) return;
+    setDeletingTierId(tierId);
+    try {
+      const res = await fetch(`/api/rewards/rules?id=${tierId}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (json.success) {
+        setQuotaTiers((prev) => prev.filter((t) => t.id !== tierId));
+      } else {
+        alert(json.error || 'Failed to delete quota tier');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error deleting quota tier');
+    } finally {
+      setDeletingTierId(null);
     }
   };
 
@@ -538,17 +630,38 @@ export default function AdminDashboard() {
     const today = new Date().toISOString().split('T')[0];
     const stats: Record<
       string,
-      { todayEarnings: number; piggybank: number; totalSettled: number; orderCount: number }
+      {
+        todayEarnings: number;
+        piggybank: number;
+        totalSettled: number;
+        orderCount: number;
+        todayWebsiteUpsells: number;
+        unlockedTier: QuotaTier | null;
+      }
     > = {};
 
     salesTeam.forEach((member) => {
-      stats[member.id] = { todayEarnings: 0, piggybank: 0, totalSettled: 0, orderCount: 0 };
+      stats[member.id] = {
+        todayEarnings: 0,
+        piggybank: 0,
+        totalSettled: 0,
+        orderCount: 0,
+        todayWebsiteUpsells: 0,
+        unlockedTier: null,
+      };
     });
 
     teamRewards.forEach((r) => {
       const repId = r.sales_rep_id;
       if (!stats[repId]) {
-        stats[repId] = { todayEarnings: 0, piggybank: 0, totalSettled: 0, orderCount: 0 };
+        stats[repId] = {
+          todayEarnings: 0,
+          piggybank: 0,
+          totalSettled: 0,
+          orderCount: 0,
+          todayWebsiteUpsells: 0,
+          unlockedTier: null,
+        };
       }
       const amount = Number(r.bonus_amount || 0);
       if (r.created_at.startsWith(today)) {
@@ -562,13 +675,33 @@ export default function AdminDashboard() {
     });
 
     orders.forEach((o) => {
-      if (o.sales_rep_id && stats[o.sales_rep_id]) {
-        stats[o.sales_rep_id].orderCount++;
+      const repId = o.sales_rep_id;
+      if (repId && stats[repId]) {
+        stats[repId].orderCount++;
+        // If order from website and created today, accumulate upsells
+        if (o.source === 'website' && o.created_at?.startsWith(today) && o.status !== 'canceled') {
+          (o.order_items || []).forEach((item) => {
+            if (item.is_upsell) {
+              stats[repId].todayWebsiteUpsells +=
+                (Number(item.price) || 0) * (Number(item.quantity) || 1);
+            }
+          });
+        }
       }
     });
 
+    // Determine highest unlocked quota tier for each staff member
+    Object.keys(stats).forEach((staffId) => {
+      const upsellVal = stats[staffId].todayWebsiteUpsells;
+      const matched = [...quotaTiers]
+        .filter((t) => t.is_active && t.min_quota > 0)
+        .sort((a, b) => b.min_quota - a.min_quota)
+        .find((t) => upsellVal >= t.min_quota);
+      stats[staffId].unlockedTier = matched || null;
+    });
+
     return stats;
-  }, [salesTeam, teamRewards, orders]);
+  }, [salesTeam, teamRewards, orders, quotaTiers]);
 
   // Performance Graph Data for selected staff member
   const selectedStaffGraphData = useMemo(() => {
@@ -1309,6 +1442,13 @@ export default function AdminDashboard() {
                       <th className="p-4">Staff Member</th>
                       <th className="p-4">Role</th>
                       <th className="p-4">Coupon Code</th>
+                      <th className="p-4">
+                        <div className="flex items-center gap-1">
+                          <span>Extra Sales (Website)</span>
+                          <span className="text-[9px] font-bold text-slate-600 bg-slate-200 px-1 py-0.5 rounded">Today</span>
+                        </div>
+                      </th>
+                      <th className="p-4">Quota Milestone</th>
                       <th className="p-4">Today's Earnings</th>
                       <th className="p-4">Piggybank (Pending)</th>
                       <th className="p-4">Settled Total</th>
@@ -1318,13 +1458,13 @@ export default function AdminDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {loadingTeam ? (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-slate-400">
+                        <td colSpan={9} className="p-8 text-center text-slate-400">
                           Loading sales team...
                         </td>
                       </tr>
                     ) : salesTeam.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-slate-400">
+                        <td colSpan={9} className="p-8 text-center text-slate-400">
                           No staff accounts registered.
                         </td>
                       </tr>
@@ -1336,6 +1476,8 @@ export default function AdminDashboard() {
                           piggybank: 0,
                           totalSettled: 0,
                           orderCount: 0,
+                          todayWebsiteUpsells: 0,
+                          unlockedTier: null,
                         };
                         const isSelected = selectedStaffForGraph?.id === member.id;
 
@@ -1414,6 +1556,26 @@ export default function AdminDashboard() {
                                     Assign
                                   </button>
                                 </div>
+                              )}
+                            </td>
+
+                            {/* Extra Sales Added on Website Orders Today */}
+                            <td className="p-4">
+                              <div className="font-bold text-slate-900 font-mono text-xs">
+                                {formatCurrency(stats.todayWebsiteUpsells || 0)}
+                              </div>
+                              <div className="text-[10px] text-slate-400">Website Upsells</div>
+                            </td>
+
+                            {/* Unlocked Quota Tier */}
+                            <td className="p-4">
+                              {stats.unlockedTier ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  <span>{stats.unlockedTier.name}</span>
+                                  <span className="opacity-75 font-mono">(+{formatCurrency(stats.unlockedTier.bonus)})</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 font-medium">Below Tier 1</span>
                               )}
                             </td>
 
@@ -1581,99 +1743,334 @@ export default function AdminDashboard() {
 
         {/* TAB 5: COMMISSION RULES */}
         {activeTab === 'rewards' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
-              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2 mb-4">
-                <Award className="w-4 h-4 text-slate-600" />
-                <span>Create Upsell Reward Rule</span>
-              </h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Create Quota Tier Form */}
+              <div className="space-y-4">
+                <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2 mb-1">
+                    <Award className="w-4 h-4 text-emerald-600" />
+                    <span>Create Quota Milestone Tier</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Set bonus milestones for extra sales added on website orders
+                  </p>
 
-              <form onSubmit={handleCreateRule} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Rule Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 50 BDT Bonus per Upsell Item"
-                    value={newRuleName}
-                    onChange={(e) => setNewRuleName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Rule Type
-                  </label>
-                  <select
-                    value={newRuleType}
-                    onChange={(e) => setNewRuleType(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  >
-                    <option value="fixed_per_item">Fixed BDT per Upsell Item</option>
-                    <option value="percentage">Percentage of Upsell Value</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reward Value ({newRuleType === 'percentage' ? '%' : 'BDT'}) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="any"
-                    value={newRuleValue}
-                    onChange={(e) => setNewRuleValue(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Save Reward Rule</span>
-                </button>
-              </form>
-            </div>
-
-            <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-              <div className="p-4 border-b border-slate-100">
-                <h3 className="font-bold text-base text-slate-900">
-                  Active Commission Calculation Rules
-                </h3>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {loadingRules ? (
-                  <div className="p-8 text-center text-slate-400">Loading rules...</div>
-                ) : rewardRules.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400">No reward rules created.</div>
-                ) : (
-                  rewardRules.map((rule) => (
-                    <div key={rule.id} className="p-4 flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-slate-900">{rule.name}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Type: {rule.rule_type} &middot; Value:{' '}
-                          {rule.rule_type === 'percentage'
-                            ? `${rule.value}%`
-                            : formatCurrency(rule.value)}
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                        Active
-                      </span>
+                  <form onSubmit={handleCreateTier} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Tier Name / Label *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Tier 8 or High Ticket Extra"
+                        value={newTierName}
+                        onChange={(e) => setNewTierName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
                     </div>
-                  ))
-                )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Min Extra Sales Added (Quota BDT) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          step="any"
+                          placeholder="3000"
+                          value={newTierQuota}
+                          onChange={(e) => setNewTierQuota(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Commission Bonus (BDT) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          step="any"
+                          placeholder="100"
+                          value={newTierBonus}
+                          onChange={(e) => setNewTierBonus(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {parseFloat(newTierQuota) > 0 && parseFloat(newTierBonus) > 0 && (
+                      <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
+                        <span className="font-medium">Effective Bonus Rate:</span>
+                        <span className="font-bold font-mono text-sm">
+                          {((parseFloat(newTierBonus) / parseFloat(newTierQuota)) * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Quota Tier</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Scope Guidance Info Card */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600 space-y-2">
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Website Order Quota Rules</span>
+                  </div>
+                  <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-500">
+                    <li>Applies exclusively to <strong>Website Orders</strong> (`source = website`).</li>
+                    <li>Extra sales combine across all website orders upsold today.</li>
+                    <li>Passing a quota milestone unlocks that tier's fixed bonus.</li>
+                    <li>Daily commissions reset at 12:00 AM midnight.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Right 2 Columns: Quota Tiers Table (From Image 2) */}
+              <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-base text-slate-900">
+                        Website Order Upsell Commission Rules
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Extra sales milestones required to earn progressive staff commission bonuses
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <WebsiteFlatIcon className="w-3.5 h-3.5" />
+                      <span>Website Only</span>
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <tr>
+                          <th className="p-4">Tier & Quota</th>
+                          <th className="p-4">Bonus Reward</th>
+                          <th className="p-4">Effective Rate</th>
+                          <th className="p-4">Scope</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {loadingRules ? (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-slate-400">
+                              Loading commission rules...
+                            </td>
+                          </tr>
+                        ) : quotaTiers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-slate-400">
+                              No commission quota tiers configured.
+                            </td>
+                          </tr>
+                        ) : (
+                          quotaTiers.map((tier) => (
+                            <tr
+                              key={tier.id}
+                              className={`hover:bg-slate-50/70 transition-colors ${
+                                !tier.is_active ? 'opacity-50 bg-slate-50/30' : ''
+                              }`}
+                            >
+                              <td className="p-4">
+                                <div className="font-bold text-slate-900">{tier.name}</div>
+                                <div className="text-xs text-slate-500 font-mono mt-0.5">
+                                  Min Extra Sales: {formatCurrency(tier.min_quota)}+
+                                </div>
+                              </td>
+
+                              <td className="p-4 font-bold text-slate-900 font-mono text-base">
+                                {formatCurrency(tier.bonus)}
+                              </td>
+
+                              <td className="p-4">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                                  {tier.effective_pct}%
+                                </span>
+                              </td>
+
+                              <td className="p-4">
+                                <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
+                                  <WebsiteFlatIcon className="w-3.5 h-3.5" />
+                                  <span>Website Orders</span>
+                                </span>
+                              </td>
+
+                              <td className="p-4">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTierActive(tier)}
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                                    tier.is_active
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                      : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {tier.is_active ? 'Active' : 'Disabled'}
+                                </button>
+                              </td>
+
+                              <td className="p-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingTier(tier)}
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
+                                    title="Edit Quota Tier"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={deletingTierId === tier.id}
+                                    onClick={() => handleDeleteTier(tier.id)}
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-40"
+                                    title="Delete Quota Tier"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Edit Quota Tier Modal */}
+            {editingTier && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+                <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                      <Pencil className="w-4 h-4 text-slate-600" />
+                      <span>Edit Commission Quota Tier</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setEditingTier(null)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleUpdateTier} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Tier Name / Label
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editingTier.name}
+                        onChange={(e) =>
+                          setEditingTier({ ...editingTier, name: e.target.value })
+                        }
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Min Extra Sales Added (Quota BDT)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          step="any"
+                          value={editingTier.min_quota}
+                          onChange={(e) =>
+                            setEditingTier({
+                              ...editingTier,
+                              min_quota: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Commission Bonus (BDT)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          step="any"
+                          value={editingTier.bonus}
+                          onChange={(e) =>
+                            setEditingTier({
+                              ...editingTier,
+                              bonus: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {editingTier.min_quota > 0 && editingTier.bonus > 0 && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
+                        <span className="font-medium">Effective Rate:</span>
+                        <span className="font-bold font-mono">
+                          {((editingTier.bonus / editingTier.min_quota) * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingTier(null)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

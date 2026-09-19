@@ -58,6 +58,7 @@ export default function EditOrderItemsModal({
   // Mandatory Editing Reason
   const [editReason, setEditReason] = useState('');
   const [currentUserLabel, setCurrentUserLabel] = useState('Staff Member');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // History tab toggle
   const [showHistoryView, setShowHistoryView] = useState(false);
@@ -67,13 +68,14 @@ export default function EditOrderItemsModal({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemIsUpsell, setNewItemIsUpsell] = useState(false);
 
-  // Load user name
+  // Load user name & id
   useEffect(() => {
     async function loadUser() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        setCurrentUserId(user.id);
         const { data: profile } = await supabase
           .from('profiles')
           .select('full_name, email')
@@ -222,6 +224,7 @@ export default function EditOrderItemsModal({
           items,
           reason: editReason.trim(),
           edited_by: currentUserLabel,
+          sales_rep_id: currentUserId || order.sales_rep_id,
         }),
       });
 

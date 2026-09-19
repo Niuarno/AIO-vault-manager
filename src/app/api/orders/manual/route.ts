@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
 
 export async function POST(req: NextRequest) {
   try {
@@ -95,36 +96,12 @@ export async function POST(req: NextRequest) {
       throw itemsError;
     }
 
-    // 3. Upsell Reward Processing (if salesperson assigned & has upsells or coupon)
+    // 3. Website Upsell Quota Reward Processing (Strictly applies to Website orders)
     let rewardGiven = 0;
-    if (sales_rep_id && (hasUpsell || coupon_used)) {
-      const { data: activeRule } = await supabase
-        .from('reward_rules')
-        .select('*')
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-
-      if (activeRule) {
-        let bonusAmount = 0;
-        if (activeRule.rule_type === 'fixed_per_item') {
-          bonusAmount = upsellItemsCount * activeRule.value;
-        } else if (activeRule.rule_type === 'percentage') {
-          bonusAmount = totalAmount * (activeRule.value / 100);
-        } else if (activeRule.rule_type === 'fixed_per_order') {
-          bonusAmount = activeRule.value;
-        }
-
-        if (bonusAmount > 0) {
-          rewardGiven = bonusAmount;
-          await supabase.from('upsell_rewards').insert({
-            sales_rep_id,
-            order_id: newOrder.id,
-            bonus_amount: bonusAmount,
-            status: 'pending',
-            note: `Upsell bonus for ${upsellItemsCount} item(s) (${activeRule.name})`,
-          });
-        }
+    if (sales_rep_id && source === 'website') {
+      const quotaResult = await syncWebsiteUpsellQuotaRewards(supabase, sales_rep_id, newOrder.id);
+      if (quotaResult?.targetBonus) {
+        rewardGiven = quotaResult.targetBonus;
       }
     }
 
