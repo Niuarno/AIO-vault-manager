@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
     // 2. Locate the matching order
     let query = supabase.from('orders').select('*');
     if (invoice) {
-      query = query.or(`order_number.eq.${invoice},external_id.eq.${invoice}`);
+      const cleanInv = invoice.replace(/^[#\s]+/, '').trim();
+      query = query.or(
+        `order_number.eq.${invoice},order_number.eq.#${cleanInv},order_number.eq.${cleanInv},external_id.eq.${invoice}`
+      );
     } else if (consignment_id) {
       query = query.or(
         `consignment_id.eq.${consignment_id},external_id.eq.${consignment_id}`

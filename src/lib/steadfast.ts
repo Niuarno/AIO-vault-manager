@@ -85,7 +85,23 @@ export async function createSteadfastConsignment(
     };
   }
 
-  const cleanPhone = payload.recipient_phone.replace(/\D/g, '').slice(-11);
+  // Sanitize invoice: Steadfast only permits letters, numbers, hyphens, and underscores (no '#' or special characters)
+  const cleanInvoice =
+    payload.invoice.replace(/^[#\s]+/, '').replace(/[^a-zA-Z0-9_-]/g, '') ||
+    `ORD-${Date.now()}`;
+
+  // Sanitize phone: ensure only 11 digits
+  const digits = payload.recipient_phone.replace(/\D/g, '');
+  const cleanPhone = digits.length >= 11 ? digits.slice(-11) : digits;
+
+  // Sanitize note: Steadfast strictly enforces max 400 characters and prefers clean delivery instructions
+  let cleanNote = (payload.note || '').trim();
+  // Strip internal audit tags like [Reachout Sale by ...] or [Steadfast ...] to keep note concise for delivery agents
+  cleanNote = cleanNote.replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim();
+  if (cleanNote.length > 350) {
+    cleanNote = cleanNote.slice(0, 350);
+  }
+
   const baseUrl = getSteadfastBaseUrl();
 
   try {
@@ -100,12 +116,12 @@ export async function createSteadfastConsignment(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        invoice: payload.invoice,
+        invoice: cleanInvoice,
         recipient_name: payload.recipient_name || 'Customer',
         recipient_phone: cleanPhone || payload.recipient_phone,
         recipient_address: payload.recipient_address || 'Address not specified',
         cod_amount: Math.max(0, Math.round(Number(payload.cod_amount) || 0)),
-        note: payload.note || '',
+        note: cleanNote,
       }),
       signal: controller.signal,
     });
