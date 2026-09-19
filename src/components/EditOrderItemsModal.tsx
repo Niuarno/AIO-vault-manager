@@ -285,10 +285,11 @@ export default function EditOrderItemsModal({
   const editHistoryList = (order as any).edit_history || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
-        {/* Header with History toggle */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-2.5 sm:p-6 animate-in fade-in">
+      <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
+        <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden relative my-auto animate-in fade-in zoom-in-95 duration-200">
+          {/* Header with History toggle */}
+          <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div>
             <div className="flex items-center space-x-2">
               <ShoppingBag className="w-5 h-5 text-brand-600" />
@@ -342,7 +343,7 @@ export default function EditOrderItemsModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 max-h-[65vh] overflow-y-auto">
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -841,8 +842,8 @@ export default function EditOrderItemsModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Sticky Footer */}
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-600">
             <span>{canEdit ? 'New Order Total: ' : 'Total Amount: '}</span>
             <span className="font-mono text-base font-black text-slate-900">
@@ -883,5 +884,6 @@ export default function EditOrderItemsModal({
         </div>
       </div>
     </div>
+  </div>
   );
 }

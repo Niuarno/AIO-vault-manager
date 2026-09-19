@@ -68,18 +68,18 @@ export default function ModernProductSelect({
         } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
       >
         {selectedVariant ? (
-          <div className="flex items-center space-x-2.5 truncate">
+          <div className="flex items-center space-x-2.5 truncate min-w-0 flex-1">
             <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
               <Package className="w-3.5 h-3.5" />
             </div>
-            <div className="truncate">
+            <div className="truncate min-w-0 flex-1">
               <span className="font-semibold text-slate-800">
                 {(selectedVariant.product as any)?.name || (selectedVariant.product as any)?.title || 'Product'}
               </span>
               <span className="text-slate-500 text-xs ml-1.5">
                 ({selectedVariant.title})
               </span>
-              <span className="font-semibold text-emerald-700 text-xs ml-2 font-mono">
+              <span className="font-semibold text-emerald-700 text-xs ml-2 font-mono shrink-0">
                 {formatCurrency(selectedVariant.price)}
               </span>
             </div>
@@ -144,13 +144,13 @@ export default function ModernProductSelect({
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-start space-x-2.5 truncate mr-3">
+                    <div className="flex items-start space-x-2.5 truncate min-w-0 flex-1 mr-3">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                         isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
                       }`}>
                         <Package className="w-3.5 h-3.5" />
                       </div>
-                      <div className="truncate">
+                      <div className="truncate min-w-0 flex-1">
                         <div className="text-xs font-semibold text-slate-900 truncate">
                           {prodName}
                         </div>
