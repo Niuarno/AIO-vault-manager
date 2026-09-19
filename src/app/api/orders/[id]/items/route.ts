@@ -170,8 +170,6 @@ export async function PATCH(
     );
 
     // 7. Determine requester role & staff assignment rules
-    // Rule 1: "any order which are assigned to any sales staff are permanantly locked, only admins can change the assigned staff"
-    // Rule 2: "any staff who upsells on website orders auto assigned to their profile"
     let isAdmin = false;
     let requesterUserId: string | null = null;
     try {
@@ -188,6 +186,34 @@ export async function PATCH(
       }
     } catch {
       // ignore
+    }
+
+    // Fallback: Check Authorization Bearer Token
+    if (!requesterUserId) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          requesterUserId = user.id;
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          isAdmin = prof?.role === 'admin';
+        }
+      }
+    }
+
+    // Rule: "when any order has already been assigned to a staff member it will only editable for that specifc staff member and admins no one else"
+    if (!isAdmin && order.sales_rep_id && order.sales_rep_id !== requesterUserId) {
+      return NextResponse.json(
+        {
+          error: 'Permission denied: This order is assigned to another staff member and can only be edited by them or an administrator.',
+        },
+        { status: 403 }
+      );
     }
 
     let resolvedSalesRepId = order.sales_rep_id;

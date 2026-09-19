@@ -76,6 +76,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     // 3. Strict Permission Enforcement for Non-Admin Staff
     if (!isAdmin) {
+      // Order assignment check: if assigned, only the assigned staff member or admin can change status
+      if (order.sales_rep_id && order.sales_rep_id !== currentUserId) {
+        return NextResponse.json(
+          {
+            error: 'Permission denied: This order is assigned to another staff member and can only be updated by them or an administrator.',
+          },
+          { status: 403 }
+        );
+      }
+
       // Sales staff can only act if current status is 'pending' or 'not_reachable'
       if (order.status !== 'pending' && order.status !== 'not_reachable') {
         return NextResponse.json(

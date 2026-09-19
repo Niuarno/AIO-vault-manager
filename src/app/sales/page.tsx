@@ -907,6 +907,7 @@ export default function SalesDashboard() {
                     ) : (
                       filteredOrders.map((order) => {
                         const isMyOrder = order.sales_rep_id === currentProfile?.id;
+                        const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
                         const hasUpsell = order.order_items?.some((i) => i.is_upsell);
                         const hasReachout = Boolean(
                           (order as any).is_reachout ||
@@ -976,13 +977,27 @@ export default function SalesDashboard() {
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/70 text-xs font-semibold">
                                   Assigned to You
                                 </span>
+                              ) : order.sales_rep_id ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
+                                  <span>Other Staff</span>
+                                  <Lock className="w-3 h-3 text-slate-400" />
+                                </span>
                               ) : (
-                                <span className="text-xs text-slate-400">Other Staff</span>
+                                <span className="text-xs text-slate-400">Unassigned</span>
                               )}
                             </td>
 
                             <td className="p-4">
-                              {order.status === 'pending' || order.status === 'not_reachable' ? (
+                              {isOtherStaffOrder ? (
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200/80 shadow-2xs"
+                                  title="Assigned to another staff member. Only they or an administrator can update status."
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                                  <span>{statusBadge.label}</span>
+                                  <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                </span>
+                              ) : order.status === 'pending' || order.status === 'not_reachable' ? (
                                 <div className="relative inline-block">
                                   <select
                                     value={order.status}
@@ -1015,9 +1030,11 @@ export default function SalesDashboard() {
                               <button
                                 onClick={() => setEditingOrderForItems(order)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                                title={isOtherStaffOrder ? 'Assigned to another staff member (Read-only)' : 'Edit items & view history'}
                               >
                                 <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
-                                <span>Edit & History</span>
+                                <span>{isOtherStaffOrder ? 'View & History' : 'Edit & History'}</span>
+                                {isOtherStaffOrder && <Lock className="w-3 h-3 text-slate-400" />}
                               </button>
                             </td>
                           </tr>
