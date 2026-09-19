@@ -90,14 +90,19 @@ export async function POST(req: NextRequest) {
     });
 
     if (steadfastResult.status !== 200 || !steadfastResult.consignment) {
+      let errorMsg = steadfastResult.message || 'Failed to create consignment in Steadfast Courier.';
+      if (steadfastResult.errors && typeof steadfastResult.errors === 'object') {
+        const fieldErrors = Object.entries(steadfastResult.errors)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+          .join('; ');
+        if (fieldErrors) errorMsg = `${errorMsg} (${fieldErrors})`;
+      }
       return NextResponse.json(
         {
-          error:
-            steadfastResult.message ||
-            'Failed to create consignment in Steadfast Courier. Check your API credentials.',
+          error: errorMsg,
           details: steadfastResult.errors,
         },
-        { status: 400 }
+        { status: steadfastResult.status >= 400 && steadfastResult.status < 600 ? steadfastResult.status : 400 }
       );
     }
 

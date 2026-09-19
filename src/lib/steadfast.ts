@@ -35,8 +35,18 @@ export interface SteadfastStatusResponse {
   message?: string;
 }
 
-const STEADFAST_BASE_URL =
-  process.env.STEADFAST_BASE_URL || 'https://portal.steadfast.com.bd/api/v1';
+/**
+ * Steadfast Courier API base URL.
+ * Official production gateway is hosted on portal.packzy.com.
+ */
+export function getSteadfastBaseUrl(): string {
+  let url = process.env.STEADFAST_BASE_URL || 'https://portal.packzy.com/api/v1';
+  // If set to the legacy/non-existent portal.steadfast.com.bd domain, automatically resolve to portal.packzy.com
+  if (url.includes('portal.steadfast.com.bd')) {
+    url = url.replace('portal.steadfast.com.bd', 'portal.packzy.com');
+  }
+  return url.replace(/\/+$/, '');
+}
 
 export function isSteadfastConfigured(): boolean {
   return Boolean(process.env.STEADFAST_API_KEY && process.env.STEADFAST_SECRET_KEY);
@@ -60,7 +70,7 @@ export async function createSteadfastConsignment(
     const mockTracking = `STF${mockCid}`;
     return {
       status: 200,
-      message: 'Consignment created (Simulated - configure STEADFAST_API_KEY in .env for live API)',
+      message: 'Consignment created (Simulated - set STEADFAST_API_KEY and STEADFAST_SECRET_KEY in Vercel for live Steadfast dispatch)',
       consignment: {
         id: mockCid,
         invoice: payload.invoice,
@@ -76,26 +86,53 @@ export async function createSteadfastConsignment(
   }
 
   const cleanPhone = payload.recipient_phone.replace(/\D/g, '').slice(-11);
+  const baseUrl = getSteadfastBaseUrl();
 
-  const res = await fetch(`${STEADFAST_BASE_URL}/create_order`, {
-    method: 'POST',
-    headers: {
-      'Api-Key': apiKey,
-      'Secret-Key': secretKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      invoice: payload.invoice,
-      recipient_name: payload.recipient_name,
-      recipient_phone: cleanPhone || payload.recipient_phone,
-      recipient_address: payload.recipient_address,
-      cod_amount: Math.round(Number(payload.cod_amount) || 0),
-      note: payload.note || '',
-    }),
-  });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  const data = await res.json();
-  return data;
+    const res = await fetch(`${baseUrl}/create_order`, {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Secret-Key': secretKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoice: payload.invoice,
+        recipient_name: payload.recipient_name || 'Customer',
+        recipient_phone: cleanPhone || payload.recipient_phone,
+        recipient_address: payload.recipient_address || 'Address not specified',
+        cod_amount: Math.max(0, Math.round(Number(payload.cod_amount) || 0)),
+        note: payload.note || '',
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return {
+        status: res.status,
+        message: `Steadfast server responded with status ${res.status}: ${text.slice(0, 150)}`,
+      };
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error('[Steadfast API Error]', err);
+    return {
+      status: 502,
+      message:
+        err.name === 'AbortError'
+          ? 'Steadfast Courier API request timed out (15s).'
+          : `Failed to connect to Steadfast Courier API (${baseUrl}): ${err.message}`,
+    };
+  }
 }
 
 /**
@@ -116,20 +153,35 @@ export async function checkSteadfastStatusByInvoice(
     };
   }
 
-  const res = await fetch(
-    `${STEADFAST_BASE_URL}/status_by_invoice/${encodeURIComponent(invoice)}`,
-    {
-      method: 'GET',
-      headers: {
-        'Api-Key': apiKey,
-        'Secret-Key': secretKey,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const baseUrl = getSteadfastBaseUrl();
 
-  const data = await res.json();
-  return data;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(
+      `${baseUrl}/status_by_invoice/${encodeURIComponent(invoice)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Api-Key': apiKey,
+          'Secret-Key': secretKey,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    console.error('[Steadfast Status by Invoice Error]', err);
+    return {
+      status: 502,
+      message: `Failed to query Steadfast status: ${err.message}`,
+    };
+  }
 }
 
 /**
@@ -150,18 +202,33 @@ export async function checkSteadfastStatusByCid(
     };
   }
 
-  const res = await fetch(
-    `${STEADFAST_BASE_URL}/status_by_cid/${encodeURIComponent(String(cid))}`,
-    {
-      method: 'GET',
-      headers: {
-        'Api-Key': apiKey,
-        'Secret-Key': secretKey,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const baseUrl = getSteadfastBaseUrl();
 
-  const data = await res.json();
-  return data;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(
+      `${baseUrl}/status_by_cid/${encodeURIComponent(String(cid))}`,
+      {
+        method: 'GET',
+        headers: {
+          'Api-Key': apiKey,
+          'Secret-Key': secretKey,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    console.error('[Steadfast Status by CID Error]', err);
+    return {
+      status: 502,
+      message: `Failed to query Steadfast status: ${err.message}`,
+    };
+  }
 }
