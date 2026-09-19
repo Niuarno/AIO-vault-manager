@@ -28,7 +28,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     // 1. Identify user and check role
     let isAdmin = false;
+    let isPacking = false;
     let currentUserId: string | null = null;
+
     try {
       const serverSupabase = await createServerClient();
       const { data: { user } } = await serverSupabase.auth.getUser();
@@ -39,7 +41,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           .select('id, role')
           .eq('id', user.id)
           .single();
-        isAdmin = profile?.role === 'admin';
+        const role = profile?.role ? String(profile.role).toLowerCase().trim() : '';
+        isAdmin = role === 'admin';
+        isPacking = role === 'packing';
       }
     } catch {
       // ignore
@@ -58,9 +62,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
             .select('id, role')
             .eq('id', user.id)
             .single();
-          isAdmin = profile?.role === 'admin';
+          const role = profile?.role ? String(profile.role).toLowerCase().trim() : '';
+          isAdmin = role === 'admin';
+          isPacking = role === 'packing';
         }
       }
+    }
+
+    // If not authenticated at all, reject immediately
+    if (!currentUserId) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Please log in to update order status.' },
+        { status: 401 }
+      );
     }
 
     // 2. Check existing order
@@ -74,37 +88,60 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // 3. Strict Permission Enforcement for Non-Admin Staff
+    // 3. Permission Enforcement:
+    // - Admin: Full permissions
+    // - Packing / Delivery team: Can transition fulfillment statuses ('confirmed', 'ready_to_ship', 'on_the_way', 'shipped', 'delivered', 'canceled')
+    // - Sales staff: Strictly limited to their assigned pending/not_reachable orders to confirm or mark not reachable
     if (!isAdmin) {
-      // Order assignment check: if assigned, only the assigned staff member or admin can change status
-      if (order.sales_rep_id && order.sales_rep_id !== currentUserId) {
-        return NextResponse.json(
-          {
-            error: 'Permission denied: This order is assigned to another staff member and can only be updated by them or an administrator.',
-          },
-          { status: 403 }
-        );
-      }
+      if (isPacking) {
+        const packingAllowedTargets: OrderStatus[] = [
+          'confirmed',
+          'ready_to_ship',
+          'on_the_way',
+          'shipped',
+          'delivered',
+          'canceled',
+        ];
+        if (!packingAllowedTargets.includes(status)) {
+          return NextResponse.json(
+            {
+              error: `Permission denied: Delivery team cannot transition order status to '${status}'.`,
+            },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Sales Staff:
+        // Order assignment check: if assigned, only the assigned staff member can change status
+        if (order.sales_rep_id && order.sales_rep_id !== currentUserId) {
+          return NextResponse.json(
+            {
+              error: 'Permission denied: This order is assigned to another staff member and can only be updated by them or an administrator.',
+            },
+            { status: 403 }
+          );
+        }
 
-      // Sales staff can only act if current status is 'pending' or 'not_reachable'
-      if (order.status !== 'pending' && order.status !== 'not_reachable') {
-        return NextResponse.json(
-          {
-            error: `Order is already '${order.status}' and locked. Only administrators can change confirmed or processed orders.`,
-          },
-          { status: 403 }
-        );
-      }
+        // Sales staff can only act if current status is 'pending' or 'not_reachable'
+        if (order.status !== 'pending' && order.status !== 'not_reachable') {
+          return NextResponse.json(
+            {
+              error: `Order is already '${order.status}' and locked for sales staff. Delivery and fulfillment team will process this order.`,
+            },
+            { status: 403 }
+          );
+        }
 
-      // Sales staff can only transition to 'confirmed', 'not_reachable', or 'pending'
-      const salesAllowedTargets: OrderStatus[] = ['pending', 'not_reachable', 'confirmed'];
-      if (!salesAllowedTargets.includes(status)) {
-        return NextResponse.json(
-          {
-            error: `Permission denied: Sales staff can only set status to 'Confirmed' or 'Not-Reachable'.`,
-          },
-          { status: 403 }
-        );
+        // Sales staff can only transition to 'confirmed', 'not_reachable', or 'pending'
+        const salesAllowedTargets: OrderStatus[] = ['pending', 'not_reachable', 'confirmed'];
+        if (!salesAllowedTargets.includes(status)) {
+          return NextResponse.json(
+            {
+              error: `Permission denied: Sales staff can only set status to 'Confirmed' or 'Not-Reachable'.`,
+            },
+            { status: 403 }
+          );
+        }
       }
     }
 
