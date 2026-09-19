@@ -124,9 +124,15 @@ export default function PackingDashboard() {
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     setUpdatingId(orderId);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ status: nextStatus }),
       });
 
@@ -150,9 +156,15 @@ export default function PackingDashboard() {
   const handleSendToSteadfast = async (order: Order) => {
     setDispatchingId(order.id);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/api/shipping/steadfast/dispatch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ orderId: order.id }),
       });
 
