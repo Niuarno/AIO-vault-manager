@@ -173,11 +173,27 @@ export async function POST(req: NextRequest) {
       .eq('id', order.id);
 
     if (updateError) {
-      console.error('[Steadfast Webhook] Database update error:', updateError);
-      return NextResponse.json(
-        { status: 'error', message: 'Failed to update order in database.' },
-        { status: 500 }
-      );
+      console.warn('[Steadfast Webhook] Full update failed, retrying with core columns:', updateError.message);
+      const fallbackPayload: Record<string, any> = {
+        status: targetOrderStatus,
+        payment_status: paymentStatus,
+        edit_history: updatedHistory,
+        note: updatedNote,
+        external_id: consignment_id ? String(consignment_id) : order.external_id,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: fallbackError } = await supabase
+        .from('orders')
+        .update(fallbackPayload)
+        .eq('id', order.id);
+
+      if (fallbackError) {
+        console.error('[Steadfast Webhook] Database fallback update error:', fallbackError);
+        return NextResponse.json(
+          { status: 'error', message: 'Failed to update order in database.' },
+          { status: 500 }
+        );
+      }
     }
 
     console.log(

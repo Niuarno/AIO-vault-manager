@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     const noteTag = `[Dispatched via Steadfast - CID: #${consignment.id}, Tracking: ${consignment.tracking_code}]`;
     const updatedNote = order.note ? `${order.note}\n${noteTag}` : noteTag;
 
-    const { data: updatedOrder, error: updateError } = await supabase
+    let { data: updatedOrder, error: updateError } = await supabase
       .from('orders')
       .update({
         status: 'on_the_way',
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
         courier_status: consignment.status || 'in_review',
         tracking_message: 'Consignment created with Steadfast Courier',
         courier_updated_at: new Date().toISOString(),
+        external_id: consignment.tracking_code || String(consignment.id),
         edit_history: updatedHistory,
         note: updatedNote,
         updated_at: new Date().toISOString(),
@@ -142,11 +143,32 @@ export async function POST(req: NextRequest) {
       .select('*, order_items(*)')
       .single();
 
+    // Fallback: If courier columns have not yet been created in Supabase via migration, update core existing schema
     if (updateError) {
-      return NextResponse.json(
-        { error: 'Failed to update order status after dispatching.' },
-        { status: 500 }
+      console.warn(
+        '[Steadfast Dispatch] Courier columns not yet migrated, retrying with core schema columns:',
+        updateError.message
       );
+      const fallbackResult = await supabase
+        .from('orders')
+        .update({
+          status: 'on_the_way',
+          external_id: consignment.tracking_code || String(consignment.id),
+          edit_history: updatedHistory,
+          note: updatedNote,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .select('*, order_items(*)')
+        .single();
+
+      if (fallbackResult.error) {
+        return NextResponse.json(
+          { error: `Failed to update order status: ${fallbackResult.error.message}` },
+          { status: 500 }
+        );
+      }
+      updatedOrder = fallbackResult.data;
     }
 
     return NextResponse.json({
