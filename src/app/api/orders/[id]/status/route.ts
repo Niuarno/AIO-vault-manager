@@ -42,7 +42,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         isAdmin = profile?.role === 'admin';
       }
     } catch {
-      isAdmin = false;
+      // ignore
+    }
+
+    // Fallback: Authorization Bearer Token
+    if (!currentUserId) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          currentUserId = user.id;
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, role')
+            .eq('id', user.id)
+            .single();
+          isAdmin = profile?.role === 'admin';
+        }
+      }
     }
 
     // 2. Check existing order

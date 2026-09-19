@@ -17,6 +17,8 @@ export async function PATCH(
     // 1. Verify that requester is an Admin
     let isAdmin = false;
     let adminProfile: any = null;
+
+    // Check A: Cookie-based server session
     try {
       const serverSupabase = await createServerClient();
       const { data: { user } } = await serverSupabase.auth.getUser();
@@ -32,7 +34,27 @@ export async function PATCH(
         }
       }
     } catch {
-      isAdmin = false;
+      // ignore
+    }
+
+    // Check B: Bearer Token from Authorization Header (fallback for API/client fetch)
+    if (!isAdmin) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, role')
+            .eq('id', user.id)
+            .single();
+          if (profile?.role === 'admin') {
+            isAdmin = true;
+            adminProfile = profile;
+          }
+        }
+      }
     }
 
     if (!isAdmin) {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -32,6 +32,7 @@ interface EditableLineItem {
   quantity: number;
   price: number;
   is_upsell: boolean;
+  is_reachout?: boolean;
 }
 
 interface EditOrderItemsModalProps {
@@ -68,6 +69,18 @@ export default function EditOrderItemsModal({
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemIsUpsell, setNewItemIsUpsell] = useState(false);
+  const [newItemIsReachout, setNewItemIsReachout] = useState(false);
+
+  // Detect if order is a Reachout order
+  const hasReachoutOrder = useMemo(() => {
+    if (!order) return false;
+    return Boolean(
+      (order as any).is_reachout ||
+      order.note?.toLowerCase().includes('reachout') ||
+      order.order_items?.some((i: any) => i.is_reachout) ||
+      (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+    );
+  }, [order]);
 
   // Load user name & id
   useEffect(() => {
@@ -103,6 +116,7 @@ export default function EditOrderItemsModal({
           quantity: Number(item.quantity) || 1,
           price: Number(item.price) || 0,
           is_upsell: order.source === 'website' ? Boolean(item.is_upsell) : false,
+          is_reachout: Boolean((item as any).is_reachout || (order.source !== 'website' && order.note?.toLowerCase().includes('reachout'))),
         }))
       );
       setEditReason('');
@@ -166,6 +180,7 @@ export default function EditOrderItemsModal({
 
     // Check if variant already exists with the SAME upsell status
     const effectiveIsUpsell = isWebsite ? newItemIsUpsell : false;
+    const effectiveIsReachout = !isWebsite && (newItemIsReachout || hasReachoutOrder);
     const existingIndex = items.findIndex(
       (i) => i.variant_id === variant.id && i.is_upsell === effectiveIsUpsell
     );
@@ -185,6 +200,7 @@ export default function EditOrderItemsModal({
           quantity: newItemQty,
           price: Number(variant.price) || 0,
           is_upsell: effectiveIsUpsell,
+          is_reachout: effectiveIsReachout,
         },
       ]);
     }
@@ -193,6 +209,7 @@ export default function EditOrderItemsModal({
     setSelectedVariantId('');
     setNewItemQty(1);
     setNewItemIsUpsell(false);
+    setNewItemIsReachout(false);
     setErrorMsg(null);
   };
 
@@ -227,6 +244,7 @@ export default function EditOrderItemsModal({
           reason: editReason.trim(),
           edited_by: currentUserLabel,
           sales_rep_id: currentUserId || order.sales_rep_id,
+          is_reachout: hasReachoutOrder || items.some((i: any) => i.is_reachout),
         }),
       });
 
@@ -257,6 +275,11 @@ export default function EditOrderItemsModal({
               <h3 className="text-lg font-black text-slate-900">
                 Edit Products: {order.order_number}
               </h3>
+              {hasReachoutOrder && (
+                <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                  Reachout
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Customer: <span className="font-semibold text-slate-700">{order.customer_name}</span>{' '}
@@ -377,22 +400,27 @@ export default function EditOrderItemsModal({
                                 Items in this revision:
                               </span>
                               <div className="space-y-0.5 pl-1">
-                                {entry.new_items.map((it: any, i: number) => (
-                                  <div key={i} className="text-slate-600 flex justify-between text-[11px]">
-                                    <span>
-                                      <b>{it.quantity}&times;</b> {it.title}{' '}
-                                      {it.variant_title ? `(${it.variant_title})` : ''}
-                                      {it.is_upsell && (
-                                        <span className="ml-1 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded">
-                                          UPSELL
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="font-mono text-slate-700">
-                                      {formatCurrency(Number(it.price) * Number(it.quantity))}
-                                    </span>
-                                  </div>
-                                ))}
+                                  {entry.new_items.map((it: any, i: number) => (
+                                    <div key={i} className="text-slate-600 flex justify-between text-[11px]">
+                                      <span>
+                                        <b>{it.quantity}&times;</b> {it.title}{' '}
+                                        {it.variant_title ? `(${it.variant_title})` : ''}
+                                        {it.is_upsell && (
+                                          <span className="ml-1 text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-1 rounded">
+                                            UPSELL
+                                          </span>
+                                        )}
+                                        {it.is_reachout && (
+                                          <span className="ml-1 text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 px-1 rounded">
+                                            REACHOUT
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="font-mono text-slate-700">
+                                        {formatCurrency(Number(it.price) * Number(it.quantity))}
+                                      </span>
+                                    </div>
+                                  ))}
                               </div>
                             </div>
                           )}
@@ -442,22 +470,30 @@ export default function EditOrderItemsModal({
 
                     {/* Original items list */}
                     <div className="space-y-1 pl-3 border-l-2 border-emerald-300 pt-1">
-                      {((order as any).original_items || order.order_items || []).map((it: any, i: number) => (
-                        <div key={i} className="text-slate-700 flex justify-between text-[11px]">
-                          <span>
-                            <b>{it.quantity}&times;</b> {it.title}{' '}
-                            {it.variant_title ? `(${it.variant_title})` : ''}
-                            {it.is_upsell && (
-                              <span className="ml-1 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded">
-                                UPSELL
-                              </span>
-                            )}
-                          </span>
-                          <span className="font-mono text-slate-800">
-                            {formatCurrency(Number(it.price) * Number(it.quantity))}
-                          </span>
-                        </div>
-                      ))}
+                      {((order as any).original_items || order.order_items || []).map((it: any, i: number) => {
+                        const isReachoutItem = it.is_reachout || (!isWebsite && hasReachoutOrder);
+                        return (
+                          <div key={i} className="text-slate-700 flex justify-between text-[11px]">
+                            <span>
+                              <b>{it.quantity}&times;</b> {it.title}{' '}
+                              {it.variant_title ? `(${it.variant_title})` : ''}
+                              {it.is_upsell && (
+                                <span className="ml-1 text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-1 rounded">
+                                  UPSELL
+                                </span>
+                              )}
+                              {isReachoutItem && (
+                                <span className="ml-1 text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 px-1 rounded">
+                                  REACHOUT
+                                </span>
+                              )}
+                            </span>
+                            <span className="font-mono text-slate-800">
+                              {formatCurrency(Number(it.price) * Number(it.quantity))}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -497,8 +533,13 @@ export default function EditOrderItemsModal({
                           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-2xs"
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-slate-900 truncate">
-                              {item.title}
+                            <div className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                              <span>{item.title}</span>
+                              {(item.is_reachout || (!isWebsite && hasReachoutOrder)) && (
+                                <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                  Reachout
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center space-x-2 mt-0.5">
                               {item.variant_title && (
@@ -691,7 +732,7 @@ export default function EditOrderItemsModal({
                     />
                   </div>
 
-                  {isWebsite && (
+                  {isWebsite ? (
                     <div className="sm:col-span-2">
                       <label className="flex items-center space-x-1.5 text-xs text-purple-700 cursor-pointer select-none">
                         <input
@@ -701,6 +742,18 @@ export default function EditOrderItemsModal({
                           className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
                         />
                         <span className="font-semibold text-[11px]">As Upsell?</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center space-x-1.5 text-xs text-sky-800 cursor-pointer select-none bg-sky-50 border border-sky-200/80 px-2 py-1.5 rounded-xl">
+                        <input
+                          type="checkbox"
+                          checked={newItemIsReachout}
+                          onChange={(e) => setNewItemIsReachout(e.target.checked)}
+                          className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                        />
+                        <span className="font-semibold text-[11px]">Reachout sell?</span>
                       </label>
                     </div>
                   )}

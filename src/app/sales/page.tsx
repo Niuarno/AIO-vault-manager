@@ -120,48 +120,57 @@ export default function SalesDashboard() {
 
   // Load User Profile & Realtime Presence
   useEffect(() => {
+    let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
+    let isMounted = true;
+
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        if (profile) {
-          setCurrentProfile(profile);
-          if (profile.coupon_code) {
-            setCouponUsed(profile.coupon_code);
-          }
-          if (profile.payment_info?.account_number) {
-            setPayoutAccount(profile.payment_info.account_number);
-          }
-          if (profile.payment_info?.method) {
-            setPayoutMethod(profile.payment_info.method);
-          }
+      if (!user || !isMounted) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (!isMounted) return;
+      if (profile) {
+        setCurrentProfile(profile);
+        if (profile.coupon_code) {
+          setCouponUsed(profile.coupon_code);
         }
-
-        // Single presence channel
-        const presenceChannel = supabase.channel('online-staff', {
-          config: { presence: { key: user.id } },
-        });
-
-        presenceChannel.subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await presenceChannel.track({
-              user_id: user.id,
-              full_name: profile?.full_name || 'Sales Staff',
-              online_at: new Date().toISOString(),
-            });
-          }
-        });
-
-        return () => {
-          supabase.removeChannel(presenceChannel);
-        };
+        if (profile.payment_info?.account_number) {
+          setPayoutAccount(profile.payment_info.account_number);
+        }
+        if (profile.payment_info?.method) {
+          setPayoutMethod(profile.payment_info.method);
+        }
       }
+
+      // Single presence channel
+      const channel = supabase.channel('online-staff', {
+        config: { presence: { key: user.id } },
+      });
+      presenceChannel = channel;
+
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED' && isMounted) {
+          await channel.track({
+            user_id: user.id,
+            full_name: profile?.full_name || 'Sales Staff',
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
     }
+
     loadUser();
+
+    return () => {
+      isMounted = false;
+      if (presenceChannel) {
+        supabase.removeChannel(presenceChannel);
+      }
+    };
   }, []);
 
   // Fetch Orders
@@ -383,9 +392,15 @@ export default function SalesDashboard() {
   // Status Change Handler
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
@@ -536,7 +551,8 @@ export default function SalesDashboard() {
         !q ||
         o.order_number.toLowerCase().includes(q) ||
         o.customer_name.toLowerCase().includes(q) ||
-        o.customer_phone.includes(q);
+        o.customer_phone.includes(q) ||
+        (o.note && o.note.toLowerCase().includes(q));
       return matchStatus && matchQuery;
     });
   }, [orders, orderStatusFilter, orderSearch]);
@@ -892,6 +908,12 @@ export default function SalesDashboard() {
                       filteredOrders.map((order) => {
                         const isMyOrder = order.sales_rep_id === currentProfile?.id;
                         const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                        const hasReachout = Boolean(
+                          (order as any).is_reachout ||
+                          order.note?.toLowerCase().includes('reachout') ||
+                          order.order_items?.some((i: any) => i.is_reachout) ||
+                          (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                        );
                         const statusBadge = getCleanStatusBadge(order.status);
 
                         return (
@@ -934,11 +956,16 @@ export default function SalesDashboard() {
                               <div className="font-semibold text-slate-900 font-mono">
                                 {formatCurrency(order.total_amount)}
                               </div>
-                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 <span>{order.order_items?.length || 0} items</span>
                                 {hasUpsell && (
                                   <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
                                     Upsell
+                                  </span>
+                                )}
+                                {hasReachout && (
+                                  <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                    Reachout
                                   </span>
                                 )}
                               </div>

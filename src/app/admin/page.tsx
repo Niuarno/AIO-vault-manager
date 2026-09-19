@@ -114,41 +114,51 @@ export default function AdminDashboard() {
 
   // Load current user profile & Presence
   useEffect(() => {
+    let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
+    let isMounted = true;
+
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profile) setCurrentProfile(profile);
+      if (!user || !isMounted) return;
 
-        const presenceChannel = supabase.channel('online-staff', {
-          config: { presence: { key: user.id } },
-        });
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (!isMounted) return;
+      if (profile) setCurrentProfile(profile);
 
-        presenceChannel
-          .on('presence', { event: 'sync' }, () => {
-            const state = presenceChannel.presenceState();
-            const activeIds = new Set<string>();
-            Object.keys(state).forEach((key) => {
-              activeIds.add(key);
-            });
-            setOnlineUserIds(activeIds);
-          })
-          .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-              await presenceChannel.track({
-                user_id: user.id,
-                full_name: profile?.full_name || 'Admin',
-                online_at: new Date().toISOString(),
-              });
-            }
+      const channel = supabase.channel('online-staff', {
+        config: { presence: { key: user.id } },
+      });
+      presenceChannel = channel;
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          if (!isMounted) return;
+          const state = channel.presenceState();
+          const activeIds = new Set<string>();
+          Object.keys(state).forEach((key) => {
+            activeIds.add(key);
           });
-
-        return () => {
-          supabase.removeChannel(presenceChannel);
-        };
-      }
+          setOnlineUserIds(activeIds);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED' && isMounted) {
+            await channel.track({
+              user_id: user.id,
+              full_name: profile?.full_name || 'Admin',
+              online_at: new Date().toISOString(),
+            });
+          }
+        });
     }
+
     loadUser();
+
+    return () => {
+      isMounted = false;
+      if (presenceChannel) {
+        supabase.removeChannel(presenceChannel);
+      }
+    };
   }, []);
 
   // Fetch Orders
@@ -246,7 +256,10 @@ export default function AdminDashboard() {
 
   // Fetch data on active tab change
   useEffect(() => {
-    if (activeTab === 'orders') fetchOrders();
+    if (activeTab === 'orders') {
+      fetchOrders();
+      fetchTeamAndRewards();
+    }
     if (activeTab === 'inventory') fetchInventory();
     if (activeTab === 'team') fetchTeamAndRewards();
     if (activeTab === 'payouts') fetchPayouts();
@@ -255,6 +268,9 @@ export default function AdminDashboard() {
 
   // Single Stable Realtime Subscription on Mount (NO reconnect loops)
   useEffect(() => {
+    fetchOrders();
+    fetchTeamAndRewards();
+
     const channel = supabase
       .channel('admin-realtime-singleton')
       .on(
@@ -287,6 +303,13 @@ export default function AdminDashboard() {
           fetchTeamAndRewards();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => {
+          fetchTeamAndRewards();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -297,9 +320,15 @@ export default function AdminDashboard() {
   // Order Status Change Handler
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
@@ -318,9 +347,15 @@ export default function AdminDashboard() {
   // Admin Staff Assignment Handler
   const handleAssignStaff = async (orderId: string, newStaffId: string | null) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`/api/orders/${orderId}/assign`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ sales_rep_id: newStaffId }),
       });
       const data = await res.json();
@@ -572,10 +607,13 @@ export default function AdminDashboard() {
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
+      const q = searchQuery.toLowerCase();
       const matchSearch =
-        o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.customer_phone.includes(searchQuery) ||
-        o.order_number.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        o.customer_name.toLowerCase().includes(q) ||
+        o.customer_phone.includes(q) ||
+        o.order_number.toLowerCase().includes(q) ||
+        (o.note && o.note.toLowerCase().includes(q));
       return matchSearch;
     });
   }, [orders, searchQuery]);
@@ -953,6 +991,12 @@ export default function AdminDashboard() {
                     ) : (
                       filteredOrders.map((order) => {
                         const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                        const hasReachout = Boolean(
+                          (order as any).is_reachout ||
+                          order.note?.toLowerCase().includes('reachout') ||
+                          order.order_items?.some((i: any) => i.is_reachout) ||
+                          (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                        );
                         const statusBadge = getCleanStatusBadge(order.status);
 
                         return (
@@ -996,11 +1040,16 @@ export default function AdminDashboard() {
                               <div className="font-semibold text-slate-900 font-mono">
                                 {formatCurrency(order.total_amount)}
                               </div>
-                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 <span>{order.order_items?.length || 0} line items</span>
                                 {hasUpsell && (
                                   <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
                                     Upsell
+                                  </span>
+                                )}
+                                {hasReachout && (
+                                  <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                    Reachout
                                   </span>
                                 )}
                               </div>
@@ -1024,6 +1073,11 @@ export default function AdminDashboard() {
                                   title="Assign staff to this order (Admin only)"
                                 >
                                   <option value="">Unassigned</option>
+                                  {order.sales_rep_id && !salesTeam.some((s) => s.id === order.sales_rep_id) && (
+                                    <option value={order.sales_rep_id}>
+                                      {order.sales_rep?.full_name || order.sales_rep?.email || 'Assigned Staff'}
+                                    </option>
+                                  )}
                                   {salesTeam.map((staff) => (
                                     <option key={staff.id} value={staff.id}>
                                       {staff.full_name || staff.email}

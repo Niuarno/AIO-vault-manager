@@ -232,12 +232,13 @@ export async function PATCH(
         price: i.price,
         is_upsell: i.is_upsell,
       })),
-      new_items: itemsToInsert.map((i) => ({
+      new_items: itemsToInsert.map((i: any) => ({
         title: i.title,
         variant_title: i.variant_title,
         quantity: i.quantity,
         price: i.price,
         is_upsell: i.is_upsell,
+        is_reachout: Boolean(i.is_reachout || body.is_reachout),
       })),
     };
 
@@ -255,7 +256,10 @@ export async function PATCH(
     const updatedHistory = [...existingHistory, editLogEntry];
 
     // Note log fallback string
-    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedTotal} BDT.`;
+    const reachoutNoteTag = body.is_reachout && !order.note?.toLowerCase().includes('reachout')
+      ? ` [Reachout Sale by ${editedBy}]`
+      : '';
+    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedTotal} BDT.${reachoutNoteTag}`;
     const updatedNote = (order.note || '').trim() + noteLog;
 
     let updatedOrder: any = null;

@@ -98,6 +98,16 @@ export async function POST(req: NextRequest) {
         sales_rep_id: assignedSalesRepId,
         coupon_used: coupon_used || null,
         note: finalNote || null,
+        original_items: items.map((it: any) => ({
+          product_id: it.product_id || null,
+          variant_id: it.variant_id || null,
+          title: it.title,
+          variant_title: it.variant_title || null,
+          quantity: parseInt(it.quantity, 10) || 1,
+          price: parseFloat(it.price || '0'),
+          is_upsell: isWebsite ? Boolean(it.is_upsell) : false,
+          is_reachout: Boolean(it.is_reachout || hasReachoutItem),
+        })),
       })
       .select()
       .single();
