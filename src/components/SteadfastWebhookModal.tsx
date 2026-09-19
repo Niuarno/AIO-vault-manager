@@ -30,7 +30,7 @@ export default function SteadfastWebhookModal({
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
   const [origin, setOrigin] = useState('');
-  const [bearerToken, setBearerToken] = useState('steadfast_wh_secret_token');
+  const [bearerToken, setBearerToken] = useState('d0aec9aa83cc49557cbc60fd5bf1553c9f619ed304859bf9991fb5752231fed4');
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<{ success: boolean; message: string } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState(
