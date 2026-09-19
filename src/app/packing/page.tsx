@@ -43,9 +43,41 @@ export default function PackingDashboard() {
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncingAll, setSyncingAll] = useState(false);
 
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
+
+  // Robustly resolve consignment ID across schema variations, external_id, notes, and edit history
+  const getOrderConsignmentId = (order: Order): string | null => {
+    if (order.consignment_id) return String(order.consignment_id);
+    if (order.external_id && !order.external_id.startsWith('http')) return String(order.external_id);
+    if (order.note) {
+      const match = order.note.match(/CID:\s*#?([A-Za-z0-9_-]+)/i);
+      if (match) return match[1];
+    }
+    if (Array.isArray(order.edit_history)) {
+      for (const h of order.edit_history) {
+        if (h?.consignment_id) return String(h.consignment_id);
+      }
+    }
+    return null;
+  };
+
+  // Robustly resolve tracking code across schema variations, notes, and edit history
+  const getOrderTrackingCode = (order: Order): string | null => {
+    if (order.tracking_code) return String(order.tracking_code);
+    if (order.note) {
+      const match = order.note.match(/Tracking:\s*([A-Za-z0-9_-]+)/i);
+      if (match) return match[1];
+    }
+    if (Array.isArray(order.edit_history)) {
+      for (const h of order.edit_history) {
+        if (h?.tracking_code) return String(h.tracking_code);
+      }
+    }
+    return null;
+  };
 
   // Load User & Check Auth
   useEffect(() => {
@@ -170,20 +202,29 @@ export default function PackingDashboard() {
 
       const data = await res.json();
       if (res.ok && data.success) {
+        const newCid =
+          data.consignment?.consignment_id ||
+          data.consignment?.id ||
+          data.order?.consignment_id;
+        const newTracking =
+          data.consignment?.tracking_code ||
+          data.order?.tracking_code;
+
         setOrders((prev) =>
           prev.map((ord) =>
             ord.id === order.id
-              ? data.order || {
-                  ...ord,
+              ? {
+                  ...(data.order || ord),
                   status: 'on_the_way',
                   courier_name: 'steadfast',
-                  consignment_id: String(data.consignment?.id),
-                  tracking_code: data.consignment?.tracking_code,
+                  consignment_id: newCid ? String(newCid) : (ord.consignment_id || null),
+                  tracking_code: newTracking ? String(newTracking) : (ord.tracking_code || null),
                   courier_status: data.consignment?.status || 'in_review',
                 }
               : ord
           )
         );
+        alert(`Dispatched to Steadfast! Consignment ID: #${newCid || 'Generated'}`);
       } else {
         alert(`Steadfast Dispatch Error: ${data.error || 'Failed to dispatch'}`);
       }
@@ -194,7 +235,7 @@ export default function PackingDashboard() {
     }
   };
 
-  // Check live status on demand from Steadfast Courier
+  // Check live status on demand from Steadfast Courier and retrieve consignment ID
   const handleSyncSteadfast = async (order: Order) => {
     setSyncingId(order.id);
     try {
@@ -206,17 +247,96 @@ export default function PackingDashboard() {
 
       const data = await res.json();
       if (res.ok && data.success) {
+        const newCid = data.consignment_id || data.order?.consignment_id;
         setOrders((prev) =>
           prev.map((ord) => (ord.id === order.id ? data.order || ord : ord))
         );
+        alert(
+          data.message ||
+            (newCid ? `Retrieved Consignment ID #${newCid}!` : 'Status synced successfully!')
+        );
       } else {
-        alert(`Steadfast Sync: ${data.message || 'No update available'}`);
+        alert(data.message || data.error || 'Could not fetch status from Steadfast.');
       }
     } catch (err: any) {
       alert(`Error syncing Steadfast: ${err.message}`);
     } finally {
       setSyncingId(null);
     }
+  };
+
+  // Manually link or edit a Steadfast Consignment ID
+  const handleManualCidPrompt = async (order: Order) => {
+    const currentCid = getOrderConsignmentId(order) || '';
+    const input = window.prompt(
+      `Enter Steadfast Consignment ID for order ${order.order_number}:`,
+      currentCid
+    );
+    if (input === null) return;
+    const cid = input.trim();
+    if (!cid) {
+      alert('Consignment ID cannot be empty.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consignment_id: cid,
+          courier_name: 'steadfast',
+          note: order.note || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOrders((prev) =>
+          prev.map((ord) =>
+            ord.id === order.id
+              ? { ...ord, consignment_id: cid, courier_name: 'steadfast' }
+              : ord
+          )
+        );
+        alert(`Consignment ID #${cid} linked successfully!`);
+      } else {
+        alert(`Failed to save Consignment ID: ${data.error || 'Server error'}`);
+      }
+    } catch (err: any) {
+      alert(`Error saving Consignment ID: ${err.message}`);
+    }
+  };
+
+  // Sync / retrieve consignment IDs for all orders in "With Courier" missing one
+  const handleSyncAllMissingCid = async () => {
+    const missing = orders.filter(
+      (o) => o.status === 'on_the_way' && !getOrderConsignmentId(o)
+    );
+    if (missing.length === 0) {
+      alert('All orders in "With Courier" already have Consignment IDs!');
+      return;
+    }
+    setSyncingAll(true);
+    let successCount = 0;
+    for (const ord of missing) {
+      try {
+        const res = await fetch('/api/shipping/steadfast/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: ord.id }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && (data.consignment_id || data.order?.consignment_id)) {
+          successCount++;
+          setOrders((prev) =>
+            prev.map((o) => (o.id === ord.id ? data.order || o : o))
+          );
+        }
+      } catch {}
+    }
+    setSyncingAll(false);
+    fetchPackingOrders();
+    alert(`Retrieved consignment details for ${successCount} of ${missing.length} orders.`);
   };
 
   // Filter orders
@@ -378,7 +498,19 @@ export default function PackingDashboard() {
             />
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap gap-2">
+            {activeFilter === 'on_the_way' && (
+              <button
+                onClick={handleSyncAllMissingCid}
+                disabled={syncingAll}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
+                title="Fetch consignment IDs from Steadfast for all orders currently in With Courier"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingAll ? 'animate-spin' : ''}`} />
+                <span>{syncingAll ? 'Fetching all CIDs...' : 'Fetch All Missing CIDs'}</span>
+              </button>
+            )}
+
             <button
               onClick={() => setActiveFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
@@ -445,24 +577,107 @@ export default function PackingDashboard() {
                         </span>
                       </div>
 
-                      {Boolean(order.consignment_id || order.tracking_code || order.courier_status) && (
-                        <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-indigo-50 border border-indigo-200/80 text-indigo-900 font-semibold font-mono text-[11px]">
-                            <Truck className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
-                          </span>
-                          {order.courier_status && (
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                              {order.courier_status.replace(/_/g, ' ')}
-                            </span>
-                          )}
-                          {order.tracking_message && (
-                            <span className="text-slate-500 text-[11px] italic truncate max-w-sm">
-                              "{order.tracking_message}"
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const cid = getOrderConsignmentId(order);
+                        const tracking = getOrderTrackingCode(order);
+
+                        if (cid) {
+                          return (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
+                              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 font-mono text-xs font-bold shadow-2xs">
+                                <Truck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                <span>Consignment ID: <span className="text-indigo-700 font-black">#{cid}</span></span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(cid);
+                                    alert(`Copied Consignment ID #${cid} to clipboard`);
+                                  }}
+                                  className="ml-1 px-1.5 py-0.5 rounded bg-white hover:bg-indigo-100 border border-indigo-300 text-[10px] font-sans font-bold text-indigo-700 cursor-pointer transition-colors"
+                                  title="Copy Consignment ID"
+                                >
+                                  Copy
+                                </button>
+                              </span>
+
+                              {tracking && tracking !== cid && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px]">
+                                  Tracking: {tracking}
+                                </span>
+                              )}
+
+                              {order.courier_status && (
+                                <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                                  {order.courier_status.replace(/_/g, ' ')}
+                                </span>
+                              )}
+
+                              {order.tracking_message && (
+                                <span className="text-slate-500 text-[11px] italic truncate max-w-sm">
+                                  "{order.tracking_message}"
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleSyncSteadfast(order)}
+                                disabled={syncingId === order.id}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-medium transition-colors cursor-pointer"
+                                title="Refresh live status from Steadfast"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${syncingId === order.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingId === order.id ? 'Refreshing...' : 'Refresh Status'}</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        // When order is in "With Courier" without a consignment ID linked:
+                        if (order.status === 'on_the_way') {
+                          return (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-semibold text-xs">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>No Consignment ID linked</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSyncSteadfast(order)}
+                                disabled={syncingId === order.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                                title="Look up consignment ID from Steadfast using order number"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${syncingId === order.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingId === order.id ? 'Looking up...' : 'Get Consignment ID'}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSendToSteadfast(order)}
+                                disabled={dispatchingId === order.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                                title="Send order to Steadfast Courier to create consignment"
+                              >
+                                <Send className={`w-3 h-3 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
+                                <span>{dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast'}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleManualCidPrompt(order)}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer transition-colors"
+                                title="Manually enter or paste Steadfast Consignment ID"
+                              >
+                                <span>Enter CID</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })()}
                     </div>
 
                     {/* Quick Print Button */}
@@ -609,12 +824,26 @@ export default function PackingDashboard() {
                       )}
 
                       {order.status === 'on_the_way' && (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap gap-2">
+                          {!getOrderConsignmentId(order) && (
+                            <button
+                              onClick={() => handleSendToSteadfast(order)}
+                              disabled={dispatchingId === order.id}
+                              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                              title="Create consignment in Steadfast Courier"
+                            >
+                              <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
+                              <span>
+                                {dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast'}
+                              </span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => handleSyncSteadfast(order)}
                             disabled={syncingId === order.id}
                             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                            title="Sync live status from Steadfast Courier"
+                            title="Query Steadfast to update live tracking and consignment status"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${syncingId === order.id ? 'animate-spin' : ''}`} />
                             <span>{syncingId === order.id ? 'Syncing...' : 'Sync Steadfast'}</span>
@@ -635,12 +864,15 @@ export default function PackingDashboard() {
 
                       {order.status === 'shipped' && (
                         <div className="flex items-center space-x-2">
-                          {order.courier_name === 'steadfast' && (
-                            <span className="text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                              <Truck className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Steadfast #{order.tracking_code || order.consignment_id}</span>
-                            </span>
-                          )}
+                          {(() => {
+                            const cid = getOrderConsignmentId(order);
+                            return cid ? (
+                              <span className="text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                                <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Steadfast CID: #{cid}</span>
+                              </span>
+                            ) : null;
+                          })()}
                           <span className="text-xs text-emerald-700 font-semibold flex items-center">
                             <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-600" />
                             Order Shipped & Complete

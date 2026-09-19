@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -60,5 +60,55 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   } catch (err: any) {
     console.error('Failed to delete order:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params;
+    const body = await req.json();
+    const { consignment_id, tracking_code, courier_name, courier_status, note } = body;
+    const supabase = createAdminClient();
+
+    const updatePayload: any = { updated_at: new Date().toISOString() };
+    if (consignment_id !== undefined) updatePayload.consignment_id = consignment_id ? String(consignment_id) : null;
+    if (tracking_code !== undefined) updatePayload.tracking_code = tracking_code ? String(tracking_code) : null;
+    if (courier_name !== undefined) updatePayload.courier_name = courier_name;
+    if (courier_status !== undefined) updatePayload.courier_status = courier_status;
+    if (note !== undefined) updatePayload.note = note;
+
+    let { data: updatedOrder, error: updateErr } = await supabase
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('*, order_items(*)')
+      .single();
+
+    if (updateErr) {
+      const fallbackPayload: any = { updated_at: new Date().toISOString() };
+      if (consignment_id) {
+        fallbackPayload.external_id = String(consignment_id);
+        const tag = `[Steadfast CID: #${consignment_id}]`;
+        if (note) fallbackPayload.note = `${note}\n${tag}`;
+      }
+      const fallbackResult = await supabase
+        .from('orders')
+        .update(fallbackPayload)
+        .eq('id', id)
+        .select('*, order_items(*)')
+        .single();
+      if (fallbackResult.error) {
+        return NextResponse.json({ error: fallbackResult.error.message }, { status: 500 });
+      }
+      updatedOrder = {
+        ...fallbackResult.data,
+        consignment_id: consignment_id || null,
+        tracking_code: tracking_code || null,
+      };
+    }
+
+    return NextResponse.json({ success: true, order: updatedOrder });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

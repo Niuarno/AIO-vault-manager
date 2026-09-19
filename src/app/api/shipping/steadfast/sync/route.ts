@@ -92,29 +92,83 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Update order if anything changed
-    const { data: updatedOrder, error: updateError } = await supabase
+    const cid =
+      (steadfastData as any)?.consignment_id ||
+      (steadfastData as any)?.id ||
+      order.consignment_id ||
+      null;
+    const trackingCode =
+      (steadfastData as any)?.tracking_code ||
+      order.tracking_code ||
+      (cid ? String(cid) : null);
+
+    // 4. Update order with status and consignment tracking information
+    const updatePayload: any = {
+      status: targetOrderStatus,
+      payment_status: paymentStatus,
+      courier_status: rawStatus || order.courier_status,
+      courier_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (cid) {
+      updatePayload.consignment_id = String(cid);
+      updatePayload.courier_name = 'steadfast';
+    }
+    if (trackingCode) {
+      updatePayload.tracking_code = String(trackingCode);
+    }
+
+    let { data: updatedOrder, error: updateError } = await supabase
       .from('orders')
-      .update({
-        status: targetOrderStatus,
-        payment_status: paymentStatus,
-        courier_status: rawStatus || order.courier_status,
-        courier_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', order.id)
       .select('*, order_items(*)')
       .single();
 
+    // Fallback if courier columns don't exist yet
     if (updateError) {
-      return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
+      console.warn('[Steadfast Sync] Fallback to core columns:', updateError.message);
+      const fallbackPayload: any = {
+        status: targetOrderStatus,
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString(),
+      };
+      if (cid) {
+        fallbackPayload.external_id = String(cid);
+        const tag = `[Steadfast CID: #${cid}]`;
+        if (!order.note?.includes(tag)) {
+          fallbackPayload.note = order.note ? `${order.note}\n${tag}` : tag;
+        }
+      }
+      const fallbackResult = await supabase
+        .from('orders')
+        .update(fallbackPayload)
+        .eq('id', order.id)
+        .select('*, order_items(*)')
+        .single();
+      if (!fallbackResult.error) {
+        updatedOrder = fallbackResult.data;
+      }
     }
+
+    const responseOrder = {
+      ...(updatedOrder || order),
+      status: targetOrderStatus,
+      payment_status: paymentStatus,
+      courier_status: rawStatus || order.courier_status,
+      consignment_id: cid ? String(cid) : (updatedOrder?.consignment_id || null),
+      tracking_code: trackingCode ? String(trackingCode) : (updatedOrder?.tracking_code || null),
+      courier_name: 'steadfast',
+    };
 
     return NextResponse.json({
       success: true,
       courierStatus: rawStatus,
-      order: updatedOrder,
-      message: `Steadfast status synced: ${rawStatus || 'No status change'}`,
+      consignment_id: cid,
+      tracking_code: trackingCode,
+      order: responseOrder,
+      message: `Steadfast status synced: ${rawStatus || 'No status change'}${cid ? ` (CID: #${cid})` : ''}`,
     });
   } catch (err: any) {
     console.error('[Steadfast Sync] Error:', err);

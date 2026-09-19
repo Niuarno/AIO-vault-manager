@@ -106,22 +106,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const consignment = steadfastResult.consignment;
+    const consignment: any = steadfastResult.consignment || steadfastResult;
+    const cid =
+      consignment?.consignment_id ||
+      consignment?.id ||
+      (steadfastResult as any)?.consignment_id ||
+      (steadfastResult as any)?.id;
+    const trackingCode =
+      consignment?.tracking_code ||
+      (steadfastResult as any)?.tracking_code ||
+      (cid ? String(cid) : null);
+    const courierStatus =
+      consignment?.status ||
+      (steadfastResult as any)?.delivery_status ||
+      'in_review';
 
     // 4. Update order to 'on_the_way' (Stage 3: With Courier) with Steadfast info
     const historyEntry = {
       timestamp: new Date().toISOString(),
       action: 'dispatched_to_steadfast',
-      consignment_id: consignment.id,
-      tracking_code: consignment.tracking_code,
-      status: consignment.status,
+      consignment_id: cid ? String(cid) : null,
+      tracking_code: trackingCode ? String(trackingCode) : null,
+      status: courierStatus,
       message: steadfastResult.message,
     };
 
     const currentHistory = Array.isArray(order.edit_history) ? order.edit_history : [];
     const updatedHistory = [...currentHistory, historyEntry];
 
-    const noteTag = `[Dispatched via Steadfast - CID: #${consignment.id}, Tracking: ${consignment.tracking_code}]`;
+    const noteTag = `[Dispatched via Steadfast - CID: #${cid || 'N/A'}, Tracking: ${trackingCode || 'N/A'}]`;
     const updatedNote = order.note ? `${order.note}\n${noteTag}` : noteTag;
 
     let { data: updatedOrder, error: updateError } = await supabase
@@ -129,12 +142,12 @@ export async function POST(req: NextRequest) {
       .update({
         status: 'on_the_way',
         courier_name: 'steadfast',
-        consignment_id: String(consignment.id),
-        tracking_code: consignment.tracking_code,
-        courier_status: consignment.status || 'in_review',
+        consignment_id: cid ? String(cid) : null,
+        tracking_code: trackingCode ? String(trackingCode) : null,
+        courier_status: courierStatus,
         tracking_message: 'Consignment created with Steadfast Courier',
         courier_updated_at: new Date().toISOString(),
-        external_id: consignment.tracking_code || String(consignment.id),
+        external_id: cid ? String(cid) : trackingCode ? String(trackingCode) : null,
         edit_history: updatedHistory,
         note: updatedNote,
         updated_at: new Date().toISOString(),
@@ -153,7 +166,7 @@ export async function POST(req: NextRequest) {
         .from('orders')
         .update({
           status: 'on_the_way',
-          external_id: consignment.tracking_code || String(consignment.id),
+          external_id: cid ? String(cid) : trackingCode ? String(trackingCode) : null,
           edit_history: updatedHistory,
           note: updatedNote,
           updated_at: new Date().toISOString(),
@@ -171,11 +184,27 @@ export async function POST(req: NextRequest) {
       updatedOrder = fallbackResult.data;
     }
 
+    // Merge courier properties onto response order object even if fallback ran
+    const responseOrder = {
+      ...(updatedOrder || order),
+      status: 'on_the_way',
+      courier_name: 'steadfast',
+      consignment_id: cid ? String(cid) : (updatedOrder?.consignment_id || null),
+      tracking_code: trackingCode ? String(trackingCode) : (updatedOrder?.tracking_code || null),
+      courier_status: courierStatus,
+      external_id: cid ? String(cid) : (updatedOrder?.external_id || null),
+    };
+
     return NextResponse.json({
       success: true,
       message: steadfastResult.message,
-      consignment,
-      order: updatedOrder,
+      consignment: {
+        id: cid,
+        consignment_id: cid,
+        tracking_code: trackingCode,
+        status: courierStatus,
+      },
+      order: responseOrder,
     });
   } catch (err: any) {
     console.error('[Steadfast Dispatch] Error:', err);
