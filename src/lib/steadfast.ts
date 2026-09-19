@@ -41,47 +41,48 @@ export interface SteadfastStatusResponse {
  */
 export function getSteadfastBaseUrl(): string {
   let url = process.env.STEADFAST_BASE_URL || 'https://portal.packzy.com/api/v1';
-  // If set to the legacy/non-existent portal.steadfast.com.bd domain, automatically resolve to portal.packzy.com
   if (url.includes('portal.steadfast.com.bd')) {
     url = url.replace('portal.steadfast.com.bd', 'portal.packzy.com');
   }
   return url.replace(/\/+$/, '');
 }
 
+/**
+ * Get credentials from environment variables, accommodating possible spaces or underscores.
+ */
+export function getSteadfastCredentials(): { apiKey: string; secretKey: string } {
+  const env = process.env as Record<string, string | undefined>;
+  const apiKey =
+    env.STEADFAST_API_KEY ||
+    env['STEADFAST API KEY'] ||
+    env.STEADFAST_APIKEY ||
+    '';
+  const secretKey =
+    env.STEADFAST_SECRET_KEY ||
+    env['STEADFAST SECRET KEY'] ||
+    env.STEADFAST_SECRETKEY ||
+    '';
+  return { apiKey: apiKey.trim(), secretKey: secretKey.trim() };
+}
+
 export function isSteadfastConfigured(): boolean {
-  return Boolean(process.env.STEADFAST_API_KEY && process.env.STEADFAST_SECRET_KEY);
+  const { apiKey, secretKey } = getSteadfastCredentials();
+  return Boolean(apiKey && secretKey);
 }
 
 /**
  * Creates a consignment in Steadfast Courier.
- * If credentials are not configured, provides a simulated success for staging/testing.
  */
 export async function createSteadfastConsignment(
   payload: SteadfastCreateOrderPayload
 ): Promise<SteadfastConsignmentResponse> {
-  const apiKey = process.env.STEADFAST_API_KEY;
-  const secretKey = process.env.STEADFAST_SECRET_KEY;
+  const { apiKey, secretKey } = getSteadfastCredentials();
 
   if (!apiKey || !secretKey) {
-    console.warn(
-      '[Steadfast] STEADFAST_API_KEY or STEADFAST_SECRET_KEY not found in environment. Generating local demo tracking code.'
-    );
-    const mockCid = Math.floor(100000 + Math.random() * 900000);
-    const mockTracking = `STF${mockCid}`;
     return {
-      status: 200,
-      message: 'Consignment created (Simulated - set STEADFAST_API_KEY and STEADFAST_SECRET_KEY in Vercel for live Steadfast dispatch)',
-      consignment: {
-        id: mockCid,
-        invoice: payload.invoice,
-        tracking_code: mockTracking,
-        status: 'in_review',
-        recipient_name: payload.recipient_name,
-        recipient_phone: payload.recipient_phone,
-        recipient_address: payload.recipient_address,
-        cod_amount: payload.cod_amount,
-        created_at: new Date().toISOString(),
-      },
+      status: 400,
+      message:
+        'Steadfast credentials missing in Vercel: Please check STEADFAST_API_KEY and STEADFAST_SECRET_KEY in Vercel (note: ensure STEADFAST_SECRET_KEY uses underscores, not spaces).',
     };
   }
 
@@ -96,7 +97,6 @@ export async function createSteadfastConsignment(
 
   // Sanitize note: Steadfast strictly enforces max 400 characters and prefers clean delivery instructions
   let cleanNote = (payload.note || '').trim();
-  // Strip internal audit tags like [Reachout Sale by ...] or [Steadfast ...] to keep note concise for delivery agents
   cleanNote = cleanNote.replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim();
   if (cleanNote.length > 350) {
     cleanNote = cleanNote.slice(0, 350);
@@ -132,6 +132,13 @@ export async function createSteadfastConsignment(
     try {
       data = JSON.parse(text);
     } catch {
+      if (text.toLowerCase().includes('unauthorized')) {
+        return {
+          status: 401,
+          message:
+            'Steadfast Authentication Failed: Invalid Api-Key or Secret-Key. Please verify credentials in your Steadfast merchant dashboard.',
+        };
+      }
       return {
         status: res.status,
         message: `Steadfast server responded with status ${res.status}: ${text.slice(0, 150)}`,
@@ -157,18 +164,18 @@ export async function createSteadfastConsignment(
 export async function checkSteadfastStatusByInvoice(
   invoice: string
 ): Promise<SteadfastStatusResponse> {
-  const apiKey = process.env.STEADFAST_API_KEY;
-  const secretKey = process.env.STEADFAST_SECRET_KEY;
+  const { apiKey, secretKey } = getSteadfastCredentials();
 
   if (!apiKey || !secretKey) {
     return {
-      status: 200,
+      status: 400,
       invoice,
       delivery_status: 'pending',
       message: 'Steadfast keys not configured in environment',
     };
   }
 
+  const cleanInvoice = invoice.replace(/^[#\s]+/, '').replace(/[^a-zA-Z0-9_-]/g, '');
   const baseUrl = getSteadfastBaseUrl();
 
   try {
@@ -176,7 +183,7 @@ export async function checkSteadfastStatusByInvoice(
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const res = await fetch(
-      `${baseUrl}/status_by_invoice/${encodeURIComponent(invoice)}`,
+      `${baseUrl}/status_by_invoice/${encodeURIComponent(cleanInvoice)}`,
       {
         method: 'GET',
         headers: {
@@ -189,7 +196,23 @@ export async function checkSteadfastStatusByInvoice(
     );
     clearTimeout(timeoutId);
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (text.toLowerCase().includes('unauthorized')) {
+        return {
+          status: 401,
+          message: 'Steadfast Authentication Failed: Invalid Api-Key or Secret-Key.',
+        };
+      }
+      return {
+        status: res.status,
+        message: `Steadfast status response (${res.status}): ${text.slice(0, 120)}`,
+      };
+    }
+
     return data;
   } catch (err: any) {
     console.error('[Steadfast Status by Invoice Error]', err);
@@ -206,12 +229,11 @@ export async function checkSteadfastStatusByInvoice(
 export async function checkSteadfastStatusByCid(
   cid: string | number
 ): Promise<SteadfastStatusResponse> {
-  const apiKey = process.env.STEADFAST_API_KEY;
-  const secretKey = process.env.STEADFAST_SECRET_KEY;
+  const { apiKey, secretKey } = getSteadfastCredentials();
 
   if (!apiKey || !secretKey) {
     return {
-      status: 200,
+      status: 400,
       consignment_id: cid,
       delivery_status: 'pending',
       message: 'Steadfast keys not configured in environment',
@@ -238,7 +260,23 @@ export async function checkSteadfastStatusByCid(
     );
     clearTimeout(timeoutId);
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (text.toLowerCase().includes('unauthorized')) {
+        return {
+          status: 401,
+          message: 'Steadfast Authentication Failed: Invalid Api-Key or Secret-Key.',
+        };
+      }
+      return {
+        status: res.status,
+        message: `Steadfast status response (${res.status}): ${text.slice(0, 120)}`,
+      };
+    }
+
     return data;
   } catch (err: any) {
     console.error('[Steadfast Status by CID Error]', err);
