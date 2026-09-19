@@ -33,6 +33,7 @@ import {
   X,
   Pencil,
   Lock,
+  Radio,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -42,6 +43,7 @@ import InteractivePieChart from '@/components/InteractivePieChart';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ProcessPayoutModal from '@/components/ProcessPayoutModal';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
+import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 import {
   WhatsAppFlatIcon,
   MessengerFlatIcon,
@@ -76,6 +78,7 @@ export default function AdminDashboard() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [isSteadfastModalOpen, setIsSteadfastModalOpen] = useState(false);
 
   // Inventory State
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -958,6 +961,15 @@ export default function AdminDashboard() {
                   <option value="phone">Phone Call</option>
                   <option value="manual">Manual Entry</option>
                 </select>
+
+                <button
+                  onClick={() => setIsSteadfastModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  title="Steadfast Webhook Integration & Testing"
+                >
+                  <Radio className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Steadfast Webhook</span>
+                </button>
               </div>
             </div>
 
@@ -1032,6 +1044,12 @@ export default function AdminDashboard() {
                               {order.shipping_address && (
                                 <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5">
                                   {order.shipping_address}
+                                </div>
+                              )}
+                              {Boolean(order.consignment_id || order.tracking_code) && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
+                                  <Truck className="w-3 h-3 text-indigo-500" />
+                                  <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
                                 </div>
                               )}
                             </td>
@@ -2232,6 +2250,14 @@ export default function AdminDashboard() {
           onClose={() => setLightboxScreenshot(null)}
         />
       )}
+
+      {/* Steadfast Webhook Integration Modal */}
+      <SteadfastWebhookModal
+        isOpen={isSteadfastModalOpen}
+        onClose={() => setIsSteadfastModalOpen(false)}
+        recentOrders={orders}
+        onOrderUpdated={fetchOrders}
+      />
     </div>
   );
 }

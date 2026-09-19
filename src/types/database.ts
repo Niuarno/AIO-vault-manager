@@ -127,6 +127,12 @@ export interface Order {
   sales_rep?: Profile | null;
   original_items?: any;
   edit_history?: any[];
+  courier_name?: string | null;
+  consignment_id?: string | null;
+  tracking_code?: string | null;
+  tracking_message?: string | null;
+  courier_status?: string | null;
+  courier_updated_at?: string | null;
 }
 
 export interface RewardRule {

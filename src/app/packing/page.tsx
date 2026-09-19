@@ -23,9 +23,12 @@ import {
   Square,
   Box,
   Sparkles,
+  Send,
+  Radio,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile } from '@/types/database';
 import { formatCurrency, formatDate, getStatusBadgeInfo } from '@/lib/utils';
+import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 
 export default function PackingDashboard() {
   const router = useRouter();
@@ -35,6 +38,9 @@ export default function PackingDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -140,6 +146,67 @@ export default function PackingDashboard() {
     }
   };
 
+  // Dispatch Order to Steadfast Courier
+  const handleSendToSteadfast = async (order: Order) => {
+    setDispatchingId(order.id);
+    try {
+      const res = await fetch('/api/shipping/steadfast/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOrders((prev) =>
+          prev.map((ord) =>
+            ord.id === order.id
+              ? data.order || {
+                  ...ord,
+                  status: 'on_the_way',
+                  courier_name: 'steadfast',
+                  consignment_id: String(data.consignment?.id),
+                  tracking_code: data.consignment?.tracking_code,
+                  courier_status: data.consignment?.status || 'in_review',
+                }
+              : ord
+          )
+        );
+      } else {
+        alert(`Steadfast Dispatch Error: ${data.error || 'Failed to dispatch'}`);
+      }
+    } catch (err: any) {
+      alert(`Error sending to Steadfast: ${err.message}`);
+    } finally {
+      setDispatchingId(null);
+    }
+  };
+
+  // Check live status on demand from Steadfast Courier
+  const handleSyncSteadfast = async (order: Order) => {
+    setSyncingId(order.id);
+    try {
+      const res = await fetch('/api/shipping/steadfast/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOrders((prev) =>
+          prev.map((ord) => (ord.id === order.id ? data.order || ord : ord))
+        );
+      } else {
+        alert(`Steadfast Sync: ${data.message || 'No update available'}`);
+      }
+    } catch (err: any) {
+      alert(`Error syncing Steadfast: ${err.message}`);
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
   // Filter orders
   const filteredOrders = orders.filter((order) => {
     const matchesFilter =
@@ -192,6 +259,14 @@ export default function PackingDashboard() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsWebhookModalOpen(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-900 text-amber-50 hover:bg-amber-950 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              title="View Callback URL & Bearer Token for Steadfast Webhook Integration"
+            >
+              <Radio className="w-3.5 h-3.5 text-amber-400" />
+              <span>Steadfast Webhook Setup</span>
+            </button>
             <button
               onClick={fetchPackingOrders}
               disabled={loading}
@@ -357,6 +432,25 @@ export default function PackingDashboard() {
                           {order.shipping_address}
                         </span>
                       </div>
+
+                      {Boolean(order.consignment_id || order.tracking_code || order.courier_status) && (
+                        <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-indigo-50 border border-indigo-200/80 text-indigo-900 font-semibold font-mono text-[11px]">
+                            <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                          </span>
+                          {order.courier_status && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
+                              {order.courier_status.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          {order.tracking_message && (
+                            <span className="text-slate-500 text-[11px] italic truncate max-w-sm">
+                              "{order.tracking_message}"
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Quick Print Button */}
@@ -476,37 +570,70 @@ export default function PackingDashboard() {
                       )}
 
                       {order.status === 'ready_to_ship' && (
-                        <button
-                          onClick={() => handleStatusChange(order.id, 'on_the_way')}
-                          disabled={updatingId === order.id}
-                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                        >
-                          <Truck className="w-4 h-4" />
-                          <span>
-                            {updatingId === order.id ? 'Updating...' : 'Hand to Courier (On The Way)'}
-                          </span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleSendToSteadfast(order)}
+                            disabled={dispatchingId === order.id}
+                            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            title="Create consignment in Steadfast Courier and advance to With Courier"
+                          >
+                            <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
+                            <span>
+                              {dispatchingId === order.id ? 'Sending to Steadfast...' : 'Send to Steadfast'}
+                            </span>
+                          </button>
+
+                          <button
+                            onClick={() => handleStatusChange(order.id, 'on_the_way')}
+                            disabled={updatingId === order.id}
+                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                            title="Manual handover without Steadfast API"
+                          >
+                            <Truck className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Manual Courier Handover</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+                        </div>
                       )}
 
                       {order.status === 'on_the_way' && (
-                        <button
-                          onClick={() => handleStatusChange(order.id, 'shipped')}
-                          disabled={updatingId === order.id}
-                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>
-                            {updatingId === order.id ? 'Updating...' : 'Mark as Shipped'}
-                          </span>
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleSyncSteadfast(order)}
+                            disabled={syncingId === order.id}
+                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            title="Sync live status from Steadfast Courier"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${syncingId === order.id ? 'animate-spin' : ''}`} />
+                            <span>{syncingId === order.id ? 'Syncing...' : 'Sync Steadfast'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleStatusChange(order.id, 'shipped')}
+                            disabled={updatingId === order.id}
+                            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              {updatingId === order.id ? 'Updating...' : 'Mark as Shipped'}
+                            </span>
+                          </button>
+                        </div>
                       )}
 
                       {order.status === 'shipped' && (
-                        <span className="text-xs text-emerald-700 font-semibold flex items-center">
-                          <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-600" />
-                          Order Shipped & Complete
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          {order.courier_name === 'steadfast' && (
+                            <span className="text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                              <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Steadfast #{order.tracking_code || order.consignment_id}</span>
+                            </span>
+                          )}
+                          <span className="text-xs text-emerald-700 font-semibold flex items-center">
+                            <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-600" />
+                            Order Shipped & Complete
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -637,6 +764,14 @@ export default function PackingDashboard() {
             </div>
           </div>
         )}
+
+        {/* Steadfast Webhook Integration & Testing Modal */}
+        <SteadfastWebhookModal
+          isOpen={isWebhookModalOpen}
+          onClose={() => setIsWebhookModalOpen(false)}
+          recentOrders={orders}
+          onOrderUpdated={fetchPackingOrders}
+        />
       </main>
     </div>
   );
