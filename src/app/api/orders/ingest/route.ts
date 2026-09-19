@@ -116,35 +116,82 @@ export async function POST(req: NextRequest) {
 
     const finalCouponUsed = matchedCoupon || extractedCodes[0] || null;
 
-    // 2. Insert Order
-    const { data: newOrder, error: orderError } = await supabase
+    // Dynamic Delivery Charge for Website Orders:
+    // Inside Dhaka: 80tk, Outside Dhaka: 130tk
+    // Rule: "if website order value exceeds 1000tk then delivery free or else keep regular charges"
+    const lineItems = orderData.line_items || [];
+    const itemsSubtotal = lineItems.reduce((acc: number, it: any) => {
+      const price = parseFloat(it.price || '0');
+      const qty = parseInt(it.quantity || '1', 10);
+      return acc + price * qty;
+    }, 0);
+
+    const isInsideDhaka =
+      /dhaka/i.test(shippingAddress) ||
+      /dhaka/i.test(city || '') ||
+      /dhaka/i.test(orderData.shipping_address?.city || '') ||
+      /dhaka/i.test(orderData.shipping_address?.province || '');
+
+    const isFreeDelivery = itemsSubtotal > 1000;
+    let websiteDeliveryCharge = 0;
+    let deliveryNote = '';
+
+    if (isFreeDelivery) {
+      websiteDeliveryCharge = 0;
+      deliveryNote = `[Website Order: Free Delivery applied (Order subtotal ${itemsSubtotal} BDT > 1000 BDT)]`;
+    } else {
+      websiteDeliveryCharge = isInsideDhaka ? 80 : 130;
+      deliveryNote = `[Website Order Delivery: ${isInsideDhaka ? 'Inside Dhaka (80 BDT)' : 'Outside Dhaka (130 BDT)'}]`;
+    }
+
+    // If Shopify/external webhook sent 0 or only items price, include delivery fee
+    let finalOrderTotal = totalAmount;
+    if (finalOrderTotal <= 0) {
+      finalOrderTotal = itemsSubtotal + websiteDeliveryCharge;
+    }
+
+    const finalOrderNote = orderData.note
+      ? `${orderData.note}\n${deliveryNote}`
+      : deliveryNote;
+
+    // 2. Insert Order (with delivery_charge fallback if column not in DB yet)
+    const ingestOrderPayload: Record<string, any> = {
+      order_number: orderNumber,
+      source: 'website',
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      customer_email: orderData.email || orderData.customer?.email || null,
+      shipping_address: shippingAddress,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      status: 'pending', // Default incoming website orders are pending confirmation
+      total_amount: finalOrderTotal,
+      delivery_charge: websiteDeliveryCharge,
+      currency: currency,
+      sales_rep_id: salesRepId,
+      coupon_used: finalCouponUsed,
+      note: finalOrderNote,
+      external_id: String(orderData.id),
+    };
+
+    let { data: newOrder, error: orderError } = await supabase
       .from('orders')
-      .insert({
-        order_number: orderNumber,
-        source: 'website',
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        customer_email: orderData.email || orderData.customer?.email || null,
-        shipping_address: shippingAddress,
-        payment_method: paymentMethod,
-        payment_status: paymentStatus,
-        status: 'pending', // Default incoming website orders are pending confirmation
-        total_amount: totalAmount,
-        currency: currency,
-        sales_rep_id: salesRepId,
-        coupon_used: finalCouponUsed,
-        note: orderData.note || null,
-        external_id: String(orderData.id),
-      })
+      .insert(ingestOrderPayload)
       .select()
       .single();
+
+    if (orderError && orderError.message?.includes('delivery_charge')) {
+      delete ingestOrderPayload.delivery_charge;
+      const res = await supabase.from('orders').insert(ingestOrderPayload).select().single();
+      newOrder = res.data;
+      orderError = res.error;
+    }
 
     if (orderError || !newOrder) {
       throw orderError || new Error('Failed to insert order into database');
     }
 
     // 3. Insert Order Items & Match Product Variants
-    const lineItems = orderData.line_items || [];
     const itemsToInsert = [];
 
     for (const item of lineItems) {

@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
       sales_rep_id,
       coupon_used,
       is_reachout_order,
+      delivery_type,
+      delivery_charge,
     } = body;
 
     if (!customer_name || !customer_phone || !shipping_address || !items || items.length === 0) {
@@ -63,61 +65,93 @@ export async function POST(req: NextRequest) {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `#${prefix}-${Date.now().toString().slice(-4)}${randomSuffix}`;
 
-    // Calculate total amount & inspect reachout items
-    let totalAmount = 0;
+    // Calculate product items subtotal & inspect reachout items
+    let itemsSubtotal = 0;
     let hasReachoutItem = Boolean(is_reachout_order);
 
     items.forEach((item: any) => {
       const lineTotal = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
-      totalAmount += lineTotal;
+      itemsSubtotal += lineTotal;
       if (item.is_reachout) {
         hasReachoutItem = true;
       }
     });
 
-    let finalNote = (note || '').trim();
-    if (hasReachoutItem) {
-      finalNote = (finalNote ? finalNote + ' ' : '') + `[Reachout Sale by ${staffFullName}]`;
+    // Determine Delivery Charge (Inside Dhaka: 80, Outside Dhaka: 130, Free Delivery: 0)
+    let finalDeliveryFee = 80;
+    let deliveryLabel = 'Inside Dhaka (80 BDT)';
+
+    if (delivery_type === 'free' || delivery_charge === 0) {
+      finalDeliveryFee = 0;
+      deliveryLabel = `Free Delivery (Offered by ${staffFullName})`;
+    } else if (delivery_type === 'outside_dhaka' || delivery_charge === 130) {
+      finalDeliveryFee = 130;
+      deliveryLabel = 'Outside Dhaka (130 BDT)';
+    } else if (delivery_type === 'inside_dhaka' || delivery_charge === 80) {
+      finalDeliveryFee = 80;
+      deliveryLabel = 'Inside Dhaka (80 BDT)';
+    } else if (typeof delivery_charge === 'number') {
+      finalDeliveryFee = Math.max(0, delivery_charge);
+      deliveryLabel = `${finalDeliveryFee} BDT`;
     }
 
-    // 1. Insert Order
-    const { data: newOrder, error: orderError } = await supabase
+    const grandTotal = itemsSubtotal + finalDeliveryFee;
+
+    let finalNote = (note || '').trim();
+    if (hasReachoutItem) {
+      finalNote = (finalNote ? finalNote + '\n' : '') + `[Reachout Sale by ${staffFullName}]`;
+    }
+    finalNote = (finalNote ? finalNote + '\n' : '') + `[Delivery: ${deliveryLabel}]`;
+
+    const isWebsite = orderSource === 'website';
+
+    // 1. Insert Order (with delivery_charge fallback if column not in DB yet)
+    const orderInsertPayload: Record<string, any> = {
+      order_number: orderNumber,
+      source: orderSource,
+      customer_name,
+      customer_phone,
+      customer_email: customer_email || null,
+      shipping_address,
+      payment_method: payment_method || 'Cash on Delivery (COD)',
+      payment_status: 'pending',
+      status: 'pending', // Pending sales confirmation
+      total_amount: grandTotal,
+      delivery_charge: finalDeliveryFee,
+      currency: 'BDT',
+      sales_rep_id: assignedSalesRepId,
+      coupon_used: coupon_used || null,
+      note: finalNote || null,
+      original_items: items.map((it: any) => ({
+        product_id: it.product_id || null,
+        variant_id: it.variant_id || null,
+        title: it.title,
+        variant_title: it.variant_title || null,
+        quantity: parseInt(it.quantity, 10) || 1,
+        price: parseFloat(it.price || '0'),
+        is_upsell: isWebsite ? Boolean(it.is_upsell) : false,
+        is_reachout: Boolean(it.is_reachout || hasReachoutItem),
+      })),
+    };
+
+    let { data: newOrder, error: orderError } = await supabase
       .from('orders')
-      .insert({
-        order_number: orderNumber,
-        source: orderSource,
-        customer_name,
-        customer_phone,
-        customer_email: customer_email || null,
-        shipping_address,
-        payment_method: payment_method || 'Cash on Delivery (COD)',
-        payment_status: 'pending',
-        status: 'pending', // Pending sales confirmation
-        total_amount: totalAmount,
-        currency: 'BDT',
-        sales_rep_id: assignedSalesRepId,
-        coupon_used: coupon_used || null,
-        note: finalNote || null,
-        original_items: items.map((it: any) => ({
-          product_id: it.product_id || null,
-          variant_id: it.variant_id || null,
-          title: it.title,
-          variant_title: it.variant_title || null,
-          quantity: parseInt(it.quantity, 10) || 1,
-          price: parseFloat(it.price || '0'),
-          is_upsell: isWebsite ? Boolean(it.is_upsell) : false,
-          is_reachout: Boolean(it.is_reachout || hasReachoutItem),
-        })),
-      })
+      .insert(orderInsertPayload)
       .select()
       .single();
+
+    if (orderError && orderError.message?.includes('delivery_charge')) {
+      delete orderInsertPayload.delivery_charge;
+      const res = await supabase.from('orders').insert(orderInsertPayload).select().single();
+      newOrder = res.data;
+      orderError = res.error;
+    }
 
     if (orderError || !newOrder) {
       throw orderError || new Error('Failed to create order');
     }
 
     // 2. Insert Order Items (Rule: "make the upsell functionality only valid for website orders, any other source are count as regular sells")
-    const isWebsite = orderSource === 'website';
     const itemsToInsert = items.map((item: any) => ({
       order_id: newOrder.id,
       product_id: item.product_id || null,

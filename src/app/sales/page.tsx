@@ -98,6 +98,7 @@ export default function SalesDashboard() {
   const [paymentMethod, setPaymentMethod] = useState('Cash on Delivery (COD)');
   const [couponUsed, setCouponUsed] = useState('');
   const [note, setNote] = useState('');
+  const [deliveryType, setDeliveryType] = useState<'inside_dhaka' | 'outside_dhaka' | 'free'>('inside_dhaka');
 
   // Selected Order Line Items
   const [orderItems, setOrderItems] = useState<
@@ -333,6 +334,20 @@ export default function SalesDashboard() {
     setOrderItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Delivery Charge Calculation:
+  // Inside Dhaka: 80tk, Outside Dhaka: 130tk, Free Delivery: 0tk
+  const deliveryCharge = useMemo(() => {
+    if (deliveryType === 'inside_dhaka') return 80;
+    if (deliveryType === 'outside_dhaka') return 130;
+    return 0; // free delivery
+  }, [deliveryType]);
+
+  const itemsSubtotal = useMemo(() => {
+    return orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  }, [orderItems]);
+
+  const totalOrderAmount = itemsSubtotal + deliveryCharge;
+
   // Submit Manual Order
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,6 +372,8 @@ export default function SalesDashboard() {
           sales_rep_id: currentProfile?.id,
           coupon_used: couponUsed || null,
           is_reachout_order: orderItems.some((i) => i.is_reachout),
+          delivery_type: deliveryType,
+          delivery_charge: deliveryCharge,
         }),
       });
 
@@ -378,6 +395,7 @@ export default function SalesDashboard() {
       setShippingAddress('');
       setNote('');
       setOrderItems([]);
+      setDeliveryType('inside_dhaka');
 
       fetchOrders();
       fetchInventory();
@@ -1649,13 +1667,29 @@ export default function SalesDashboard() {
                       </div>
                     ))}
 
-                    <div className="pt-3 flex justify-between font-bold text-sm text-slate-900">
-                      <span>Total Order Amount:</span>
-                      <span className="font-mono text-emerald-700 text-base">
-                        {formatCurrency(
-                          orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-                        )}
-                      </span>
+                    <div className="pt-3 border-t border-slate-200/80 space-y-1.5 text-xs">
+                      <div className="flex justify-between text-slate-500">
+                        <span>Items Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-800">
+                          {formatCurrency(itemsSubtotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-slate-500">
+                        <span>Delivery Charge:</span>
+                        <span className="font-mono font-bold text-slate-800">
+                          {deliveryCharge === 0 ? (
+                            <span className="text-emerald-700 font-bold">FREE (৳0)</span>
+                          ) : (
+                            formatCurrency(deliveryCharge)
+                          )}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-dashed border-slate-200 flex justify-between font-bold text-sm text-slate-900">
+                        <span>Grand Total:</span>
+                        <span className="font-mono text-emerald-700 text-base">
+                          {formatCurrency(totalOrderAmount)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -1663,6 +1697,86 @@ export default function SalesDashboard() {
                     No items added yet. Pick an item above to add to cart.
                   </p>
                 )}
+              </div>
+
+              {/* Delivery Charge Selection: 3 Dynamic Cards */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Delivery Option
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Choose zone or offer customer free delivery
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  {/* 1. Inside Dhaka: 80tk */}
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('inside_dhaka')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                      deliveryType === 'inside_dhaka'
+                        ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold">Inside Dhaka</span>
+                      {deliveryType === 'inside_dhaka' ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      ) : (
+                        <span className="w-2 h-2 rounded-full border border-slate-300"></span>
+                      )}
+                    </div>
+                    <div className="text-base font-black font-mono mt-1 text-slate-900">৳80</div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Dhaka metro delivery</p>
+                  </button>
+
+                  {/* 2. Outside Dhaka: 130tk */}
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('outside_dhaka')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                      deliveryType === 'outside_dhaka'
+                        ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold">Outside Dhaka</span>
+                      {deliveryType === 'outside_dhaka' ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      ) : (
+                        <span className="w-2 h-2 rounded-full border border-slate-300"></span>
+                      )}
+                    </div>
+                    <div className="text-base font-black font-mono mt-1 text-slate-900">৳130</div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Nationwide delivery</p>
+                  </button>
+
+                  {/* 3. Free Delivery: 0tk */}
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('free')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                      deliveryType === 'free'
+                        ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold text-emerald-700">Free Delivery</span>
+                      {deliveryType === 'free' ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      ) : (
+                        <span className="w-2 h-2 rounded-full border border-slate-300"></span>
+                      )}
+                    </div>
+                    <div className="text-base font-black font-mono mt-1 text-emerald-700">৳0 FREE</div>
+                    <p className="text-[10px] text-emerald-600 font-medium mt-0.5 leading-tight">Staff special offer</p>
+                  </button>
+                </div>
               </div>
 
               {/* Salesperson Coupon Code */}

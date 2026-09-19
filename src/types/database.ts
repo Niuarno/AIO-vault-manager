@@ -133,6 +133,7 @@ export interface Order {
   tracking_message?: string | null;
   courier_status?: string | null;
   courier_updated_at?: string | null;
+  delivery_charge?: number | null;
 }
 
 export interface RewardRule {
