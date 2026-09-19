@@ -1930,12 +1930,12 @@ export default function AdminDashboard() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Tier Name / Label *
+                        Milestone Name / Label *
                       </label>
                       <input
                         type="text"
                         required
-                        placeholder={newTierSource === 'other' ? 'e.g. Tier 6 or ৳60k Club' : 'e.g. Tier 8 or High Ticket Extra'}
+                        placeholder={newTierSource === 'other' ? 'e.g. Milestone 6 or ৳60k Club' : 'e.g. Milestone 8'}
                         value={newTierName}
                         onChange={(e) => setNewTierName(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -1963,7 +1963,7 @@ export default function AdminDashboard() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Commission Bonus (BDT) *
+                        Extra Commission (BDT) *
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
@@ -1982,7 +1982,7 @@ export default function AdminDashboard() {
 
                     {parseFloat(newTierQuota) > 0 && parseFloat(newTierBonus) > 0 && (
                       <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
-                        <span className="font-medium">Effective Bonus Rate:</span>
+                        <span className="font-medium">Effective Rate:</span>
                         <span className="font-bold font-mono text-sm">
                           {((parseFloat(newTierBonus) / parseFloat(newTierQuota)) * 100).toFixed(2)}%
                         </span>
@@ -1996,7 +1996,7 @@ export default function AdminDashboard() {
                       }`}
                     >
                       <Plus className="w-4 h-4" />
-                      <span>{newTierSource === 'other' ? 'Add Daily Sales Tier' : 'Add Website Quota Tier'}</span>
+                      <span>{newTierSource === 'other' ? 'Add Non-Website Milestone' : 'Add Website Milestone'}</span>
                     </button>
                   </form>
                 </div>
@@ -2005,17 +2005,17 @@ export default function AdminDashboard() {
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600 space-y-3">
                   <div className="font-bold text-slate-800 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Rule Sets Overview</span>
+                    <span>Milestones Overview</span>
                   </div>
                   <div className="space-y-2 text-[11px] text-slate-600">
                     <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60">
-                      <div className="font-bold text-amber-900 mb-0.5">Every Other Order Source (Non-Website)</div>
+                      <div className="font-bold text-amber-900 mb-0.5">Non-Website Sales Milestones</div>
                       <p className="text-amber-800">
-                        Applies to all manual, phone, social & other non-website sales. Staff earn progressive daily bonuses based on total daily sales volume (৳20k: ৳200, ৳25k: ৳500, ৳30k: ৳1,000, ৳40k: ৳1,500, ৳50k+: ৳2,000).
+                        Applies to phone, WhatsApp, manual & social sales. Staff earn daily extra commission upon reaching sales milestones (৳20k: ৳200, ৳25k: ৳500, ৳30k: ৳1,000, ৳40k: ৳1,500, ৳50k+: ৳2,000).
                       </p>
                     </div>
                     <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60">
-                      <div className="font-bold text-emerald-900 mb-0.5">Website Orders (Upsell Quota)</div>
+                      <div className="font-bold text-emerald-900 mb-0.5">Website Sales Milestones (Upsell)</div>
                       <p className="text-emerald-800">
                         Applies strictly to website orders where staff upsell extra products. Milestones unlock at ৳3k, ৳4k, ৳6k, ৳8k, ৳12k, ৳16k, and ৳24k.
                       </p>
@@ -2030,10 +2030,10 @@ export default function AdminDashboard() {
                   <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-base text-slate-900">
-                        Commission & Daily Sales Bonus Rules
+                        Sales Milestones & Extra Commission Rules
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Performance thresholds and commission rewards configured for sales staff
+                        Performance thresholds and extra commission milestones configured for sales staff
                       </p>
                     </div>
 
@@ -2058,7 +2058,7 @@ export default function AdminDashboard() {
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        Other Sources ({quotaTiers.filter((t) => t.source !== 'website').length})
+                        Non-Website ({quotaTiers.filter((t) => t.source !== 'website').length})
                       </button>
                       <button
                         type="button"
@@ -2078,8 +2078,8 @@ export default function AdminDashboard() {
                     <table className="w-full text-left text-sm text-slate-700">
                       <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                         <tr>
-                          <th className="p-4">Tier & Criteria</th>
-                          <th className="p-4">Bonus Reward</th>
+                          <th className="p-4">Milestone & Target</th>
+                          <th className="p-4">Extra Commission</th>
                           <th className="p-4">Effective Rate</th>
                           <th className="p-4">Scope</th>
                           <th className="p-4">Status</th>

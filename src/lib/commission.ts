@@ -15,22 +15,22 @@ export interface QuotaTier {
 
 // Default 7 Tiers for Website Orders (Upsell Quota)
 export const DEFAULT_WEBSITE_QUOTA_TIERS = [
-  { name: 'Tier 1', min_quota: 3000, bonus: 100 },
-  { name: 'Tier 2', min_quota: 4000, bonus: 250 },
-  { name: 'Tier 3', min_quota: 6000, bonus: 500 },
-  { name: 'Tier 4', min_quota: 8000, bonus: 800 },
-  { name: 'Tier 5', min_quota: 12000, bonus: 1200 },
-  { name: 'Tier 6', min_quota: 16000, bonus: 1800 },
-  { name: 'Tier 7', min_quota: 24000, bonus: 3000 },
+  { name: 'Milestone 1', min_quota: 3000, bonus: 100 },
+  { name: 'Milestone 2', min_quota: 4000, bonus: 250 },
+  { name: 'Milestone 3', min_quota: 6000, bonus: 500 },
+  { name: 'Milestone 4', min_quota: 8000, bonus: 800 },
+  { name: 'Milestone 5', min_quota: 12000, bonus: 1200 },
+  { name: 'Milestone 6', min_quota: 16000, bonus: 1800 },
+  { name: 'Milestone 7', min_quota: 24000, bonus: 3000 },
 ];
 
 // Default 5 Daily Sales Bonus Tiers for All Other Order Sources (Beside Website)
 export const DEFAULT_NON_WEBSITE_SALES_TIERS = [
-  { name: 'Tier 1', min_quota: 20000, bonus: 200 },
-  { name: 'Tier 2', min_quota: 25000, bonus: 500 },
-  { name: 'Tier 3', min_quota: 30000, bonus: 1000 },
-  { name: 'Tier 4', min_quota: 40000, bonus: 1500 },
-  { name: 'Tier 5', min_quota: 50000, bonus: 2000 },
+  { name: 'Milestone 1', min_quota: 20000, bonus: 200 },
+  { name: 'Milestone 2', min_quota: 25000, bonus: 500 },
+  { name: 'Milestone 3', min_quota: 30000, bonus: 1000 },
+  { name: 'Milestone 4', min_quota: 40000, bonus: 1500 },
+  { name: 'Milestone 5', min_quota: 50000, bonus: 2000 },
 ];
 
 /**
@@ -304,7 +304,7 @@ export async function syncNonWebsiteSalesRewards(
       .select('*')
       .eq('sales_rep_id', staffId)
       .gte('created_at', today + 'T00:00:00.000Z')
-      .like('note', 'Daily Sales Bonus%')
+      .or('note.like.Daily Sales Bonus%,note.like.Non-Website Sales Milestone%')
       .neq('status', 'paid');
 
     const currentAwardedBonus = (existingRewards || []).reduce(
@@ -320,7 +320,7 @@ export async function syncNonWebsiteSalesRewards(
         order_id: mostRecentOrderId,
         bonus_amount: deltaBonus,
         status: 'pending',
-        note: `Daily Sales Bonus: Reached ৳${reachedTier?.min_quota.toLocaleString()}+ Daily Sales tier (Total: ৳${targetBonus} BDT bonus)`,
+        note: `Non-Website Sales Milestone: Reached ${reachedTier?.name || `৳${reachedTier?.min_quota.toLocaleString()}+`} (Total: ৳${targetBonus} BDT Extra Commission)`,
       });
     }
 
