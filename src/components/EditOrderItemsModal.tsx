@@ -48,6 +48,7 @@ export default function EditOrderItemsModal({
   onUpdated,
 }: EditOrderItemsModalProps) {
   const supabase = createClient();
+  const isWebsite = order.source === 'website';
 
   const [items, setItems] = useState<EditableLineItem[]>([]);
   const [catalogVariants, setCatalogVariants] = useState<ProductVariant[]>([]);
@@ -101,7 +102,7 @@ export default function EditOrderItemsModal({
           variant_title: item.variant_title,
           quantity: Number(item.quantity) || 1,
           price: Number(item.price) || 0,
-          is_upsell: Boolean(item.is_upsell),
+          is_upsell: order.source === 'website' ? Boolean(item.is_upsell) : false,
         }))
       );
       setEditReason('');
@@ -164,8 +165,9 @@ export default function EditOrderItemsModal({
     if (!variant) return;
 
     // Check if variant already exists with the SAME upsell status
+    const effectiveIsUpsell = isWebsite ? newItemIsUpsell : false;
     const existingIndex = items.findIndex(
-      (i) => i.variant_id === variant.id && i.is_upsell === newItemIsUpsell
+      (i) => i.variant_id === variant.id && i.is_upsell === effectiveIsUpsell
     );
 
     if (existingIndex >= 0) {
@@ -182,7 +184,7 @@ export default function EditOrderItemsModal({
           variant_title: variantTitle,
           quantity: newItemQty,
           price: Number(variant.price) || 0,
-          is_upsell: newItemIsUpsell,
+          is_upsell: effectiveIsUpsell,
         },
       ]);
     }
@@ -511,14 +513,16 @@ export default function EditOrderItemsModal({
                           </div>
 
                           <div className="flex items-center justify-between sm:justify-end space-x-2.5">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleUpsell(idx)}
-                              className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 hover:bg-purple-100 hover:text-purple-700 transition-colors"
-                              title="Mark as Upsell Item"
-                            >
-                              Make Upsell
-                            </button>
+                            {isWebsite && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleUpsell(idx)}
+                                className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 hover:bg-purple-100 hover:text-purple-700 transition-colors"
+                                title="Mark as Upsell Item"
+                              >
+                                Make Upsell
+                              </button>
+                            )}
 
                             <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
                               <button
@@ -561,102 +565,104 @@ export default function EditOrderItemsModal({
                 )}
               </div>
 
-              {/* SECTION 2: UPSELL PRODUCTS (SHOWN SEPARATELY) */}
-              <div className="pt-3 border-t border-slate-100">
-                <div className="text-xs font-bold uppercase text-purple-700 tracking-wider mb-2 flex items-center justify-between">
-                  <span className="flex items-center space-x-1">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                    <span>Upsell Items & Add-Ons ({upsellItems.length})</span>
-                  </span>
-                  <span className="text-[11px] text-purple-600 font-semibold lowercase">
-                    Commission eligible
-                  </span>
-                </div>
-
-                {upsellItems.length === 0 ? (
-                  <div className="p-3 text-center bg-purple-50/40 rounded-xl text-purple-600/70 text-xs border border-dashed border-purple-200">
-                    No upsell items attached yet. (Add an item with "Upsell" checked below)
+              {/* SECTION 2: UPSELL PRODUCTS (SHOWN ONLY FOR WEBSITE ORDERS) */}
+              {isWebsite && (
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="text-xs font-bold uppercase text-purple-700 tracking-wider mb-2 flex items-center justify-between">
+                    <span className="flex items-center space-x-1">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Upsell Items & Add-Ons ({upsellItems.length})</span>
+                    </span>
+                    <span className="text-[11px] text-purple-600 font-semibold lowercase">
+                      Website quota commission eligible
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {items.map((item, idx) => {
-                      if (!item.is_upsell) return null;
-                      return (
-                        <div
-                          key={idx}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-purple-200 bg-purple-50/50 hover:border-purple-300 transition-colors shadow-2xs"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-1.5">
-                              <span className="text-sm font-bold text-purple-950 truncate">
-                                {item.title}
-                              </span>
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-200 text-purple-800">
-                                UPSELL
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-2 mt-0.5">
-                              {item.variant_title && (
-                                <span className="text-xs text-purple-700 font-medium">
-                                  {item.variant_title}
+
+                  {upsellItems.length === 0 ? (
+                    <div className="p-3 text-center bg-purple-50/40 rounded-xl text-purple-600/70 text-xs border border-dashed border-purple-200">
+                      No upsell items attached yet. (Add an item with "As Upsell?" checked below)
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {items.map((item, idx) => {
+                        if (!item.is_upsell) return null;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-purple-200 bg-purple-50/50 hover:border-purple-300 transition-colors shadow-2xs"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-sm font-bold text-purple-950 truncate">
+                                  {item.title}
                                 </span>
-                              )}
-                              <span className="text-xs text-purple-800 font-bold font-mono">
-                                {formatCurrency(item.price)} each
-                              </span>
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-200 text-purple-800">
+                                  UPSELL
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2 mt-0.5">
+                                {item.variant_title && (
+                                  <span className="text-xs text-purple-700 font-medium">
+                                    {item.variant_title}
+                                  </span>
+                                )}
+                                <span className="text-xs text-purple-800 font-bold font-mono">
+                                  {formatCurrency(item.price)} each
+                                </span>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex items-center justify-between sm:justify-end space-x-2.5">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleUpsell(idx)}
-                              className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white border border-purple-200 text-purple-700 hover:bg-slate-100 transition-colors"
-                              title="Convert to regular item"
-                            >
-                              Make Regular
-                            </button>
-
-                            <div className="flex items-center border border-purple-200 rounded-lg bg-white">
+                            <div className="flex items-center justify-between sm:justify-end space-x-2.5">
                               <button
                                 type="button"
-                                onClick={() => handleQuantityChange(idx, -1)}
-                                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-l-lg"
-                                disabled={item.quantity <= 1}
+                                onClick={() => handleToggleUpsell(idx)}
+                                className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white border border-purple-200 text-purple-700 hover:bg-slate-100 transition-colors"
+                                title="Convert to regular item"
                               >
-                                <Minus className="w-3.5 h-3.5" />
+                                Make Regular
                               </button>
-                              <span className="w-7 text-center text-xs font-bold text-slate-900">
-                                {item.quantity}
-                              </span>
+
+                              <div className="flex items-center border border-purple-200 rounded-lg bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuantityChange(idx, -1)}
+                                  className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-l-lg"
+                                  disabled={item.quantity <= 1}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-7 text-center text-xs font-bold text-slate-900">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuantityChange(idx, 1)}
+                                  className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-r-lg"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="text-right min-w-[70px] font-mono text-xs font-bold text-purple-950">
+                                {formatCurrency(item.price * item.quantity)}
+                              </div>
+
                               <button
                                 type="button"
-                                onClick={() => handleQuantityChange(idx, 1)}
-                                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-r-lg"
+                                onClick={() => handleRemoveItem(idx)}
+                                className="p-1.5 text-purple-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                title="Remove upsell"
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-
-                            <div className="text-right min-w-[70px] font-mono text-xs font-bold text-purple-950">
-                              {formatCurrency(item.price * item.quantity)}
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="p-1.5 text-purple-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                              title="Remove upsell"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ADD ANOTHER PRODUCT OR UPSELL */}
               <div className="pt-3 border-t border-slate-100">
@@ -666,7 +672,7 @@ export default function EditOrderItemsModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                  <div className="sm:col-span-6">
+                  <div className={isWebsite ? 'sm:col-span-6' : 'sm:col-span-8'}>
                     <ModernProductSelect
                       variants={catalogVariants}
                       selectedVariantId={selectedVariantId}
@@ -685,17 +691,19 @@ export default function EditOrderItemsModal({
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="flex items-center space-x-1.5 text-xs text-purple-700 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={newItemIsUpsell}
-                        onChange={(e) => setNewItemIsUpsell(e.target.checked)}
-                        className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
-                      />
-                      <span className="font-semibold text-[11px]">As Upsell?</span>
-                    </label>
-                  </div>
+                  {isWebsite && (
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center space-x-1.5 text-xs text-purple-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={newItemIsUpsell}
+                          onChange={(e) => setNewItemIsUpsell(e.target.checked)}
+                          className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
+                        />
+                        <span className="font-semibold text-[11px]">As Upsell?</span>
+                      </label>
+                    </div>
+                  )}
 
                   <div className="sm:col-span-2">
                     <button

@@ -315,6 +315,31 @@ export default function AdminDashboard() {
     }
   };
 
+  // Admin Staff Assignment Handler
+  const handleAssignStaff = async (orderId: string, newStaffId: string | null) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sales_rep_id: newStaffId }),
+      });
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, sales_rep_id: newStaffId, sales_rep: data.order.sales_rep }
+              : o
+          )
+        );
+      } else {
+        alert(data.error || 'Failed to assign order');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   // Stock Adjustment Handler
   const handleStockAdjust = async (variantId: string, amount: number) => {
     setAdjustingId(variantId);
@@ -799,6 +824,8 @@ export default function AdminDashboard() {
     switch (status) {
       case 'pending':
         return { dot: 'bg-amber-400', label: 'Pending' };
+      case 'not_reachable':
+        return { dot: 'bg-orange-500', label: 'Not Reachable' };
       case 'confirmed':
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
@@ -872,6 +899,7 @@ export default function AdminDashboard() {
                   >
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
+                    <option value="not_reachable">Not Reachable</option>
                     <option value="confirmed">Confirmed</option>
                     <option value="ready_to_ship">Ready to Ship</option>
                     <option value="on_the_way">On the Way</option>
@@ -979,22 +1007,30 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4">
-                              {order.sales_rep ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
-                                    {order.sales_rep.avatar_url ? (
-                                      <img src={order.sales_rep.avatar_url} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      order.sales_rep.full_name?.charAt(0) || 'U'
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-slate-700 font-medium">
-                                    {order.sales_rep.full_name}
-                                  </span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 shrink-0">
+                                  {order.sales_rep?.avatar_url ? (
+                                    <img src={order.sales_rep.avatar_url} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    order.sales_rep?.full_name?.charAt(0) || 'U'
+                                  )}
                                 </div>
-                              ) : (
-                                <span className="text-xs text-slate-400 italic">Unassigned</span>
-                              )}
+                                <select
+                                  value={order.sales_rep_id || ''}
+                                  onChange={(e) =>
+                                    handleAssignStaff(order.id, e.target.value || null)
+                                  }
+                                  className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs max-w-[140px] truncate"
+                                  title="Assign staff to this order (Admin only)"
+                                >
+                                  <option value="">Unassigned</option>
+                                  {salesTeam.map((staff) => (
+                                    <option key={staff.id} value={staff.id}>
+                                      {staff.full_name || staff.email}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             </td>
 
                             <td className="p-4">
@@ -1007,6 +1043,7 @@ export default function AdminDashboard() {
                                   className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
                                 >
                                   <option value="pending">Pending</option>
+                                  <option value="not_reachable">Not Reachable</option>
                                   <option value="confirmed">Confirmed</option>
                                   <option value="ready_to_ship">Ready to Ship</option>
                                   <option value="on_the_way">On the Way</option>

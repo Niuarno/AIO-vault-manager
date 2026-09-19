@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
 
 export async function PATCH(
@@ -144,7 +145,8 @@ export async function PATCH(
     // Delete old items
     await supabase.from('order_items').delete().eq('order_id', orderId);
 
-    // Insert new items preserving is_upsell distinction
+    // Rule: "make the upsell functionality only valid for website orders, any other source are count as regular sells"
+    const isWebsite = order.source === 'website';
     const itemsToInsert = newItems.map((item) => ({
       order_id: orderId,
       product_id: item.product_id || null,
@@ -153,7 +155,7 @@ export async function PATCH(
       variant_title: item.variant_title || null,
       quantity: Number(item.quantity) || 1,
       price: Number(item.price) || 0,
-      is_upsell: Boolean(item.is_upsell),
+      is_upsell: isWebsite ? Boolean(item.is_upsell) : false,
     }));
 
     const { error: insertErr } = await supabase.from('order_items').insert(itemsToInsert);
@@ -167,7 +169,47 @@ export async function PATCH(
       0
     );
 
-    // 7. Prepare Edit History Entry and preserve Original Order snapshot
+    // 7. Determine requester role & staff assignment rules
+    // Rule 1: "any order which are assigned to any sales staff are permanantly locked, only admins can change the assigned staff"
+    // Rule 2: "any staff who upsells on website orders auto assigned to their profile"
+    let isAdmin = false;
+    let requesterUserId: string | null = null;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        requesterUserId = user.id;
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        isAdmin = prof?.role === 'admin';
+      }
+    } catch {
+      // ignore
+    }
+
+    let resolvedSalesRepId = order.sales_rep_id;
+    const hasUpsellItem = itemsToInsert.some((i) => i.is_upsell);
+
+    if (isAdmin) {
+      // Admin has full power to assign or reassign
+      if (body.sales_rep_id !== undefined) {
+        resolvedSalesRepId = body.sales_rep_id || null;
+      }
+    } else {
+      // Non-admin sales staff:
+      if (order.sales_rep_id) {
+        // PERMANENTLY LOCKED: Staff cannot change or steal already assigned orders
+        resolvedSalesRepId = order.sales_rep_id;
+      } else if (isWebsite && hasUpsellItem) {
+        // Staff who upsells on an unassigned website order is auto-assigned
+        resolvedSalesRepId = requesterUserId || body.sales_rep_id || null;
+      }
+    }
+
+    // 8. Prepare Edit History Entry and preserve Original Order snapshot
     const nowIso = new Date().toISOString();
     const formattedDate = new Date().toLocaleDateString('en-US', {
       month: 'short',
@@ -190,12 +232,12 @@ export async function PATCH(
         price: i.price,
         is_upsell: i.is_upsell,
       })),
-      new_items: newItems.map((i) => ({
+      new_items: itemsToInsert.map((i) => ({
         title: i.title,
         variant_title: i.variant_title,
         quantity: i.quantity,
         price: i.price,
-        is_upsell: Boolean(i.is_upsell),
+        is_upsell: i.is_upsell,
       })),
     };
 
@@ -218,8 +260,6 @@ export async function PATCH(
 
     let updatedOrder: any = null;
 
-    const salesRepId = body.sales_rep_id || order.sales_rep_id;
-
     // Try updating with JSONB history columns
     const updatePayload: Record<string, any> = {
       total_amount: recalculatedTotal,
@@ -227,10 +267,8 @@ export async function PATCH(
       note: updatedNote,
       edit_history: updatedHistory,
       original_items: originalItems,
+      sales_rep_id: resolvedSalesRepId,
     };
-    if (salesRepId) {
-      updatePayload.sales_rep_id = salesRepId;
-    }
 
     const { data: fullUpdateData, error: fullUpdateErr } = await supabase
       .from('orders')
@@ -245,10 +283,8 @@ export async function PATCH(
         total_amount: recalculatedTotal,
         updated_at: nowIso,
         note: updatedNote,
+        sales_rep_id: resolvedSalesRepId,
       };
-      if (salesRepId) {
-        fallbackPayload.sales_rep_id = salesRepId;
-      }
 
       const { data: fallbackData, error: fallbackErr } = await supabase
         .from('orders')
@@ -265,9 +301,9 @@ export async function PATCH(
       updatedOrder = fullUpdateData;
     }
 
-    // 8. If this order is from website and attributed to a staff member, synchronize quota rewards
-    if (order.source === 'website' && salesRepId) {
-      await syncWebsiteUpsellQuotaRewards(supabase, salesRepId, orderId);
+    // 9. If this order is from website and attributed to a staff member, synchronize quota rewards
+    if (isWebsite && resolvedSalesRepId) {
+      await syncWebsiteUpsellQuotaRewards(supabase, resolvedSalesRepId, orderId);
     }
 
     return NextResponse.json({ success: true, order: updatedOrder });

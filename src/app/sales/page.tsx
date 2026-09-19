@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Lock,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
@@ -108,13 +109,14 @@ export default function SalesDashboard() {
       price: number;
       quantity: number;
       is_upsell: boolean;
+      is_reachout?: boolean;
     }>
   >([]);
 
   // Current item being selected in modal
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
-  const [isUpsellItem, setIsUpsellItem] = useState(false);
+  const [isReachoutItem, setIsReachoutItem] = useState(false);
 
   // Load User Profile & Realtime Presence
   useEffect(() => {
@@ -306,14 +308,15 @@ export default function SalesDashboard() {
         variant_title: v.title,
         price: Number(v.price),
         quantity: itemQuantity,
-        is_upsell: isUpsellItem,
+        is_upsell: false,
+        is_reachout: isReachoutItem,
       },
     ]);
 
     // Reset picker
     setSelectedVariantId('');
     setItemQuantity(1);
-    setIsUpsellItem(false);
+    setIsReachoutItem(false);
   };
 
   // Remove Item
@@ -344,6 +347,7 @@ export default function SalesDashboard() {
           items: orderItems,
           sales_rep_id: currentProfile?.id,
           coupon_used: couponUsed || null,
+          is_reachout_order: orderItems.some((i) => i.is_reachout),
         }),
       });
 
@@ -592,6 +596,8 @@ export default function SalesDashboard() {
     switch (status) {
       case 'pending':
         return { dot: 'bg-amber-400', label: 'Pending' };
+      case 'not_reachable':
+        return { dot: 'bg-orange-500', label: 'Not Reachable' };
       case 'confirmed':
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
@@ -845,6 +851,7 @@ export default function SalesDashboard() {
                 >
                   <option value="all">All Statuses</option>
                   <option value="pending">Pending</option>
+                  <option value="not_reachable">Not Reachable</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="ready_to_ship">Ready to Ship</option>
                   <option value="on_the_way">On the Way</option>
@@ -948,25 +955,33 @@ export default function SalesDashboard() {
                             </td>
 
                             <td className="p-4">
-                              <div className="relative inline-block">
-                                <select
-                                  value={order.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(order.id, e.target.value as OrderStatus)
-                                  }
-                                  className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
-                                >
-                                  <option value="pending">Pending</option>
-                                  <option value="confirmed">Confirmed</option>
-                                  <option value="ready_to_ship">Ready to Ship</option>
-                                  <option value="on_the_way">On the Way</option>
-                                  <option value="delivered">Delivered</option>
-                                  <option value="canceled">Canceled</option>
-                                </select>
+                              {order.status === 'pending' || order.status === 'not_reachable' ? (
+                                <div className="relative inline-block">
+                                  <select
+                                    value={order.status}
+                                    onChange={(e) =>
+                                      handleStatusChange(order.id, e.target.value as OrderStatus)
+                                    }
+                                    className="text-xs font-semibold pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="not_reachable">Not Reachable</option>
+                                    <option value="confirmed">Confirm Order</option>
+                                  </select>
+                                  <span
+                                    className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                  />
+                                </div>
+                              ) : (
                                 <span
-                                  className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
-                                />
-                              </div>
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs"
+                                  title="Confirmed orders are locked for sales staff. Contact an admin to adjust status."
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                                  <span>{statusBadge.label}</span>
+                                  <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                </span>
+                              )}
                             </td>
 
                             <td className="p-4 text-right">
@@ -1538,14 +1553,14 @@ export default function SalesDashboard() {
                     </div>
 
                     <div className="flex items-center pt-5">
-                      <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer select-none">
+                      <label className="flex items-center gap-2 text-xs text-amber-800 font-semibold cursor-pointer select-none bg-amber-50 border border-amber-200/80 px-3 py-1.5 rounded-xl hover:bg-amber-100/70 transition-colors">
                         <input
                           type="checkbox"
-                          checked={isUpsellItem}
-                          onChange={(e) => setIsUpsellItem(e.target.checked)}
-                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                          checked={isReachoutItem}
+                          onChange={(e) => setIsReachoutItem(e.target.checked)}
+                          className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
                         />
-                        <span>Upsell Item?</span>
+                        <span>Reachout sell?</span>
                       </label>
                     </div>
                   </div>
@@ -1569,9 +1584,9 @@ export default function SalesDashboard() {
                           <span className="font-semibold text-slate-900">{item.title}</span>
                           <span className="text-slate-500">({item.variant_title})</span>
                           <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
-                          {item.is_upsell && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
-                              Upsell
+                          {item.is_reachout && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[10px]">
+                              Reachout Sell
                             </span>
                           )}
                         </div>

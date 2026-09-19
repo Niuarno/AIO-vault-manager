@@ -4,6 +4,7 @@ export type OrderSource = 'website' | 'messenger' | 'whatsapp' | 'phone' | 'manu
 
 export type OrderStatus =
   | 'pending'
+  | 'not_reachable'
   | 'confirmed'
   | 'ready_to_ship'
   | 'on_the_way'
@@ -99,6 +100,7 @@ export interface OrderItem {
   quantity: number;
   price: number;
   is_upsell: boolean;
+  is_reachout?: boolean;
   created_at: string;
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { syncWebsiteUpsellQuotaRewards } from '@/lib/commission';
 
 export async function POST(req: NextRequest) {
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
       items,
       sales_rep_id,
       coupon_used,
+      is_reachout_order,
     } = body;
 
     if (!customer_name || !customer_phone || !shipping_address || !items || items.length === 0) {
@@ -24,6 +26,32 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
+    // 1. Resolve Creator (Auto-assignment for non-website orders)
+    let authenticatedUserId: string | null = null;
+    let staffFullName = 'Staff';
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        authenticatedUserId = user.id;
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+        if (prof?.full_name) staffFullName = prof.full_name;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Rule: "any order from other sources besides website orders are auto assignes to the staff who created the order"
+    const orderSource = source || 'manual';
+    let assignedSalesRepId = sales_rep_id || null;
+    if (orderSource !== 'website') {
+      assignedSalesRepId = authenticatedUserId || sales_rep_id || null;
+    }
+
     // Generate readable order number: e.g. WA-1025, MSG-1026, PH-1027
     const prefixMap: Record<string, string> = {
       whatsapp: 'WA',
@@ -31,30 +59,33 @@ export async function POST(req: NextRequest) {
       phone: 'PH',
       manual: 'MAN',
     };
-    const prefix = prefixMap[source] || 'ORD';
+    const prefix = prefixMap[orderSource] || 'ORD';
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `#${prefix}-${Date.now().toString().slice(-4)}${randomSuffix}`;
 
-    // Calculate total amount
+    // Calculate total amount & inspect reachout items
     let totalAmount = 0;
-    let hasUpsell = false;
-    let upsellItemsCount = 0;
+    let hasReachoutItem = Boolean(is_reachout_order);
 
     items.forEach((item: any) => {
       const lineTotal = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
       totalAmount += lineTotal;
-      if (item.is_upsell) {
-        hasUpsell = true;
-        upsellItemsCount += parseInt(item.quantity) || 1;
+      if (item.is_reachout) {
+        hasReachoutItem = true;
       }
     });
+
+    let finalNote = (note || '').trim();
+    if (hasReachoutItem) {
+      finalNote = (finalNote ? finalNote + ' ' : '') + `[Reachout Sale by ${staffFullName}]`;
+    }
 
     // 1. Insert Order
     const { data: newOrder, error: orderError } = await supabase
       .from('orders')
       .insert({
         order_number: orderNumber,
-        source: source || 'manual',
+        source: orderSource,
         customer_name,
         customer_phone,
         customer_email: customer_email || null,
@@ -64,9 +95,9 @@ export async function POST(req: NextRequest) {
         status: 'pending', // Pending sales confirmation
         total_amount: totalAmount,
         currency: 'BDT',
-        sales_rep_id: sales_rep_id || null,
+        sales_rep_id: assignedSalesRepId,
         coupon_used: coupon_used || null,
-        note: note || null,
+        note: finalNote || null,
       })
       .select()
       .single();
@@ -75,7 +106,8 @@ export async function POST(req: NextRequest) {
       throw orderError || new Error('Failed to create order');
     }
 
-    // 2. Insert Order Items (Database trigger deduct_inventory_for_order_item handles live stock deduction)
+    // 2. Insert Order Items (Rule: "make the upsell functionality only valid for website orders, any other source are count as regular sells")
+    const isWebsite = orderSource === 'website';
     const itemsToInsert = items.map((item: any) => ({
       order_id: newOrder.id,
       product_id: item.product_id || null,
@@ -84,7 +116,8 @@ export async function POST(req: NextRequest) {
       variant_title: item.variant_title || null,
       quantity: parseInt(item.quantity, 10) || 1,
       price: parseFloat(item.price || '0'),
-      is_upsell: Boolean(item.is_upsell),
+      // Only website orders can have is_upsell true
+      is_upsell: isWebsite ? Boolean(item.is_upsell) : false,
     }));
 
     const { data: insertedItems, error: itemsError } = await supabase
@@ -98,8 +131,8 @@ export async function POST(req: NextRequest) {
 
     // 3. Website Upsell Quota Reward Processing (Strictly applies to Website orders)
     let rewardGiven = 0;
-    if (sales_rep_id && source === 'website') {
-      const quotaResult = await syncWebsiteUpsellQuotaRewards(supabase, sales_rep_id, newOrder.id);
+    if (assignedSalesRepId && isWebsite) {
+      const quotaResult = await syncWebsiteUpsellQuotaRewards(supabase, assignedSalesRepId, newOrder.id);
       if (quotaResult?.targetBonus) {
         rewardGiven = quotaResult.targetBonus;
       }
