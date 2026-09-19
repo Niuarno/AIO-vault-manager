@@ -34,6 +34,7 @@ import {
   Pencil,
   Lock,
   Radio,
+  Download,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -44,6 +45,7 @@ import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ProcessPayoutModal from '@/components/ProcessPayoutModal';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
 import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
+import ExportStaffReportModal from '@/components/ExportStaffReportModal';
 import {
   WhatsAppFlatIcon,
   MessengerFlatIcon,
@@ -99,6 +101,9 @@ export default function AdminDashboard() {
   const [teamRewards, setTeamRewards] = useState<UpsellReward[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [selectedStaffForGraph, setSelectedStaffForGraph] = useState<Profile | null>(null);
+  const [adminGraphYear, setAdminGraphYear] = useState<number>(new Date().getFullYear());
+  const [adminGraphMonth, setAdminGraphMonth] = useState<number>(new Date().getMonth());
+  const [staffToExport, setStaffToExport] = useState<Profile | null>(null);
 
   // Payouts State
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
@@ -769,49 +774,53 @@ export default function AdminDashboard() {
     return stats;
   }, [salesTeam, teamRewards, orders, quotaTiers]);
 
-  // Performance Graph Data for selected staff member
+  // Monthly Performance Graph Data for selected staff member
   const selectedStaffGraphData = useMemo(() => {
     if (!selectedStaffForGraph) return [];
     const staffId = selectedStaffForGraph.id;
-    const days: Record<string, { commission: number; ordersCount: number }> = {};
+    const staffCode = selectedStaffForGraph.coupon_code?.trim().toUpperCase();
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      days[key] = { commission: 0, ordersCount: 0 };
+    const daysInMonth = new Date(adminGraphYear, adminGraphMonth + 1, 0).getDate();
+    const days: Record<string, { dayNumber: number; commission: number; ordersCount: number }> = {};
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const monthStr = String(adminGraphMonth + 1).padStart(2, '0');
+      const key = `${adminGraphYear}-${monthStr}-${dayStr}`;
+      days[key] = { dayNumber: day, commission: 0, ordersCount: 0 };
     }
 
     teamRewards.forEach((r) => {
       if (r.sales_rep_id === staffId) {
-        const day = r.created_at.split('T')[0];
-        if (days[day]) {
-          days[day].commission += Number(r.bonus_amount || 0);
+        const dayKey = r.created_at.split('T')[0];
+        if (days[dayKey]) {
+          days[dayKey].commission += Number(r.bonus_amount || 0);
         }
       }
     });
 
     orders.forEach((o) => {
-      if (o.sales_rep_id === staffId) {
-        const day = o.created_at.split('T')[0];
-        if (days[day]) {
-          days[day].ordersCount++;
+      const isRep = o.sales_rep_id === staffId;
+      const isCoupon = staffCode && o.coupon_used?.trim().toUpperCase() === staffCode;
+      if (isRep || isCoupon) {
+        const dayKey = o.created_at.split('T')[0];
+        if (days[dayKey]) {
+          days[dayKey].ordersCount++;
         }
       }
     });
 
     return Object.entries(days).map(([dateStr, metrics]) => {
-      const d = new Date(dateStr);
-      const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
       return {
         dateKey: dateStr,
-        label,
+        label: `${metrics.dayNumber}`,
+        dayNumber: metrics.dayNumber,
         ordersCount: metrics.ordersCount,
         salesVolume: 0,
         commissionEarned: Math.round(metrics.commission),
       };
     });
-  }, [selectedStaffForGraph, teamRewards, orders]);
+  }, [selectedStaffForGraph, teamRewards, orders, adminGraphYear, adminGraphMonth]);
 
   // Filtered variants for Inventory
   const filteredVariants = useMemo(() => {
@@ -1524,11 +1533,15 @@ export default function AdminDashboard() {
         {/* TAB 3: TEAM & PERFORMANCE */}
         {activeTab === 'team' && (
           <div className="space-y-6">
-            {/* Visual Performance Graph */}
+            {/* Visual Monthly Performance Graph */}
             {selectedStaffForGraph && (
               <StaffPerformanceGraph
                 staffName={selectedStaffForGraph.full_name || selectedStaffForGraph.email}
                 dailyStats={selectedStaffGraphData}
+                selectedYear={adminGraphYear}
+                selectedMonth={adminGraphMonth}
+                onYearChange={setAdminGraphYear}
+                onMonthChange={setAdminGraphMonth}
               />
             )}
 
@@ -1701,13 +1714,26 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4 text-right">
-                              <button
-                                onClick={() => setSelectedStaffForGraph(member)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-                              >
-                                <TrendingUp className="w-3.5 h-3.5 text-slate-600" />
-                                <span>View Graph</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedStaffForGraph(member)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                                  title="View Monthly Performance Graph"
+                                >
+                                  <TrendingUp className="w-3.5 h-3.5 text-slate-600" />
+                                  <span className="hidden sm:inline">View Graph</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setStaffToExport(member)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-colors"
+                                  title="Export Monthly / Yearly Report"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Export Record</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2258,6 +2284,17 @@ export default function AdminDashboard() {
         recentOrders={orders}
         onOrderUpdated={fetchOrders}
       />
+
+      {/* Export Staff Report Modal */}
+      {staffToExport && (
+        <ExportStaffReportModal
+          isOpen={true}
+          onClose={() => setStaffToExport(null)}
+          staffMember={staffToExport}
+          orders={orders}
+          rewards={teamRewards}
+        />
+      )}
     </div>
   );
 }

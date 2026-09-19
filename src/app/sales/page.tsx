@@ -119,6 +119,10 @@ export default function SalesDashboard() {
   const [itemQuantity, setItemQuantity] = useState(1);
   const [isReachoutItem, setIsReachoutItem] = useState(false);
 
+  // Performance Graph Month/Year State
+  const [graphYear, setGraphYear] = useState<number>(new Date().getFullYear());
+  const [graphMonth, setGraphMonth] = useState<number>(new Date().getMonth());
+
   // Load User Profile & Realtime Presence
   useEffect(() => {
     let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -575,42 +579,43 @@ export default function SalesDashboard() {
     });
   }, [orders, orderStatusFilter, orderSearch]);
 
-  // Performance Graph Data (Last 7 Days)
+  // Monthly Performance Graph Data (all days of selected month/year)
   const performanceGraphData = useMemo(() => {
-    const days: Record<string, { commission: number; ordersCount: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      days[key] = { commission: 0, ordersCount: 0 };
+    const daysInMonth = new Date(graphYear, graphMonth + 1, 0).getDate();
+    const days: Record<string, { dayNumber: number; commission: number; ordersCount: number }> = {};
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const monthStr = String(graphMonth + 1).padStart(2, '0');
+      const key = `${graphYear}-${monthStr}-${dayStr}`;
+      days[key] = { dayNumber: day, commission: 0, ordersCount: 0 };
     }
 
     rewards.forEach((r) => {
-      const day = r.created_at.split('T')[0];
-      if (days[day]) {
-        days[day].commission += Number(r.bonus_amount || 0);
+      const dayKey = r.created_at.split('T')[0];
+      if (days[dayKey]) {
+        days[dayKey].commission += Number(r.bonus_amount || 0);
       }
     });
 
     myOrders.forEach((o) => {
-      const day = o.created_at.split('T')[0];
-      if (days[day]) {
-        days[day].ordersCount++;
+      const dayKey = o.created_at.split('T')[0];
+      if (days[dayKey]) {
+        days[dayKey].ordersCount++;
       }
     });
 
     return Object.entries(days).map(([dateStr, metrics]) => {
-      const d = new Date(dateStr);
-      const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
       return {
         dateKey: dateStr,
-        label,
+        label: `${metrics.dayNumber}`,
+        dayNumber: metrics.dayNumber,
         ordersCount: metrics.ordersCount,
         salesVolume: 0,
         commissionEarned: Math.round(metrics.commission),
       };
     });
-  }, [rewards, myOrders]);
+  }, [rewards, myOrders, graphYear, graphMonth]);
 
   // Filtered variants for Inventory
   const filteredVariants = useMemo(() => {
@@ -834,10 +839,14 @@ export default function SalesDashboard() {
           </div>
         </div>
 
-        {/* Visual Performance Graph */}
+        {/* Visual Monthly Performance Graph */}
         <StaffPerformanceGraph
           staffName={currentProfile?.full_name || 'My Performance'}
           dailyStats={performanceGraphData}
+          selectedYear={graphYear}
+          selectedMonth={graphMonth}
+          onYearChange={setGraphYear}
+          onMonthChange={setGraphMonth}
         />
 
         {/* Primary Action Button */}
