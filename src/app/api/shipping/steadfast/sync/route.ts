@@ -57,9 +57,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Query Steadfast
+    const resolvedCid =
+      order.consignment_id ||
+      (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id) ? order.external_id : null) ||
+      order.note?.match(/CID:\s*#?([A-Za-z0-9_-]+)/i)?.[1] ||
+      null;
+
     let steadfastData = null;
-    if (order.consignment_id) {
-      steadfastData = await checkSteadfastStatusByCid(order.consignment_id);
+    if (resolvedCid) {
+      steadfastData = await checkSteadfastStatusByCid(resolvedCid);
     } else {
       steadfastData = await checkSteadfastStatusByInvoice(order.order_number);
     }
@@ -77,18 +83,25 @@ export async function POST(req: NextRequest) {
     let targetOrderStatus: OrderStatus = order.status;
     let paymentStatus = order.payment_status;
 
-    if (rawStatus === 'delivered' || rawStatus === 'partial_delivered') {
-      targetOrderStatus = 'shipped';
-      paymentStatus = 'paid';
-    } else if (rawStatus === 'cancelled' || rawStatus === 'cancelled_approval_pending') {
-      targetOrderStatus = 'canceled';
-    } else if (
-      rawStatus === 'pending' ||
-      rawStatus === 'in_review' ||
-      rawStatus === 'hold'
-    ) {
-      if (order.status === 'confirmed' || order.status === 'ready_to_ship') {
-        targetOrderStatus = 'on_the_way';
+    // Strict status guard: NEVER change order status for pending/sales pipeline orders
+    if (order.status !== 'pending' && order.status !== 'not_reachable') {
+      if (rawStatus === 'delivered' || rawStatus === 'partial_delivered') {
+        if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
+          targetOrderStatus = 'shipped';
+          paymentStatus = 'paid';
+        }
+      } else if (rawStatus === 'cancelled' || rawStatus === 'cancelled_approval_pending') {
+        if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
+          targetOrderStatus = 'canceled';
+        }
+      } else if (
+        rawStatus === 'pending' ||
+        rawStatus === 'in_review' ||
+        rawStatus === 'hold'
+      ) {
+        if (order.status === 'ready_to_ship') {
+          targetOrderStatus = 'on_the_way';
+        }
       }
     }
 

@@ -56,44 +56,74 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 2. Locate the matching order
-    let query = supabase.from('orders').select('*');
-    if (invoice) {
-      const cleanInv = invoice.replace(/^[#\s]+/, '').trim();
-      query = query.or(
-        `order_number.eq.${invoice},order_number.eq.#${cleanInv},order_number.eq.${cleanInv},external_id.eq.${invoice}`
-      );
-    } else if (consignment_id) {
-      query = query.or(
-        `consignment_id.eq.${consignment_id},external_id.eq.${consignment_id}`
-      );
-    }
+    // 2. Locate the matching order with strict, exact matching
+    let matchedOrder: any = null;
 
-    const { data: initialOrders } = await query.limit(1);
-    let matchedOrder: any = initialOrders && initialOrders.length > 0 ? initialOrders[0] : null;
+    // A. Match by Consignment ID
+    if (consignment_id) {
+      const cidStr = String(consignment_id).trim();
 
-    if (!matchedOrder) {
-      // Also try fuzzy search on order_number without leading hash/prefix if needed
-      const cleanInvoice = invoice ? invoice.replace(/^[#]/, '').trim() : '';
-      const { data: fallbackOrders } = await supabase
+      // Try exact match on external_id or consignment_id column
+      const { data: byExtId } = await supabase
         .from('orders')
         .select('*')
-        .ilike('order_number', `%${cleanInvoice}%`)
+        .eq('external_id', cidStr)
         .limit(1);
 
-      if (!fallbackOrders || fallbackOrders.length === 0) {
-        console.warn(`[Steadfast Webhook] Order not found for invoice: ${invoice}, CID: ${consignment_id}`);
-        return NextResponse.json(
-          { status: 'error', message: `Order not found for invoice ${invoice}` },
-          { status: 404 }
-        );
+      if (byExtId && byExtId.length > 0) {
+        matchedOrder = byExtId[0];
       }
-      matchedOrder = fallbackOrders[0];
+
+      // Try exact CID match inside note if stored as note tag
+      if (!matchedOrder) {
+        const { data: byNote } = await supabase
+          .from('orders')
+          .select('*')
+          .ilike('note', `%CID: #${cidStr}%`)
+          .limit(1);
+
+        if (byNote && byNote.length > 0) {
+          matchedOrder = byNote[0];
+        }
+      }
+    }
+
+    // B. Match by Invoice strictly (exact comparison only, NEVER substring ilike)
+    if (!matchedOrder && invoice && typeof invoice === 'string' && invoice.trim().length >= 2) {
+      const cleanInv = invoice.replace(/^[#\s]+/, '').trim();
+      const { data: byInvoice } = await supabase
+        .from('orders')
+        .select('*')
+        .or(`order_number.eq.${invoice},order_number.eq.#${cleanInv},order_number.eq.${cleanInv},external_id.eq.${invoice}`)
+        .limit(1);
+
+      if (byInvoice && byInvoice.length > 0) {
+        matchedOrder = byInvoice[0];
+      }
+    }
+
+    // If no verified matching order exists in OMS, ignore safely without corrupting unrelated orders
+    if (!matchedOrder) {
+      console.log(`[Steadfast Webhook] Ignored: No matching OMS order found for CID: ${consignment_id}, Invoice: ${invoice}`);
+      return NextResponse.json({
+        status: 'ignored',
+        message: 'No matching order found in OMS database.',
+      });
     }
 
     const order = matchedOrder;
 
-    // 3. Determine New Status based on Steadfast Notification
+    // 3. Strict Status Guard:
+    // Sales pipeline statuses ('pending', 'not_reachable') MUST NEVER be auto-modified by courier webhooks
+    if (order.status === 'pending' || order.status === 'not_reachable') {
+      console.log(`[Steadfast Webhook] Ignored status update for order #${order.order_number} because order is still in sales stage (${order.status}).`);
+      return NextResponse.json({
+        status: 'ignored',
+        message: `Order #${order.order_number} is in sales status "${order.status}". Status change skipped.`,
+      });
+    }
+
+    // 4. Determine New Status based on Steadfast Notification
     let targetOrderStatus: OrderStatus = order.status;
     let paymentStatus = order.payment_status;
 
@@ -104,27 +134,31 @@ export async function POST(req: NextRequest) {
         normalizedStatus === 'delivered' ||
         normalizedStatus === 'partial_delivered'
       ) {
-        // Stage 4: Shipped / Fulfilled
-        targetOrderStatus = 'shipped';
-        paymentStatus = 'paid';
+        // Stage 4: Shipped / Fulfilled (only for orders currently in fulfillment)
+        if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
+          targetOrderStatus = 'shipped';
+          paymentStatus = 'paid';
+        }
       } else if (
         normalizedStatus === 'cancelled' ||
         normalizedStatus === 'cancelled_approval_pending'
       ) {
-        targetOrderStatus = 'canceled';
+        if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
+          targetOrderStatus = 'canceled';
+        }
       } else if (
         normalizedStatus === 'pending' ||
         normalizedStatus === 'in_review' ||
         normalizedStatus === 'hold'
       ) {
-        // If it was confirmed or packed, moving into courier transit advances it to Stage 3
-        if (order.status === 'confirmed' || order.status === 'ready_to_ship') {
+        // Only packed orders waiting for courier pickup advance to 'on_the_way'
+        if (order.status === 'ready_to_ship') {
           targetOrderStatus = 'on_the_way';
         }
       }
     } else if (notification_type === 'tracking_update') {
-      // Tracking progress update - ensure order is marked With Courier if still in ready_to_ship
-      if (order.status === 'confirmed' || order.status === 'ready_to_ship') {
+      // Tracking progress update - advance to With Courier only if already packed
+      if (order.status === 'ready_to_ship') {
         targetOrderStatus = 'on_the_way';
       }
     }
