@@ -9,25 +9,51 @@ export async function GET() {
   try {
     const supabase = createAdminClient();
 
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('value, updated_at')
-      .eq('key', 'noticeboard_headline')
+    // 1. Try system_settings table first
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value, updated_at')
+        .eq('key', 'noticeboard_headline')
+        .maybeSingle();
+
+      if (!error && data?.value) {
+        return NextResponse.json({
+          success: true,
+          headline: data.value,
+          updated_at: data.updated_at || new Date().toISOString(),
+        });
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Seamless fallback: check reward_rules
+    const { data: ruleRow } = await supabase
+      .from('reward_rules')
+      .select('name, updated_at')
+      .like('name', '%noticeboard_headline%')
       .maybeSingle();
 
-    if (error) {
-      // Graceful fallback if table doesn't exist yet
-      return NextResponse.json({
-        success: true,
-        headline: DEFAULT_HEADLINE,
-        updated_at: new Date().toISOString(),
-      });
+    if (ruleRow?.name) {
+      try {
+        const parsed = JSON.parse(ruleRow.name);
+        if (parsed.text) {
+          return NextResponse.json({
+            success: true,
+            headline: parsed.text,
+            updated_at: ruleRow.updated_at || new Date().toISOString(),
+          });
+        }
+      } catch {
+        // Not JSON
+      }
     }
 
     return NextResponse.json({
       success: true,
-      headline: data?.value || DEFAULT_HEADLINE,
-      updated_at: data?.updated_at || new Date().toISOString(),
+      headline: DEFAULT_HEADLINE,
+      updated_at: new Date().toISOString(),
     });
   } catch (err: any) {
     return NextResponse.json({
@@ -79,26 +105,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upsert into system_settings
-    const { error: upsertErr } = await supabase.from('system_settings').upsert({
-      key: 'noticeboard_headline',
-      value: trimmedHeadline,
-      updated_at: new Date().toISOString(),
-      updated_by: userId,
-    });
+    let saved = false;
 
-    if (upsertErr) {
-      // If table doesn't exist, try to create it on the fly
-      if (upsertErr.message?.includes('relation "public.system_settings" does not exist') || upsertErr.code === '42P01') {
-        return NextResponse.json(
-          {
-            error:
-              'Database table system_settings is missing. Please execute the latest migration in Supabase SQL editor.',
-          },
-          { status: 500 }
-        );
+    // 1. Try upserting into system_settings
+    try {
+      const { error: upsertErr } = await supabase.from('system_settings').upsert({
+        key: 'noticeboard_headline',
+        value: trimmedHeadline,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      });
+
+      if (!upsertErr) {
+        saved = true;
       }
-      throw upsertErr;
+    } catch {
+      // Fallback
+    }
+
+    // 2. Seamless fallback into reward_rules if system_settings is not present in schema
+    if (!saved) {
+      const jsonPayload = JSON.stringify({
+        type: 'noticeboard',
+        key: 'noticeboard_headline',
+        text: trimmedHeadline,
+      });
+
+      const { data: existing } = await supabase
+        .from('reward_rules')
+        .select('id')
+        .like('name', '%noticeboard_headline%')
+        .maybeSingle();
+
+      if (existing) {
+        const { error: updateErr } = await supabase
+          .from('reward_rules')
+          .update({
+            name: jsonPayload,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+
+        if (updateErr) throw updateErr;
+      } else {
+        const { error: insertErr } = await supabase.from('reward_rules').insert({
+          name: jsonPayload,
+          rule_type: 'fixed_per_order',
+          value: 0,
+          is_active: false,
+        });
+
+        if (insertErr) throw insertErr;
+      }
     }
 
     return NextResponse.json({

@@ -7,6 +7,7 @@ import {
   DEFAULT_NON_WEBSITE_SALES_TIERS,
   DEFAULT_REACHOUT_COMMISSION_PERCENTAGE,
   isReachoutRule,
+  isNoticeboardRule,
   parseReachoutRule,
 } from '@/lib/commission';
 
@@ -22,9 +23,9 @@ export async function GET() {
 
     let rules = rawRules || [];
 
-    // Separate reachout rule from quota tier rules
+    // Separate reachout rule and noticeboard rule from quota tier rules
     let reachoutRuleRaw = rules.find(isReachoutRule);
-    let quotaRules = rules.filter((r) => !isReachoutRule(r));
+    let quotaRules = rules.filter((r) => !isReachoutRule(r) && !isNoticeboardRule(r));
 
     // Seed default reachout rule if not present
     if (!reachoutRuleRaw) {

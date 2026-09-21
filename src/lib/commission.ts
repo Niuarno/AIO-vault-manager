@@ -45,9 +45,17 @@ export interface ReachoutCommissionRule {
   updated_at?: string;
 }
 
+export function isNoticeboardRule(rule: any): boolean {
+  if (!rule) return false;
+  if (typeof rule.name === 'string') {
+    return rule.name.includes('noticeboard');
+  }
+  return false;
+}
+
 export function isReachoutRule(rule: any): boolean {
   if (!rule) return false;
-  if (rule.rule_type === 'percentage') return true;
+  if (isNoticeboardRule(rule)) return false;
   if (typeof rule.name === 'string') {
     if (rule.name.toLowerCase().includes('reachout')) return true;
     try {
@@ -61,6 +69,7 @@ export function isReachoutRule(rule: any): boolean {
       }
     } catch {}
   }
+  if (rule.rule_type === 'percentage') return true;
   return false;
 }
 
