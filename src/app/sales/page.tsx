@@ -101,6 +101,11 @@ export default function SalesDashboard() {
   const [couponUsed, setCouponUsed] = useState('');
   const [note, setNote] = useState('');
   const [deliveryType, setDeliveryType] = useState<'inside_dhaka' | 'outside_dhaka' | 'free'>('inside_dhaka');
+  const [customDiscount, setCustomDiscount] = useState<string>('');
+  const [hasAdvancePayment, setHasAdvancePayment] = useState<boolean>(false);
+  const [advancePayment, setAdvancePayment] = useState<string>('');
+  const [advanceMethod, setAdvanceMethod] = useState<string>('bKash');
+  const [advanceTrxId, setAdvanceTrxId] = useState<string>('');
 
   // Selected Order Line Items
   const [orderItems, setOrderItems] = useState<
@@ -402,7 +407,26 @@ export default function SalesDashboard() {
     return orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
   }, [orderItems]);
 
-  const totalOrderAmount = itemsSubtotal + deliveryCharge;
+  const discountAmount = useMemo(() => {
+    const val = parseFloat(customDiscount);
+    return isNaN(val) || val < 0 ? 0 : val;
+  }, [customDiscount]);
+
+  const advanceAmount = useMemo(() => {
+    if (!hasAdvancePayment) return 0;
+    const val = parseFloat(advancePayment);
+    return isNaN(val) || val < 0 ? 0 : val;
+  }, [hasAdvancePayment, advancePayment]);
+
+  const grandTotal = useMemo(() => {
+    return Math.max(0, itemsSubtotal + deliveryCharge - discountAmount);
+  }, [itemsSubtotal, deliveryCharge, discountAmount]);
+
+  const remainingCod = useMemo(() => {
+    return Math.max(0, grandTotal - advanceAmount);
+  }, [grandTotal, advanceAmount]);
+
+  const totalOrderAmount = grandTotal;
 
   // Submit Manual Order
   const handleSubmitOrder = async (e: React.FormEvent) => {
@@ -422,7 +446,10 @@ export default function SalesDashboard() {
           customer_name: customerName,
           customer_phone: customerPhone,
           shipping_address: shippingAddress,
-          payment_method: paymentMethod,
+          payment_method:
+            hasAdvancePayment && remainingCod === 0
+              ? `${advanceMethod} (Prepaid)`
+              : paymentMethod,
           note,
           items: orderItems,
           sales_rep_id: currentProfile?.id,
@@ -430,6 +457,10 @@ export default function SalesDashboard() {
           is_reachout_order: orderItems.some((i) => i.is_reachout),
           delivery_type: deliveryType,
           delivery_charge: deliveryCharge,
+          discount_amount: discountAmount,
+          advance_payment: advanceAmount,
+          advance_method: hasAdvancePayment ? advanceMethod : null,
+          advance_trx_id: hasAdvancePayment && advanceTrxId.trim() ? advanceTrxId.trim() : null,
         }),
       });
 
@@ -452,6 +483,11 @@ export default function SalesDashboard() {
       setNote('');
       setOrderItems([]);
       setDeliveryType('inside_dhaka');
+      setCustomDiscount('');
+      setHasAdvancePayment(false);
+      setAdvancePayment('');
+      setAdvanceMethod('bKash');
+      setAdvanceTrxId('');
 
       fetchOrders();
       fetchInventory();
@@ -2188,12 +2224,36 @@ export default function SalesDashboard() {
                             )}
                           </span>
                         </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-rose-600">
+                            <span>Special Discount:</span>
+                            <span className="font-mono font-bold">
+                              -{formatCurrency(discountAmount)}
+                            </span>
+                          </div>
+                        )}
                         <div className="pt-2 border-t border-dashed border-slate-200 flex justify-between font-bold text-sm text-slate-900">
                           <span>Grand Total:</span>
-                          <span className="font-mono text-emerald-700 text-base">
-                            {formatCurrency(totalOrderAmount)}
+                          <span className="font-mono text-slate-900 text-base">
+                            {formatCurrency(grandTotal)}
                           </span>
                         </div>
+                        {advanceAmount > 0 && (
+                          <>
+                            <div className="flex justify-between text-emerald-700">
+                              <span>Advance Received ({advanceMethod}):</span>
+                              <span className="font-mono font-bold">
+                                -{formatCurrency(advanceAmount)}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 flex justify-between items-center font-bold text-xs text-amber-900">
+                              <span>Remaining COD for Courier:</span>
+                              <span className="font-mono text-sm text-amber-900 font-black">
+                                {formatCurrency(remainingCod)}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -2299,6 +2359,113 @@ export default function SalesDashboard() {
                       </div>
                     </button>
                   </div>
+                </div>
+
+                {/* Custom Discount Input Box */}
+                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Custom Discount (৳)</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">Special price reduction</span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
+                      ৳
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 50"
+                      value={customDiscount}
+                      onChange={(e) => setCustomDiscount(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Customer Advance / Pre-payment Box */}
+                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Customer Advance Payment</span>
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hasAdvancePayment}
+                        onChange={(e) => {
+                          setHasAdvancePayment(e.target.checked);
+                          if (!e.target.checked) {
+                            setAdvancePayment('');
+                            setAdvanceTrxId('');
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <span className="ml-2 text-xs font-semibold text-slate-700">
+                        {hasAdvancePayment ? 'Advance Paid' : 'No Advance'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {hasAdvancePayment && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Advance Paid (৳) *
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
+                            ৳
+                          </span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="any"
+                            required={hasAdvancePayment}
+                            placeholder="e.g. 200"
+                            value={advancePayment}
+                            onChange={(e) => setAdvancePayment(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Payment Channel
+                        </label>
+                        <select
+                          value={advanceMethod}
+                          onChange={(e) => setAdvanceMethod(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        >
+                          <option value="bKash">bKash</option>
+                          <option value="Nagad">Nagad</option>
+                          <option value="Rocket">Rocket</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          TrxID / Ref (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 9JA8..."
+                          value={advanceTrxId}
+                          onChange={(e) => setAdvanceTrxId(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs uppercase font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Salesperson Coupon Code */}

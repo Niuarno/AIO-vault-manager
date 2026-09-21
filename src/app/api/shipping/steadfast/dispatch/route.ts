@@ -76,9 +76,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // 3. Dispatch to Steadfast API
+    // 3. Dispatch to Steadfast API (Deduct advance payment if customer made pre-payment)
+    let advanceDeduction = Number(order.advance_payment || 0);
+    if (advanceDeduction === 0 && order.note) {
+      const advMatch = order.note.match(/Advance Paid:\s*৳?([0-9,]+)/i);
+      if (advMatch) {
+        advanceDeduction = parseFloat(advMatch[1].replace(/,/g, '')) || 0;
+      }
+    }
+
     const codAmount =
-      order.payment_status === 'paid' ? 0 : Math.round(Number(order.total_amount) || 0);
+      order.payment_status === 'paid'
+        ? 0
+        : Math.max(0, Math.round(Number(order.total_amount) - advanceDeduction));
 
     const steadfastResult = await createSteadfastConsignment({
       invoice: order.order_number,

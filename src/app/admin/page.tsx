@@ -35,6 +35,7 @@ import {
   Lock,
   Radio,
   Download,
+  Percent,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -123,6 +124,21 @@ export default function AdminDashboard() {
   const [rulesScopeTab, setRulesScopeTab] = useState<'all' | 'other' | 'website'>('all');
   const [editingTier, setEditingTier] = useState<QuotaTier | null>(null);
   const [deletingTierId, setDeletingTierId] = useState<string | null>(null);
+
+  // Reachout Commission Rule State
+  const [reachoutRule, setReachoutRule] = useState<{
+    id?: string;
+    name: string;
+    percentage: number;
+    is_active: boolean;
+  }>({
+    name: 'Reachout Sales Commission',
+    percentage: 10,
+    is_active: true,
+  });
+  const [isEditingReachout, setIsEditingReachout] = useState(false);
+  const [reachoutPercentageDraft, setReachoutPercentageDraft] = useState('10');
+  const [updatingReachout, setUpdatingReachout] = useState(false);
 
   // Load current user profile & Presence
   useEffect(() => {
@@ -265,6 +281,10 @@ export default function AdminDashboard() {
       const json = await res.json();
       if (json.rules) {
         setQuotaTiers(json.rules);
+      }
+      if (json.reachout_rule) {
+        setReachoutRule(json.reachout_rule);
+        setReachoutPercentageDraft(String(json.reachout_rule.percentage));
       }
     } catch (e) {
       console.error('Failed to load rules:', e);
@@ -621,6 +641,64 @@ export default function AdminDashboard() {
       alert(err.message || 'Error deleting quota tier');
     } finally {
       setDeletingTierId(null);
+    }
+  };
+
+  // Update Reachout Sales Commission Rule
+  const handleUpdateReachoutRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pct = parseFloat(reachoutPercentageDraft);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      alert('Please enter a valid percentage between 0 and 100');
+      return;
+    }
+    setUpdatingReachout(true);
+    try {
+      const res = await fetch('/api/rewards/rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: reachoutRule.id,
+          source: 'reachout',
+          rule_type: 'reachout_percentage',
+          percentage: pct,
+          is_active: reachoutRule.is_active,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.reachout_rule) {
+        setReachoutRule(json.reachout_rule);
+        setIsEditingReachout(false);
+      } else {
+        alert(json.error || 'Failed to update reachout commission rule');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating reachout commission');
+    } finally {
+      setUpdatingReachout(false);
+    }
+  };
+
+  // Toggle Reachout Sales Commission Active / Disabled
+  const handleToggleReachoutActive = async () => {
+    try {
+      const res = await fetch('/api/rewards/rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: reachoutRule.id,
+          source: 'reachout',
+          rule_type: 'reachout_percentage',
+          percentage: reachoutRule.percentage,
+          is_active: !reachoutRule.is_active,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.reachout_rule) {
+        setReachoutRule(json.reachout_rule);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error toggling reachout rule');
     }
   };
 
@@ -1906,6 +1984,132 @@ export default function AdminDashboard() {
         {/* TAB 5: COMMISSION RULES */}
         {activeTab === 'rewards' && (
           <div className="space-y-6">
+            {/* Top Card: Reachout Sales Flat Percentage Commission Rule */}
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-sm border border-slate-700">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5">
+                    <Percent className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-base text-white">Reachout Sales Commission</h3>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                          reachoutRule.is_active
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : 'bg-slate-700 text-slate-400 border-slate-600'
+                        }`}
+                      >
+                        {reachoutRule.is_active ? 'Active Rule' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1 max-w-xl">
+                      Flat percentage commission awarded directly to staff on all Reachout orders and items. Applied automatically to staff piggybank balance.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
+                  <div className="bg-slate-950/60 border border-slate-700/80 rounded-xl px-4 py-2 text-center">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Commission Rate</span>
+                    <span className="text-xl font-black text-amber-400 font-mono">
+                      {reachoutRule.percentage}%
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReachoutPercentageDraft(String(reachoutRule.percentage));
+                      setIsEditingReachout(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-xs hover:bg-slate-100 transition-colors shadow-xs cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit Rate</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleReachoutActive}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                      reachoutRule.is_active
+                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        : 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500'
+                    }`}
+                  >
+                    {reachoutRule.is_active ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Edit Reachout Commission Modal */}
+            {isEditingReachout && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+                <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                      <Percent className="w-4 h-4 text-amber-600" />
+                      <span>Edit Reachout Commission Rate</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingReachout(false)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleUpdateReachoutRule} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Commission Percentage (%) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          placeholder="10"
+                          value={reachoutPercentageDraft}
+                          onChange={(e) => setReachoutPercentageDraft(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-8 pl-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">
+                          %
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Applied flatly across the sales value of any order or item flagged as Reachout.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingReachout(false)}
+                        className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={updatingReachout}
+                        className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        {updatingReachout ? 'Saving...' : 'Save Rule'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column: Create Quota Tier Form */}
               <div className="space-y-4">

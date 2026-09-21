@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
@@ -22,11 +22,14 @@ import {
   CheckSquare,
   Square,
   Box,
+  Boxes,
+  Plus,
+  Minus,
   Sparkles,
   Send,
   Radio,
 } from 'lucide-react';
-import { Order, OrderStatus, Profile } from '@/types/database';
+import { Order, OrderStatus, Profile, Product, ProductVariant } from '@/types/database';
 import { formatCurrency, formatDate, getStatusBadgeInfo } from '@/lib/utils';
 import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 
@@ -44,6 +47,15 @@ export default function PackingDashboard() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingAll, setSyncingAll] = useState(false);
+
+  // Tab Switcher: Fulfillment Queue vs Live Stock Management
+  const [activeMainTab, setActiveMainTab] = useState<'queue' | 'inventory'>('queue');
+
+  // Stock Management State
+  const [inventoryProducts, setInventoryProducts] = useState<Product[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [adjustingVariantId, setAdjustingVariantId] = useState<string | null>(null);
 
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
@@ -124,6 +136,55 @@ export default function PackingDashboard() {
       setOrders(data as Order[]);
     }
     setLoading(false);
+  };
+
+  // Fetch Live Inventory for Stock Management
+  const fetchInventory = async () => {
+    setLoadingInventory(true);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, variants:product_variants(*)')
+      .eq('is_active', true)
+      .order('title', { ascending: true });
+
+    if (!error && data) {
+      setInventoryProducts(data as Product[]);
+    }
+    setLoadingInventory(false);
+  };
+
+  // Adjust stock quantity via /api/inventory/adjust
+  const handleAdjustStock = async (variantId: string, changeAmount: number) => {
+    setAdjustingVariantId(variantId);
+    try {
+      const res = await fetch('/api/inventory/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant_id: variantId,
+          change_amount: changeAmount,
+          reason: 'manual_adjustment',
+          adjusted_by: currentProfile?.full_name || 'Delivery Team',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to adjust stock');
+      }
+
+      setInventoryProducts((prev) =>
+        prev.map((p) => ({
+          ...p,
+          variants: p.variants?.map((v) =>
+            v.id === variantId ? { ...v, stock_quantity: data.new_stock } : v
+          ),
+        }))
+      );
+    } catch (err: any) {
+      alert(err.message || 'Error updating stock');
+    } finally {
+      setAdjustingVariantId(null);
+    }
   };
 
   useEffect(() => {
@@ -362,6 +423,21 @@ export default function PackingDashboard() {
   const onTheWayCount = orders.filter((o) => o.status === 'on_the_way').length;
   const shippedCount = orders.filter((o) => o.status === 'shipped').length;
 
+  // Filtered products for stock management
+  const filteredProducts = useMemo(() => {
+    return inventoryProducts.filter((p) => {
+      if (!inventorySearch.trim()) return true;
+      const q = inventorySearch.toLowerCase();
+      const titleMatch = p.title?.toLowerCase().includes(q);
+      const variantMatch = p.variants?.some(
+        (v) =>
+          v.title?.toLowerCase().includes(q) ||
+          (v.sku && v.sku.toLowerCase().includes(q))
+      );
+      return titleMatch || variantMatch;
+    });
+  }, [inventoryProducts, inventorySearch]);
+
   const triggerPrint = (order: Order) => {
     setSelectedOrderForSlip(order);
     setTimeout(() => {
@@ -377,7 +453,60 @@ export default function PackingDashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Top Notification Banner for Packing Team Security */}
+        {/* Main Tab Switcher: Fulfillment Queue vs Live Stock Management */}
+        <div className="no-print flex items-center gap-2 mb-6 border-b border-slate-200 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('queue')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeMainTab === 'queue'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Fulfillment Queue</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeMainTab === 'queue' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {orders.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMainTab('inventory');
+              if (inventoryProducts.length === 0) {
+                fetchInventory();
+              }
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeMainTab === 'inventory'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>Live Stock & Inventory</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                activeMainTab === 'inventory'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-emerald-50 text-emerald-800'
+              }`}
+            >
+              Stock Control
+            </span>
+          </button>
+        </div>
+
+        {/* FULFILLMENT QUEUE TAB */}
+        {activeMainTab === 'queue' && (
+          <>
+            {/* Top Notification Banner for Packing Team Security */}
         <div className="no-print mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
           <div className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center font-bold">
@@ -884,6 +1013,226 @@ export default function PackingDashboard() {
                 </div>
               );
             })}
+            </div>
+          )}
+          </>
+        )}
+
+        {/* LIVE STOCK & INVENTORY MANAGEMENT VIEW */}
+        {activeMainTab === 'inventory' && (
+          <div className="space-y-6">
+            {/* Header / Search Controls */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <Boxes className="w-5 h-5 text-emerald-600" />
+                    <span>Live Stock & Inventory Station</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Warehouse stock management. Realtime stock lookup and quantity adjustments (+1, -1, +10).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search product or SKU..."
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchInventory}
+                    disabled={loadingInventory}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors shrink-0 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingInventory ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory List */}
+            {loadingInventory ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-slate-400 mb-2" />
+                <p className="text-xs text-slate-500 font-medium">Loading inventory products...</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+                <Boxes className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-700">No products found</p>
+                <p className="text-xs text-slate-400 mt-1">Try a different search query or click Refresh</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredProducts.map((product) => {
+                  const variants = product.variants || [];
+                  const totalStock = variants.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
+
+                  return (
+                    <div
+                      key={product.id}
+                      className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                    >
+                      <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {product.image_url ? (
+                            <img
+                              src={product.image_url}
+                              alt={product.title}
+                              className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-500">
+                              <Box className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">{product.title}</h4>
+                            <p className="text-xs text-slate-500">
+                              {variants.length} {variants.length === 1 ? 'Variant' : 'Variants'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[11px] font-semibold text-slate-500 block">
+                            Combined Stock
+                          </span>
+                          <span
+                            className={`font-mono text-sm font-black ${
+                              totalStock <= 0
+                                ? 'text-rose-600'
+                                : totalStock <= 5
+                                ? 'text-amber-600'
+                                : 'text-emerald-700'
+                            }`}
+                          >
+                            {totalStock} units
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-slate-100">
+                        {variants.map((variant) => {
+                          const isLow = variant.stock_quantity > 0 && variant.stock_quantity <= 5;
+                          const isOut = variant.stock_quantity <= 0;
+                          const isUpdating = adjustingVariantId === variant.id;
+
+                          return (
+                            <div
+                              key={variant.id}
+                              className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/40 transition-colors"
+                            >
+                              <div className="flex items-start sm:items-center gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-slate-800">
+                                      {variant.title}
+                                    </span>
+                                    {variant.sku && (
+                                      <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                        SKU: {variant.sku}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-slate-500 font-mono mt-0.5 inline-block">
+                                    Selling Price: {formatCurrency(variant.price)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between sm:justify-end gap-3">
+                                {/* Stock Status Badge */}
+                                <div className="text-right">
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                                      isOut
+                                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                        : isLow
+                                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        isOut
+                                          ? 'bg-rose-500'
+                                          : isLow
+                                          ? 'bg-amber-500'
+                                          : 'bg-emerald-500'
+                                      }`}
+                                    />
+                                    <span className="font-mono">{variant.stock_quantity} in stock</span>
+                                  </span>
+                                </div>
+
+                                {/* Stock Adjust Actions */}
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={variant.stock_quantity <= 0 || isUpdating}
+                                    onClick={() => handleAdjustStock(variant.id, -1)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer"
+                                    title="Deduct 1"
+                                  >
+                                    -1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() => handleAdjustStock(variant.id, 1)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer"
+                                    title="Add 1"
+                                  >
+                                    +1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() => handleAdjustStock(variant.id, 10)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer"
+                                    title="Add 10"
+                                  >
+                                    +10
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() => {
+                                      const input = prompt(
+                                        `Enter stock adjustment amount for "${variant.title}" (e.g. +5 or -2):`
+                                      );
+                                      if (input) {
+                                        const num = parseInt(input, 10);
+                                        if (!isNaN(num) && num !== 0) {
+                                          handleAdjustStock(variant.id, num);
+                                        }
+                                      }
+                                    }}
+                                    className="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition-colors cursor-pointer"
+                                    title="Custom Adjustment"
+                                  >
+                                    Custom
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

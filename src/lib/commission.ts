@@ -33,6 +33,135 @@ export const DEFAULT_NON_WEBSITE_SALES_TIERS = [
   { name: 'Milestone 5', min_quota: 50000, bonus: 2000 },
 ];
 
+// Default Flat Percentage Commission for Reachout Sales
+export const DEFAULT_REACHOUT_COMMISSION_PERCENTAGE = 10;
+
+export interface ReachoutCommissionRule {
+  id?: string;
+  name: string;
+  percentage: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function isReachoutRule(rule: any): boolean {
+  if (!rule) return false;
+  if (rule.rule_type === 'percentage') return true;
+  if (typeof rule.name === 'string') {
+    if (rule.name.toLowerCase().includes('reachout')) return true;
+    try {
+      if (rule.name.startsWith('{')) {
+        const p = JSON.parse(rule.name);
+        return (
+          p.source === 'reachout' ||
+          p.rule_type === 'reachout_percentage' ||
+          p.name?.toLowerCase().includes('reachout')
+        );
+      }
+    } catch {}
+  }
+  return false;
+}
+
+export function parseReachoutRule(rule: any): ReachoutCommissionRule {
+  let title = 'Reachout Sales Commission';
+  try {
+    if (typeof rule.name === 'string' && rule.name.startsWith('{')) {
+      const p = JSON.parse(rule.name);
+      title = p.name || title;
+    } else if (rule.name) {
+      title = rule.name;
+    }
+  } catch {}
+
+  return {
+    id: rule.id,
+    name: title,
+    percentage: Number(rule.value !== undefined ? rule.value : DEFAULT_REACHOUT_COMMISSION_PERCENTAGE),
+    is_active: rule.is_active ?? true,
+    created_at: rule.created_at,
+    updated_at: rule.updated_at,
+  };
+}
+
+export async function getReachoutCommissionRule(
+  supabase: SupabaseClient
+): Promise<ReachoutCommissionRule> {
+  try {
+    const { data: rules } = await supabase
+      .from('reward_rules')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (rules && rules.length > 0) {
+      const match = rules.find((r) => isReachoutRule(r));
+      if (match) {
+        return parseReachoutRule(match);
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching reachout rule:', err);
+  }
+
+  return {
+    name: 'Reachout Sales Commission',
+    percentage: DEFAULT_REACHOUT_COMMISSION_PERCENTAGE,
+    is_active: true,
+  };
+}
+
+export async function syncReachoutCommissionReward(
+  supabase: SupabaseClient,
+  staffId: string,
+  orderId: string,
+  reachoutSubtotal: number
+) {
+  if (!staffId || !orderId || reachoutSubtotal <= 0) return null;
+
+  try {
+    const rule = await getReachoutCommissionRule(supabase);
+    if (!rule.is_active || rule.percentage <= 0) return null;
+
+    const commissionAmount = Math.round((reachoutSubtotal * rule.percentage) / 100);
+    if (commissionAmount <= 0) return null;
+
+    const { data: existing } = await supabase
+      .from('upsell_rewards')
+      .select('id, bonus_amount')
+      .eq('sales_rep_id', staffId)
+      .eq('order_id', orderId)
+      .like('note', 'Reachout Commission%')
+      .maybeSingle();
+
+    if (existing) {
+      if (Number(existing.bonus_amount) !== commissionAmount) {
+        await supabase
+          .from('upsell_rewards')
+          .update({
+            bonus_amount: commissionAmount,
+            note: `Reachout Commission (${rule.percentage}% of ৳${reachoutSubtotal.toLocaleString()})`,
+          })
+          .eq('id', existing.id);
+      }
+      return { bonus: commissionAmount };
+    }
+
+    await supabase.from('upsell_rewards').insert({
+      sales_rep_id: staffId,
+      order_id: orderId,
+      bonus_amount: commissionAmount,
+      status: 'pending',
+      note: `Reachout Commission (${rule.percentage}% of ৳${reachoutSubtotal.toLocaleString()})`,
+    });
+
+    return { bonus: commissionAmount };
+  } catch (err) {
+    console.error('Error in syncReachoutCommissionReward:', err);
+    return null;
+  }
+}
+
 /**
  * Parses a raw database RewardRule row into a typed QuotaTier.
  */

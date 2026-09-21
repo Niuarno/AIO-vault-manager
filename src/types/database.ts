@@ -135,6 +135,8 @@ export interface Order {
   courier_status?: string | null;
   courier_updated_at?: string | null;
   delivery_charge?: number | null;
+  discount_amount?: number | null;
+  advance_payment?: number | null;
 }
 
 export interface RewardRule {
