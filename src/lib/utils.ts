@@ -84,3 +84,40 @@ export function getSourceBadge(source: OrderSource) {
       return { label: 'Manual/Walk-in', color: 'bg-gray-100 text-gray-800' };
   }
 }
+
+export function getOrderDiscount(order: any): number {
+  if (!order) return 0;
+  if (typeof order.discount_amount === 'number' && order.discount_amount > 0) {
+    return order.discount_amount;
+  }
+  if (order.note) {
+    const match = order.note.match(/\[Discount:\s*৳?([0-9,]+(\.[0-9]+)?)\]/i);
+    if (match) return parseFloat(match[1].replace(/,/g, '')) || 0;
+  }
+  return 0;
+}
+
+export function getOrderAdvance(order: any): number {
+  if (!order) return 0;
+  if (typeof order.advance_payment === 'number' && order.advance_payment > 0) {
+    return order.advance_payment;
+  }
+  if (order.note) {
+    const match = order.note.match(/\[Advance Paid:\s*৳?([0-9,]+(\.[0-9]+)?)/i);
+    if (match) return parseFloat(match[1].replace(/,/g, '')) || 0;
+  }
+  return 0;
+}
+
+export function getOrderDeliveryCharge(order: any): number {
+  if (!order) return 80;
+  if (typeof order.delivery_charge === 'number') {
+    return order.delivery_charge;
+  }
+  if (order.note) {
+    if (order.note.includes('Free Delivery')) return 0;
+    if (order.note.includes('130 BDT') || order.note.includes('Outside Dhaka')) return 130;
+    if (order.note.includes('80 BDT') || order.note.includes('Inside Dhaka')) return 80;
+  }
+  return 80;
+}

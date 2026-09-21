@@ -65,7 +65,7 @@ import {
   PayoutRequest,
   UpsellReward,
 } from '@/types/database';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getOrderDiscount, getOrderAdvance } from '@/lib/utils';
 import { QuotaTier } from '@/lib/commission';
 
 export default function AdminDashboard() {
@@ -1169,6 +1169,29 @@ export default function AdminDashboard() {
                                     Reachout
                                   </span>
                                 )}
+                                {(() => {
+                                  const disc = getOrderDiscount(order);
+                                  return disc > 0 ? (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
+                                      title={`Discount applied: -৳${disc.toLocaleString()}`}
+                                    >
+                                      Disc: -৳{disc.toLocaleString()}
+                                    </span>
+                                  ) : null;
+                                })()}
+                                {(() => {
+                                  const adv = getOrderAdvance(order);
+                                  const cod = Math.max(0, order.total_amount - adv);
+                                  return adv > 0 ? (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
+                                      title={`Advance: ৳${adv.toLocaleString()} | Remaining COD: ৳${cod.toLocaleString()}`}
+                                    >
+                                      Adv: ৳{adv.toLocaleString()} | COD: ৳{cod.toLocaleString()}
+                                    </span>
+                                  ) : null;
+                                })()}
                               </div>
                             </td>
 

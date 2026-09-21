@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { syncStaffCommissionRewards } from '@/lib/commission';
+import { syncStaffCommissionRewards, syncReachoutCommissionReward } from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -163,11 +163,42 @@ export async function PATCH(
       return NextResponse.json({ error: 'Failed to update order items: ' + insertErr.message }, { status: 500 });
     }
 
-    // 6. Recalculate total amount
-    const recalculatedTotal = newItems.reduce(
+    // 6. Recalculate grand total amount accounting for delivery charge and custom discount
+    const recalculatedItemsSubtotal = newItems.reduce(
       (sum, item) => sum + (Number(item.quantity) || 1) * (Number(item.price) || 0),
       0
     );
+
+    // Resolve delivery charge
+    let finalDeliveryFee =
+      body.delivery_charge !== undefined
+        ? Number(body.delivery_charge)
+        : (typeof order.delivery_charge === 'number' ? order.delivery_charge : 80);
+
+    // Resolve custom discount
+    let finalDiscount =
+      body.discount_amount !== undefined
+        ? Math.max(0, Number(body.discount_amount) || 0)
+        : (typeof order.discount_amount === 'number' ? order.discount_amount : 0);
+
+    // Resolve advance payment
+    let finalAdvance =
+      body.advance_payment !== undefined
+        ? Math.max(0, Number(body.advance_payment) || 0)
+        : (typeof order.advance_payment === 'number' ? order.advance_payment : 0);
+
+    // Fallbacks from note if columns were 0 or missing
+    if (finalDiscount === 0 && order.note) {
+      const dm = order.note.match(/\[Discount:\s*৳?([0-9,]+(\.[0-9]+)?)\]/i);
+      if (dm) finalDiscount = parseFloat(dm[1].replace(/,/g, '')) || 0;
+    }
+    if (finalAdvance === 0 && order.note) {
+      const am = order.note.match(/\[Advance Paid:\s*৳?([0-9,]+(\.[0-9]+)?)/i);
+      if (am) finalAdvance = parseFloat(am[1].replace(/,/g, '')) || 0;
+    }
+
+    const recalculatedGrandTotal = Math.max(0, recalculatedItemsSubtotal + finalDeliveryFee - finalDiscount);
+    const recalculatedRemainingCod = Math.max(0, recalculatedGrandTotal - finalAdvance);
 
     // 7. Determine requester role & staff assignment rules
     let isAdmin = false;
@@ -250,7 +281,12 @@ export async function PATCH(
       edited_by: editedBy,
       reason: reason.trim(),
       previous_total: order.total_amount,
-      new_total: recalculatedTotal,
+      new_total: recalculatedGrandTotal,
+      subtotal: recalculatedItemsSubtotal,
+      delivery_charge: finalDeliveryFee,
+      discount_amount: finalDiscount,
+      advance_payment: finalAdvance,
+      remaining_cod: recalculatedRemainingCod,
       previous_items: (oldItems || []).map((i) => ({
         title: i.title,
         variant_title: i.variant_title,
@@ -285,14 +321,25 @@ export async function PATCH(
     const reachoutNoteTag = body.is_reachout && !order.note?.toLowerCase().includes('reachout')
       ? ` [Reachout Sale by ${editedBy}]`
       : '';
-    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedTotal} BDT.${reachoutNoteTag}`;
-    const updatedNote = (order.note || '').trim() + noteLog;
+    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedGrandTotal} BDT.${reachoutNoteTag}`;
+    let updatedNote = (order.note || '').trim() + noteLog;
+
+    // Refresh discount and advance notes
+    if (finalDiscount > 0 && !updatedNote.includes('[Discount:')) {
+      updatedNote += `\n[Discount: ৳${finalDiscount.toLocaleString()}]`;
+    }
+    if (finalAdvance > 0 && !updatedNote.includes('[Advance Paid:')) {
+      updatedNote += `\n[Advance Paid: ৳${finalAdvance.toLocaleString()} | Remaining COD: ৳${recalculatedRemainingCod.toLocaleString()}]`;
+    }
 
     let updatedOrder: any = null;
 
-    // Try updating with JSONB history columns
+    // Try updating with all columns
     const updatePayload: Record<string, any> = {
-      total_amount: recalculatedTotal,
+      total_amount: recalculatedGrandTotal,
+      delivery_charge: finalDeliveryFee,
+      discount_amount: finalDiscount,
+      advance_payment: finalAdvance,
       updated_at: nowIso,
       note: updatedNote,
       edit_history: updatedHistory,
@@ -308,9 +355,9 @@ export async function PATCH(
       .single();
 
     if (fullUpdateErr) {
-      // Graceful fallback without JSONB columns if not yet created in Supabase schema
+      // Graceful fallback without newer columns if not yet created in Supabase schema
       const fallbackPayload: Record<string, any> = {
-        total_amount: recalculatedTotal,
+        total_amount: recalculatedGrandTotal,
         updated_at: nowIso,
         note: updatedNote,
         sales_rep_id: resolvedSalesRepId,
@@ -331,7 +378,7 @@ export async function PATCH(
       updatedOrder = fullUpdateData;
     }
 
-    // 9. If attributed to a staff member, synchronize quota / sales bonus rewards
+    // 9. If attributed to a staff member, synchronize quota / sales bonus rewards & reachout commission
     if (resolvedSalesRepId) {
       await syncStaffCommissionRewards(
         supabase,
@@ -339,6 +386,14 @@ export async function PATCH(
         orderId,
         updatedOrder?.source || (isWebsite ? 'website' : 'other')
       );
+
+      const reachoutSubtotal = itemsToInsert
+        .filter((i: any) => i.is_reachout)
+        .reduce((sum: number, it: any) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1), 0);
+
+      if (reachoutSubtotal > 0) {
+        await syncReachoutCommissionReward(supabase, resolvedSalesRepId, orderId, reachoutSubtotal);
+      }
     }
 
     return NextResponse.json({ success: true, order: updatedOrder });

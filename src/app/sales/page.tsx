@@ -29,6 +29,8 @@ import {
   ChevronUp,
   Sparkles,
   Lock,
+  Receipt,
+  Truck,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
@@ -51,7 +53,7 @@ import {
   PayoutRequest,
 } from '@/types/database';
 import { QuotaTier } from '@/lib/commission';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getOrderDiscount, getOrderAdvance } from '@/lib/utils';
 
 export default function SalesDashboard() {
   const supabase = createClient();
@@ -1327,6 +1329,29 @@ export default function SalesDashboard() {
                                     Reachout
                                   </span>
                                 )}
+                                {(() => {
+                                  const disc = getOrderDiscount(order);
+                                  return disc > 0 ? (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
+                                      title={`Discount applied: -৳${disc.toLocaleString()}`}
+                                    >
+                                      Disc: -৳{disc.toLocaleString()}
+                                    </span>
+                                  ) : null;
+                                })()}
+                                {(() => {
+                                  const adv = getOrderAdvance(order);
+                                  const cod = Math.max(0, order.total_amount - adv);
+                                  return adv > 0 ? (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
+                                      title={`Advance: ৳${adv.toLocaleString()} | Remaining COD: ৳${cod.toLocaleString()}`}
+                                    >
+                                      Adv: ৳{adv.toLocaleString()} | COD: ৳{cod.toLocaleString()}
+                                    </span>
+                                  ) : null;
+                                })()}
                               </div>
                             </td>
 
@@ -1976,8 +2001,8 @@ export default function SalesDashboard() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs animate-in fade-in p-2.5 sm:p-4">
           <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
-            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl relative my-auto">
-              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl relative my-auto">
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div>
                   <h3 className="font-bold text-base text-slate-900">
                     Create New Order
@@ -1989,545 +2014,497 @@ export default function SalesDashboard() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitOrder} className="p-4 sm:p-5 space-y-4">
-                {/* ORDER SOURCE */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Order Source
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setSource('whatsapp')}
-                      className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
-                        source === 'whatsapp'
-                          ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <WhatsAppFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                      <span className={`text-xs sm:text-[11px] font-semibold ${
-                        source === 'whatsapp' ? 'text-emerald-800' : 'text-slate-600'
-                      }`}>
-                        WhatsApp
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSource('messenger')}
-                      className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
-                        source === 'messenger'
-                          ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/10'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <MessengerFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                      <span className={`text-xs sm:text-[11px] font-semibold ${
-                        source === 'messenger' ? 'text-blue-800' : 'text-slate-600'
-                      }`}>
-                        Messenger
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSource('phone')}
-                      className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
-                        source === 'phone'
-                          ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/10'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <PhoneCallFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                      <span className={`text-xs sm:text-[11px] font-semibold ${
-                        source === 'phone' ? 'text-amber-800' : 'text-slate-600'
-                      }`}>
-                        Phone Call
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSource('manual')}
-                      className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
-                        source === 'manual'
-                          ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/10'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <WalkInFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                      <span className={`text-xs sm:text-[11px] font-semibold ${
-                        source === 'manual' ? 'text-indigo-800' : 'text-slate-600'
-                      }`}>
-                        Walk-in
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Customer Full Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Customer Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Shahajadi Farjana"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Customer Phone Number */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Customer Phone Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 01726640689"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Full Delivery Address */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Full Delivery Address *
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
-                    placeholder="House #, Road #, Area, City (e.g. 264/6, Block C, Banasree, Dhaka)"
-                    value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
-                  />
-                </div>
-
-                {/* ADD PRODUCTS TO ORDER */}
-                <div className="p-3.5 sm:p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Add Products to Order
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
-                      Live Stock Protected
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5">
+              <form onSubmit={handleSubmitOrder} className="p-4 sm:p-6 max-h-[75vh] overflow-y-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                  {/* LEFT 2 COLUMNS: CUSTOMER & PRODUCTS */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* ORDER SOURCE */}
                     <div>
-                      <label className="block text-[11px] text-slate-500 font-medium mb-1">
-                        Select Product / Variant
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        Order Source
                       </label>
-                      <ModernProductSelect
-                        variants={variants}
-                        selectedVariantId={selectedVariantId}
-                        onSelect={(variantId) => setSelectedVariantId(variantId)}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setSource('whatsapp')}
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                            source === 'whatsapp'
+                              ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <WhatsAppFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                          <span className={`text-xs sm:text-[11px] font-semibold ${
+                            source === 'whatsapp' ? 'text-emerald-800' : 'text-slate-600'
+                          }`}>
+                            WhatsApp
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSource('messenger')}
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                            source === 'messenger'
+                              ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/10'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <MessengerFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                          <span className={`text-xs sm:text-[11px] font-semibold ${
+                            source === 'messenger' ? 'text-blue-800' : 'text-slate-600'
+                          }`}>
+                            Messenger
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSource('phone')}
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                            source === 'phone'
+                              ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/10'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <PhoneCallFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                          <span className={`text-xs sm:text-[11px] font-semibold ${
+                            source === 'phone' ? 'text-amber-800' : 'text-slate-600'
+                          }`}>
+                            Phone Call
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSource('manual')}
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                            source === 'manual'
+                              ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/10'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <WalkInFlatIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                          <span className={`text-xs sm:text-[11px] font-semibold ${
+                            source === 'manual' ? 'text-indigo-800' : 'text-slate-600'
+                          }`}>
+                            Walk-in
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Customer Full Name */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Customer Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Shahajadi Farjana"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                       />
                     </div>
 
-                    <div className="flex flex-wrap sm:flex-nowrap items-end gap-2.5 sm:gap-3">
-                      <div className="w-24 sm:w-28 shrink-0">
-                        <label className="block text-[11px] text-slate-500 font-medium mb-1">Quantity</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={itemQuantity}
-                          onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-[140px]">
-                        <label className="flex items-center justify-center gap-2 text-xs text-amber-800 font-semibold cursor-pointer select-none bg-amber-50 border border-amber-200/80 px-3 py-2 rounded-xl hover:bg-amber-100/70 transition-colors h-[38px]">
-                          <input
-                            type="checkbox"
-                            checked={isReachoutItem}
-                            onChange={(e) => setIsReachoutItem(e.target.checked)}
-                            className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
-                          />
-                          <span>Reachout sell?</span>
-                        </label>
-                      </div>
+                    {/* Customer Phone Number */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Customer Phone Number *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 01726640689"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleAddItem}
-                      className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>+ Add Item</span>
-                    </button>
+                    {/* Full Delivery Address */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Full Delivery Address *
+                      </label>
+                      <textarea
+                        rows={2}
+                        required
+                        placeholder="House #, Road #, Area, City (e.g. 264/6, Block C, Banasree, Dhaka)"
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                      />
+                    </div>
+
+                    {/* ADD PRODUCTS TO ORDER */}
+                    <div className="p-3.5 sm:p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Add Products to Order
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
+                          Live Stock Protected
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="block text-[11px] text-slate-500 font-medium mb-1">
+                            Select Product / Variant
+                          </label>
+                          <ModernProductSelect
+                            variants={variants}
+                            selectedVariantId={selectedVariantId}
+                            onSelect={(variantId) => setSelectedVariantId(variantId)}
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap sm:flex-nowrap items-end gap-2.5 sm:gap-3">
+                          <div className="w-24 sm:w-28 shrink-0">
+                            <label className="block text-[11px] text-slate-500 font-medium mb-1">Quantity</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={itemQuantity}
+                              onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          <div className="flex-1 min-w-[140px]">
+                            <label className="flex items-center justify-center gap-2 text-xs text-amber-800 font-semibold cursor-pointer select-none bg-amber-50 border border-amber-200/80 px-3 py-2 rounded-xl hover:bg-amber-100/70 transition-colors h-[38px]">
+                              <input
+                                type="checkbox"
+                                checked={isReachoutItem}
+                                onChange={(e) => setIsReachoutItem(e.target.checked)}
+                                className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
+                              />
+                              <span>Reachout sell?</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddItem}
+                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Add Item</span>
+                        </button>
+                      </div>
+
+                      {/* Items List */}
+                      {orderItems.length > 0 ? (
+                        <div className="divide-y divide-slate-200/80 pt-2">
+                          {orderItems.map((item, idx) => (
+                            <div key={idx} className="py-2.5 flex items-center justify-between text-xs gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                <span className="font-semibold text-slate-900 truncate max-w-[130px] sm:max-w-xs">{item.title}</span>
+                                {item.variant_title && (
+                                  <span className="text-slate-500 text-[11px]">({item.variant_title})</span>
+                                )}
+                                <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
+                                {item.is_reachout && (
+                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[9px]">
+                                    Reachout
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                <span className="font-mono font-bold text-slate-900">
+                                  {formatCurrency(item.price * item.quantity)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-xs text-slate-400 italic pt-1">
+                          No items added yet. Pick an item above to add to order.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Salesperson Coupon Code */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Salesperson Coupon Code (For Commission)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. NUR10"
+                        value={couponUsed}
+                        onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* Payment Method */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Payment Method
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      >
+                        <option value="Cash on Delivery (COD)">Cash on Delivery (COD)</option>
+                        <option value="bKash (Prepaid)">bKash (Prepaid)</option>
+                        <option value="Nagad (Prepaid)">Nagad (Prepaid)</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                      </select>
+                    </div>
+
+                    {/* Order Notes */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Order Notes (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Customer requested evening delivery"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
                   </div>
 
-                  {/* Items List */}
-                  {orderItems.length > 0 ? (
-                    <div className="divide-y divide-slate-200/80 pt-2">
-                      {orderItems.map((item, idx) => (
-                        <div key={idx} className="py-2.5 flex items-center justify-between text-xs gap-2">
-                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                            <span className="font-semibold text-slate-900 truncate max-w-[130px] sm:max-w-xs">{item.title}</span>
-                            {item.variant_title && (
-                              <span className="text-slate-500 text-[11px]">({item.variant_title})</span>
-                            )}
-                            <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
-                            {item.is_reachout && (
-                              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[9px]">
-                                Reachout
-                              </span>
-                            )}
+                  {/* RIGHT 1 COLUMN: ORDER SUMMARY TO THE SIDE */}
+                  <div className="lg:col-span-1 space-y-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4 shadow-xs sticky top-0">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                            <Receipt className="w-3.5 h-3.5" />
                           </div>
-                          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                            <span className="font-mono font-bold text-slate-900">
-                              {formatCurrency(item.price * item.quantity)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Order Summary</h4>
+                            <p className="text-[10px] text-slate-400">Total & Payment Breakdown</p>
                           </div>
                         </div>
-                      ))}
+                        <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700">
+                          {orderItems.length} items
+                        </span>
+                      </div>
 
-                      <div className="pt-3 border-t border-slate-200/80 space-y-1.5 text-xs">
-                        <div className="flex justify-between text-slate-500">
-                          <span>Items Subtotal:</span>
-                          <span className="font-mono font-bold text-slate-800">
-                            {formatCurrency(itemsSubtotal)}
-                          </span>
+                      {/* Items Subtotal */}
+                      <div className="flex justify-between items-center text-xs text-slate-600">
+                        <span>Items Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-900">
+                          {formatCurrency(itemsSubtotal)}
+                        </span>
+                      </div>
+
+                      {/* Delivery Option Selection */}
+                      <div className="pt-2 border-t border-slate-200/70 space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          <Truck className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Delivery Fee:</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryType('inside_dhaka')}
+                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                              deliveryType === 'inside_dhaka'
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="text-[10px] text-slate-500">Dhaka</div>
+                            <div className="text-xs font-mono font-black">৳80</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryType('outside_dhaka')}
+                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                              deliveryType === 'outside_dhaka'
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="text-[10px] text-slate-500">Outside</div>
+                            <div className="text-xs font-mono font-black">৳130</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryType('free')}
+                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                              deliveryType === 'free'
+                                ? 'border-emerald-600 bg-emerald-600 text-white font-bold shadow-2xs'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className={`text-[10px] ${deliveryType === 'free' ? 'text-emerald-100' : 'text-slate-500'}`}>Offer</div>
+                            <div className="text-xs font-mono font-black">Free</div>
+                          </button>
                         </div>
-                        <div className="flex justify-between text-slate-500">
-                          <span>Delivery Charge:</span>
-                          <span className="font-mono font-bold text-slate-800">
-                            {deliveryCharge === 0 ? (
-                              <span className="text-emerald-700 font-bold">FREE (৳0)</span>
-                            ) : (
-                              formatCurrency(deliveryCharge)
-                            )}
-                          </span>
-                        </div>
-                        {discountAmount > 0 && (
-                          <div className="flex justify-between text-rose-600">
-                            <span>Special Discount:</span>
-                            <span className="font-mono font-bold">
+                      </div>
+
+                      {/* Custom Discount Input Box */}
+                      <div className="pt-2 border-t border-slate-200/70 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                            <Tag className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Custom Discount:</span>
+                          </label>
+                          {discountAmount > 0 && (
+                            <span className="font-mono font-bold text-rose-600 text-[11px]">
                               -{formatCurrency(discountAmount)}
                             </span>
-                          </div>
-                        )}
-                        <div className="pt-2 border-t border-dashed border-slate-200 flex justify-between font-bold text-sm text-slate-900">
-                          <span>Grand Total:</span>
-                          <span className="font-mono text-slate-900 text-base">
-                            {formatCurrency(grandTotal)}
-                          </span>
+                          )}
                         </div>
-                        {advanceAmount > 0 && (
-                          <>
-                            <div className="flex justify-between text-emerald-700">
-                              <span>Advance Received ({advanceMethod}):</span>
-                              <span className="font-mono font-bold">
-                                -{formatCurrency(advanceAmount)}
-                              </span>
-                            </div>
-                            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 flex justify-between items-center font-bold text-xs text-amber-900">
-                              <span>Remaining COD for Courier:</span>
-                              <span className="font-mono text-sm text-amber-900 font-black">
-                                {formatCurrency(remainingCod)}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-center text-xs text-slate-400 italic pt-1">
-                      No items added yet. Pick an item above to add to cart.
-                    </p>
-                  )}
-                </div>
-
-                {/* Delivery Charge Selection: 3 Dynamic Responsive Cards */}
-                <div className="space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Delivery Option
-                    </label>
-                    <span className="text-[11px] text-slate-400 font-medium">
-                      Choose zone or offer customer free delivery
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-                    {/* 1. Inside Dhaka: 80tk */}
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryType('inside_dhaka')}
-                      className={`p-3 rounded-xl sm:rounded-2xl border text-left transition-all cursor-pointer relative ${
-                        deliveryType === 'inside_dhaka'
-                          ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
-                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex sm:flex-col justify-between sm:justify-start items-center sm:items-start gap-1">
-                        <div className="flex items-center gap-2 sm:w-full sm:justify-between">
-                          <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 transition-all ${
-                            deliveryType === 'inside_dhaka'
-                              ? 'border-emerald-600 bg-emerald-600'
-                              : 'border-slate-300 bg-white'
-                          }`}>
-                            {deliveryType === 'inside_dhaka' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <span className="text-xs font-bold text-slate-900">Inside Dhaka</span>
-                        </div>
-                        <div className="text-right sm:text-left sm:mt-1">
-                          <div className="text-sm sm:text-base font-black font-mono text-slate-900">৳80</div>
-                          <p className="text-[10px] text-slate-500 leading-tight">Dhaka metro delivery</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* 2. Outside Dhaka: 130tk */}
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryType('outside_dhaka')}
-                      className={`p-3 rounded-xl sm:rounded-2xl border text-left transition-all cursor-pointer relative ${
-                        deliveryType === 'outside_dhaka'
-                          ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
-                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex sm:flex-col justify-between sm:justify-start items-center sm:items-start gap-1">
-                        <div className="flex items-center gap-2 sm:w-full sm:justify-between">
-                          <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 transition-all ${
-                            deliveryType === 'outside_dhaka'
-                              ? 'border-emerald-600 bg-emerald-600'
-                              : 'border-slate-300 bg-white'
-                          }`}>
-                            {deliveryType === 'outside_dhaka' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <span className="text-xs font-bold text-slate-900">Outside Dhaka</span>
-                        </div>
-                        <div className="text-right sm:text-left sm:mt-1">
-                          <div className="text-sm sm:text-base font-black font-mono text-slate-900">৳130</div>
-                          <p className="text-[10px] text-slate-500 leading-tight">Nationwide delivery</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* 3. Free Delivery: 0tk */}
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryType('free')}
-                      className={`p-3 rounded-xl sm:rounded-2xl border text-left transition-all cursor-pointer relative ${
-                        deliveryType === 'free'
-                          ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
-                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex sm:flex-col justify-between sm:justify-start items-center sm:items-start gap-1">
-                        <div className="flex items-center gap-2 sm:w-full sm:justify-between">
-                          <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 transition-all ${
-                            deliveryType === 'free'
-                              ? 'border-emerald-600 bg-emerald-600'
-                              : 'border-slate-300 bg-white'
-                          }`}>
-                            {deliveryType === 'free' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <span className="text-xs font-bold text-emerald-700">Free Delivery</span>
-                        </div>
-                        <div className="text-right sm:text-left sm:mt-1">
-                          <div className="text-sm sm:text-base font-black font-mono text-emerald-700">৳0 FREE</div>
-                          <p className="text-[10px] text-emerald-600 font-medium leading-tight">Staff special offer</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Custom Discount Input Box */}
-                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Custom Discount (৳)</span>
-                    </label>
-                    <span className="text-[11px] text-slate-400 font-medium">Special price reduction</span>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
-                      ৳
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 50"
-                      value={customDiscount}
-                      onChange={(e) => setCustomDiscount(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Customer Advance / Pre-payment Box */}
-                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Customer Advance Payment</span>
-                    </label>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hasAdvancePayment}
-                        onChange={(e) => {
-                          setHasAdvancePayment(e.target.checked);
-                          if (!e.target.checked) {
-                            setAdvancePayment('');
-                            setAdvanceTrxId('');
-                          }
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-                      <span className="ml-2 text-xs font-semibold text-slate-700">
-                        {hasAdvancePayment ? 'Advance Paid' : 'No Advance'}
-                      </span>
-                    </label>
-                  </div>
-
-                  {hasAdvancePayment && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Advance Paid (৳) *
-                        </label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
                             ৳
                           </span>
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             step="any"
-                            required={hasAdvancePayment}
-                            placeholder="e.g. 200"
-                            value={advancePayment}
-                            onChange={(e) => setAdvancePayment(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            placeholder="0"
+                            value={customDiscount}
+                            onChange={(e) => setCustomDiscount(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-6 pr-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
                           />
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Payment Channel
-                        </label>
-                        <select
-                          value={advanceMethod}
-                          onChange={(e) => setAdvanceMethod(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                        >
-                          <option value="bKash">bKash</option>
-                          <option value="Nagad">Nagad</option>
-                          <option value="Rocket">Rocket</option>
-                          <option value="Bank Transfer">Bank Transfer</option>
-                        </select>
+                      {/* Customer Advance / Pre-payment Box */}
+                      <div className="pt-2 border-t border-slate-200/70 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Advance Paid</span>
+                          </label>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={hasAdvancePayment}
+                              onChange={(e) => {
+                                setHasAdvancePayment(e.target.checked);
+                                if (!e.target.checked) {
+                                  setAdvancePayment('');
+                                  setAdvanceTrxId('');
+                                }
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                          </label>
+                        </div>
+
+                        {hasAdvancePayment && (
+                          <div className="space-y-2 pt-1">
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-400">
+                                ৳
+                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                step="any"
+                                required={hasAdvancePayment}
+                                placeholder="Amount (e.g. 200)"
+                                value={advancePayment}
+                                onChange={(e) => setAdvancePayment(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl pl-6 pr-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <select
+                                value={advanceMethod}
+                                onChange={(e) => setAdvanceMethod(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              >
+                                <option value="bKash">bKash</option>
+                                <option value="Nagad">Nagad</option>
+                                <option value="Rocket">Rocket</option>
+                                <option value="Bank Transfer">Bank</option>
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="TrxID (Opt)"
+                                value={advanceTrxId}
+                                onChange={(e) => setAdvanceTrxId(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] uppercase font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          TrxID / Ref (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 9JA8..."
-                          value={advanceTrxId}
-                          onChange={(e) => setAdvanceTrxId(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs uppercase font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                        />
+                      {/* Grand Total */}
+                      <div className="pt-3 border-t-2 border-slate-200">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Grand Total:</span>
+                          <span className="font-mono text-base font-black text-slate-900">
+                            {formatCurrency(grandTotal)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Remaining COD Box */}
+                      <div
+                        className={`p-3 rounded-xl border flex flex-col gap-1 transition-all ${
+                          advanceAmount > 0
+                            ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                            : 'bg-slate-100 border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider">Remaining COD:</span>
+                          <span className="font-mono text-sm font-black">
+                            {formatCurrency(remainingCod)}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-tight">
+                          {remainingCod === 0
+                            ? 'Fully prepaid. 0 COD collection.'
+                            : 'To collect from customer via Courier.'}
+                        </p>
+                      </div>
+
+                      {/* Submit Actions */}
+                      <div className="pt-2 space-y-2">
+                        <button
+                          type="submit"
+                          disabled={submittingOrder || orderItems.length === 0}
+                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-all disabled:opacity-50 text-center flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{submittingOrder ? 'Placing Order...' : 'Confirm & Create Order'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsModalOpen(false)}
+                          className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-colors text-center"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Salesperson Coupon Code */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Salesperson Coupon Code (For Commission)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. NUR10"
-                    value={couponUsed}
-                    onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Payment Method */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Payment Method
-                  </label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  >
-                    <option value="Cash on Delivery (COD)">Cash on Delivery (COD)</option>
-                    <option value="bKash (Prepaid)">bKash (Prepaid)</option>
-                    <option value="Nagad (Prepaid)">Nagad (Prepaid)</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                  </select>
-                </div>
-
-                {/* Order Notes */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Order Notes (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Customer requested evening delivery"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="pt-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors text-center"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingOrder}
-                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-all disabled:opacity-50 text-center"
-                  >
-                    {submittingOrder ? 'Placing Order...' : 'Confirm & Create Order'}
-                  </button>
+                  </div>
                 </div>
               </form>
             </div>

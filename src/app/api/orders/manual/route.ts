@@ -181,25 +181,12 @@ export async function POST(req: NextRequest) {
 
     // Fallback if migration columns are missing from DB
     if (orderError) {
-      let retryNeeded = false;
-      if (orderError.message?.includes('delivery_charge')) {
-        delete orderInsertPayload.delivery_charge;
-        retryNeeded = true;
-      }
-      if (orderError.message?.includes('discount_amount')) {
-        delete orderInsertPayload.discount_amount;
-        retryNeeded = true;
-      }
-      if (orderError.message?.includes('advance_payment')) {
-        delete orderInsertPayload.advance_payment;
-        retryNeeded = true;
-      }
-
-      if (retryNeeded) {
-        const res = await supabase.from('orders').insert(orderInsertPayload).select().single();
-        newOrder = res.data;
-        orderError = res.error;
-      }
+      delete orderInsertPayload.delivery_charge;
+      delete orderInsertPayload.discount_amount;
+      delete orderInsertPayload.advance_payment;
+      const res = await supabase.from('orders').insert(orderInsertPayload).select().single();
+      newOrder = res.data;
+      orderError = res.error;
     }
 
     if (orderError || !newOrder) {
