@@ -283,7 +283,7 @@ export default function PackingDashboard() {
   };
 
   // Dispatch Order to Steadfast Courier
-  const handleSendToSteadfast = async (order: Order) => {
+  const handleSendToSteadfast = async (order: Order, customItemDesc?: string) => {
     setDispatchingId(order.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -295,7 +295,10 @@ export default function PackingDashboard() {
       const res = await fetch('/api/shipping/steadfast/dispatch', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ orderId: order.id }),
+        body: JSON.stringify({
+          orderId: order.id,
+          itemDescription: customItemDesc || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -1104,6 +1107,24 @@ export default function PackingDashboard() {
                             </div>
                           </div>
                         )}
+
+                        {/* Steadfast Item Description Preview */}
+                        {(() => {
+                          const allItems = [...mainItems, ...upsellItems];
+                          if (allItems.length === 0) return null;
+                          const desc = allItems
+                            .map((i: any) => `${i.quantity || 1}x ${i.title}${i.variant_title ? ` (${i.variant_title})` : ''}`)
+                            .join(', ');
+                          return (
+                            <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-2 text-xs">
+                              <Box className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-bold text-slate-800">Steadfast Item Description:</span>{' '}
+                                <span className="text-slate-600 font-mono text-[11px]">{desc}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}

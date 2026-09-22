@@ -6,7 +6,7 @@ import { getOrderAdvance } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
-async function dispatchSingleOrder(orderId: string, supabase: any) {
+async function dispatchSingleOrder(orderId: string, supabase: any, overrideItemDescription?: string) {
   // 1. Fetch order with order_items
   const { data: order, error: orderError } = await supabase
     .from('orders')
@@ -25,16 +25,41 @@ async function dispatchSingleOrder(orderId: string, supabase: any) {
       ? 0
       : Math.max(0, Math.round(Number(order.total_amount) - advanceDeduction));
 
-  // 3. Construct concise item description for Steadfast package details
-  let itemDescription = '';
-  if (Array.isArray(order.order_items) && order.order_items.length > 0) {
-    itemDescription = order.order_items
-      .map((item: any) => `${item.quantity || 1}x ${item.title || 'Item'}`)
-      .slice(0, 5)
+  // 3. Resolve items from order_items, original_items, or direct query fallback
+  let items = Array.isArray(order.order_items) && order.order_items.length > 0
+    ? order.order_items
+    : (Array.isArray(order.original_items) && order.original_items.length > 0)
+    ? order.original_items
+    : [];
+
+  if (items.length === 0) {
+    const { data: directItems } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', order.id);
+    if (directItems && directItems.length > 0) {
+      items = directItems;
+    }
+  }
+
+  // 4. Construct comprehensive item description for Steadfast package details (max 400 chars)
+  let itemDescription = (overrideItemDescription || '').trim();
+  if (!itemDescription && items.length > 0) {
+    itemDescription = items
+      .map((item: any) => {
+        const qty = item.quantity || 1;
+        const title = (item.title || item.name || 'Product').trim();
+        const variant = item.variant_title ? ` (${item.variant_title.trim()})` : '';
+        return `${qty}x ${title}${variant}`;
+      })
       .join(', ');
   }
 
-  // 4. Dispatch to Steadfast API
+  if (itemDescription.length > 390) {
+    itemDescription = itemDescription.slice(0, 387) + '...';
+  }
+
+  // 5. Dispatch to Steadfast API
   const steadfastResult = await createSteadfastConsignment({
     invoice: order.order_number,
     recipient_name: order.customer_name,
@@ -167,7 +192,8 @@ async function dispatchSingleOrder(orderId: string, supabase: any) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderIds } = body;
+    const { orderId, orderIds, itemDescription, customItemDescription } = body;
+    const finalItemDesc = itemDescription || customItemDescription;
 
     if (!orderId && (!Array.isArray(orderIds) || orderIds.length === 0)) {
       return NextResponse.json(
@@ -256,7 +282,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Handle Single Dispatch
-    const singleResult = await dispatchSingleOrder(orderId, supabase);
+    const singleResult = await dispatchSingleOrder(orderId, supabase, finalItemDesc);
     if (!singleResult.success) {
       return NextResponse.json(
         { error: singleResult.error, details: singleResult.details },
