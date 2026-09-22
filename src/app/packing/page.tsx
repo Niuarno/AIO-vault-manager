@@ -38,6 +38,10 @@ import {
   getOrderAdvance,
   getOrderDeliveryCharge,
 } from '@/lib/utils';
+import {
+  getSteadfastTrackingUrl,
+  parseSteadfastStatus,
+} from '@/lib/steadfast';
 import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 
 export default function PackingDashboard() {
@@ -54,6 +58,13 @@ export default function PackingDashboard() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingAll, setSyncingAll] = useState(false);
+
+  // Steadfast Balance & Bulk Dispatch State
+  const [steadfastBalance, setSteadfastBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkDispatching, setBulkDispatching] = useState(false);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
 
   // Tab Switcher: Fulfillment Queue vs Live Stock Management
   const [activeMainTab, setActiveMainTab] = useState<'queue' | 'inventory'>('queue');
@@ -194,8 +205,27 @@ export default function PackingDashboard() {
     }
   };
 
+  // Fetch Steadfast Account Balance
+  const fetchSteadfastBalance = async () => {
+    setLoadingBalance(true);
+    try {
+      const res = await fetch('/api/shipping/steadfast/balance');
+      const data = await res.json();
+      if (data.success && typeof data.current_balance === 'number') {
+        setSteadfastBalance(data.current_balance);
+      } else {
+        setSteadfastBalance(null);
+      }
+    } catch {
+      setSteadfastBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
   useEffect(() => {
     fetchPackingOrders();
+    fetchSteadfastBalance();
 
     // Auto-refresh polling every 12 seconds for packing queue
     const timer = setInterval(() => {
@@ -407,6 +437,73 @@ export default function PackingDashboard() {
     alert(`Retrieved consignment details for ${successCount} of ${missing.length} orders.`);
   };
 
+  // 1-Click Bulk Dispatch selected orders to Steadfast
+  const handleBulkDispatch = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to dispatch ${selectedOrderIds.length} order(s) to Steadfast Courier?`)) {
+      return;
+    }
+
+    setBulkDispatching(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch('/api/shipping/steadfast/dispatch', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ orderIds: selectedOrderIds }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Successfully dispatched ${data.successCount} of ${data.total} order(s) to Steadfast Courier!`);
+        setSelectedOrderIds([]);
+        fetchPackingOrders();
+        fetchSteadfastBalance();
+      } else {
+        alert(data.error || 'Failed to bulk dispatch orders.');
+      }
+    } catch (err: any) {
+      alert(`Bulk dispatch error: ${err.message}`);
+    } finally {
+      setBulkDispatching(false);
+    }
+  };
+
+  // 1-Click Bulk Sync status for all orders in transit
+  const handleBulkSyncAll = async () => {
+    const onTheWayOrders = orders.filter((o) => o.status === 'on_the_way');
+    if (onTheWayOrders.length === 0) {
+      alert('No orders are currently in transit ("With Courier") to sync.');
+      return;
+    }
+
+    setBulkSyncing(true);
+    try {
+      const res = await fetch('/api/shipping/steadfast/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: onTheWayOrders.map((o) => o.id) }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Successfully updated delivery status for ${data.successCount} of ${data.total} in-transit orders!`);
+        fetchPackingOrders();
+        fetchSteadfastBalance();
+      } else {
+        alert(data.message || data.error || 'Failed to sync all orders.');
+      }
+    } catch (err: any) {
+      alert(`Bulk sync error: ${err.message}`);
+    } finally {
+      setBulkSyncing(false);
+    }
+  };
+
   // Filter orders
   const filteredOrders = orders.filter((order) => {
     const matchesFilter =
@@ -526,7 +623,22 @@ export default function PackingDashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-2">
+            {steadfastBalance !== null && (
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-900 text-white text-xs font-bold shadow-xs">
+                <span>Steadfast:</span>
+                <span className="text-emerald-300 font-mono">৳{steadfastBalance.toLocaleString()}</span>
+                <button
+                  type="button"
+                  onClick={fetchSteadfastBalance}
+                  disabled={loadingBalance}
+                  className="ml-1 text-emerald-400 hover:text-emerald-200 transition-colors cursor-pointer"
+                  title="Refresh Steadfast Balance"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingBalance ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            )}
             <button
               onClick={() => setIsWebhookModalOpen(true)}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-900 text-amber-50 hover:bg-amber-950 text-xs font-semibold shadow-xs transition-all cursor-pointer"
@@ -635,16 +747,66 @@ export default function PackingDashboard() {
           </div>
 
           <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap gap-2">
+            {activeFilter === 'ready_to_ship' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const readyOrders = filteredOrders.filter((o) => o.status === 'ready_to_ship');
+                    if (selectedOrderIds.length === readyOrders.length && readyOrders.length > 0) {
+                      setSelectedOrderIds([]);
+                    } else {
+                      setSelectedOrderIds(readyOrders.map((o) => o.id));
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center space-x-1.5 transition-all cursor-pointer"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
+                  <span>
+                    {selectedOrderIds.length > 0 && selectedOrderIds.length === filteredOrders.filter((o) => o.status === 'ready_to_ship').length
+                      ? 'Deselect All'
+                      : `Select All Ready (${filteredOrders.filter((o) => o.status === 'ready_to_ship').length})`}
+                  </span>
+                </button>
+
+                {selectedOrderIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBulkDispatch}
+                    disabled={bulkDispatching}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Send className={`w-3.5 h-3.5 ${bulkDispatching ? 'animate-spin' : ''}`} />
+                    <span>{bulkDispatching ? 'Dispatching...' : `Bulk Dispatch (${selectedOrderIds.length}) to Steadfast 🚀`}</span>
+                  </button>
+                )}
+              </>
+            )}
+
             {activeFilter === 'on_the_way' && (
-              <button
-                onClick={handleSyncAllMissingCid}
-                disabled={syncingAll}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
-                title="Fetch consignment IDs from Steadfast for all orders currently in With Courier"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncingAll ? 'animate-spin' : ''}`} />
-                <span>{syncingAll ? 'Fetching all CIDs...' : 'Fetch All Missing CIDs'}</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkSyncAll}
+                  disabled={bulkSyncing}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                  title="Sync live delivery status for all orders currently in With Courier"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${bulkSyncing ? 'animate-spin' : ''}`} />
+                  <span>{bulkSyncing ? 'Syncing with Steadfast...' : 'Sync All Dispatched'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncAllMissingCid}
+                  disabled={syncingAll}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
+                  title="Fetch consignment IDs from Steadfast for all orders currently in With Courier"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingAll ? 'animate-spin' : ''}`} />
+                  <span>{syncingAll ? 'Fetching CIDs...' : 'Fetch Missing CIDs'}</span>
+                </button>
+              </>
             )}
 
             <button
@@ -683,11 +845,35 @@ export default function PackingDashboard() {
               return (
                 <div
                   key={order.id}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs hover:shadow-md transition-shadow"
+                  className={`bg-white rounded-2xl border ${
+                    selectedOrderIds.includes(order.id)
+                      ? 'border-blue-500 ring-2 ring-blue-100'
+                      : 'border-slate-200'
+                  } p-5 sm:p-6 shadow-xs hover:shadow-md transition-all`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                       <div className="flex items-center space-x-3">
+                        {activeFilter === 'ready_to_ship' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrderIds((prev) =>
+                                prev.includes(order.id)
+                                  ? prev.filter((id) => id !== order.id)
+                                  : [...prev, order.id]
+                              );
+                            }}
+                            className="text-slate-400 hover:text-blue-600 focus:outline-none cursor-pointer"
+                            title="Select order for bulk dispatch"
+                          >
+                            {selectedOrderIds.includes(order.id) ? (
+                              <CheckSquare className="w-5 h-5 text-blue-600" />
+                            ) : (
+                              <Square className="w-5 h-5 text-slate-300 hover:text-slate-400" />
+                            )}
+                          </button>
+                        )}
                         <span className="text-lg font-black text-slate-900">
                           {order.order_number}
                         </span>
@@ -737,17 +923,31 @@ export default function PackingDashboard() {
                                 </button>
                               </span>
 
-                              {tracking && tracking !== cid && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px]">
-                                  Tracking: {tracking}
+                              {tracking && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px]">
+                                  <span>Tracking: {tracking}</span>
+                                  <a
+                                    href={getSteadfastTrackingUrl(tracking) || `https://steadfast.com.bd/t/${tracking}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="ml-1 text-indigo-600 hover:text-indigo-800 font-bold font-sans inline-flex items-center gap-0.5 cursor-pointer"
+                                    title="Track live on Steadfast Courier portal"
+                                  >
+                                    <span>Track</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
                                 </span>
                               )}
 
-                              {order.courier_status && (
-                                <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
-                                  {order.courier_status.replace(/_/g, ' ')}
-                                </span>
-                              )}
+                              {order.courier_status && (() => {
+                                const parsedStatus = parseSteadfastStatus(order.courier_status);
+                                return (
+                                  <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${parsedStatus.badgeClass}`}>
+                                    {parsedStatus.label}
+                                  </span>
+                                );
+                              })()}
 
                               {order.tracking_message && (
                                 <span className="text-slate-500 text-[11px] italic truncate max-w-sm">
@@ -1292,6 +1492,12 @@ export default function PackingDashboard() {
                 <div className="text-right">
                   <h2 className="text-xl font-bold font-mono">{selectedOrderForSlip.order_number}</h2>
                   <p className="text-xs text-slate-500">{formatDate(selectedOrderForSlip.created_at)}</p>
+                  {selectedOrderForSlip.consignment_id && (
+                    <div className="mt-1 text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded inline-block">
+                      Steadfast CID: #{selectedOrderForSlip.consignment_id}
+                      {selectedOrderForSlip.tracking_code && ` · Trk: ${selectedOrderForSlip.tracking_code}`}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1301,6 +1507,9 @@ export default function PackingDashboard() {
                   <div className="font-bold uppercase text-slate-500 mb-1">Customer Details</div>
                   <div className="font-bold text-sm text-slate-900">{selectedOrderForSlip.customer_name}</div>
                   <div className="font-mono mt-0.5">{selectedOrderForSlip.customer_phone}</div>
+                  {selectedOrderForSlip.customer_email && (
+                    <div className="text-[11px] text-slate-500 mt-0.5">{selectedOrderForSlip.customer_email}</div>
+                  )}
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded border border-slate-200">
@@ -1308,6 +1517,11 @@ export default function PackingDashboard() {
                   <div className="text-slate-800 leading-relaxed font-medium">
                     {selectedOrderForSlip.shipping_address}
                   </div>
+                  {selectedOrderForSlip.note && (
+                    <div className="mt-2 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 p-1.5 rounded font-medium">
+                      Note: {selectedOrderForSlip.note}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -139,19 +139,20 @@ export async function POST(req: NextRequest) {
           targetOrderStatus = 'shipped';
           paymentStatus = 'paid';
         }
-      } else if (
-        normalizedStatus === 'cancelled' ||
-        normalizedStatus === 'cancelled_approval_pending'
-      ) {
+      } else if (normalizedStatus === 'cancelled') {
+        // Only final confirmed cancellation transitions the order to canceled
         if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
           targetOrderStatus = 'canceled';
         }
       } else if (
         normalizedStatus === 'pending' ||
         normalizedStatus === 'in_review' ||
-        normalizedStatus === 'hold'
+        normalizedStatus === 'hold' ||
+        normalizedStatus === 'cancelled_approval_pending' ||
+        normalizedStatus === 'delivered_approval_pending' ||
+        normalizedStatus === 'partial_delivered_approval_pending'
       ) {
-        // Only packed orders waiting for courier pickup advance to 'on_the_way'
+        // Orders in transit or approval-pending stay safely in 'on_the_way'
         if (order.status === 'ready_to_ship') {
           targetOrderStatus = 'on_the_way';
         }
