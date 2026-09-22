@@ -144,7 +144,12 @@ export default function UniversalProfilePage() {
         setProfile(userProfile);
         setFullName(userProfile.full_name || '');
         setPhone(userProfile.phone || '');
-        setBio(userProfile.bio || '');
+        const rawBio = userProfile.bio || '';
+        const isCorrupted = rawBio.includes('BAILEYS_SESSION');
+        setBio(isCorrupted ? '' : rawBio);
+        if (isCorrupted) {
+          supabase.from('profiles').update({ bio: null }).eq('id', user.id).then();
+        }
         setAvatarUrl(userProfile.avatar_url || '');
         setCouponCode(userProfile.coupon_code || '');
 
@@ -376,8 +381,8 @@ export default function UniversalProfilePage() {
                 </div>
               )}
 
-              {bio && (
-                <p className="text-xs text-slate-600 italic bg-slate-50 rounded-xl p-3 mt-4 border border-slate-100 text-left">
+              {bio && !bio.includes('BAILEYS_SESSION') && (
+                <p className="text-xs text-slate-600 italic bg-slate-50 rounded-xl p-3 mt-4 border border-slate-100 text-left break-words overflow-hidden">
                   &ldquo;{bio}&rdquo;
                 </p>
               )}
