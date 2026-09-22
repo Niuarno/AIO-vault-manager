@@ -30,7 +30,14 @@ import {
   Radio,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile, Product, ProductVariant } from '@/types/database';
-import { formatCurrency, formatDate, getStatusBadgeInfo } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  getStatusBadgeInfo,
+  getOrderDiscount,
+  getOrderAdvance,
+  getOrderDeliveryCharge,
+} from '@/lib/utils';
 import SteadfastWebhookModal from '@/components/SteadfastWebhookModal';
 
 export default function PackingDashboard() {
@@ -903,12 +910,48 @@ export default function PackingDashboard() {
 
                   {/* Actions & Next Step Progressions */}
                   <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="text-xs text-slate-600">
-                      <span className="font-semibold">Payment:</span> {order.payment_method} |{' '}
-                      <span className="font-bold text-slate-900">
-                        Collect: {formatCurrency(order.total_amount)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const advance = getOrderAdvance(order);
+                      const discount = getOrderDiscount(order);
+                      const remainingCod = Math.max(0, Number(order.total_amount || 0) - advance);
+                      const isFullyPrepaid = (advance >= order.total_amount && order.total_amount > 0) || remainingCod === 0;
+
+                      return (
+                        <div className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
+                          <span>
+                            <span className="font-semibold">Payment:</span> {order.payment_method}
+                          </span>
+                          <span className="text-slate-300">&middot;</span>
+                          <span>
+                            Total: <b className="text-slate-900 font-mono">{formatCurrency(order.total_amount)}</b>
+                          </span>
+
+                          {discount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                              Disc: -৳{discount.toLocaleString()}
+                            </span>
+                          )}
+
+                          {advance > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                              Adv: ৳{advance.toLocaleString()}
+                            </span>
+                          )}
+
+                          <span className="text-slate-300">&middot;</span>
+                          <span
+                            className={`font-black px-2.5 py-1 rounded-lg text-xs font-mono inline-flex items-center gap-1 shadow-2xs ${
+                              isFullyPrepaid
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                : 'bg-amber-100 text-amber-950 border border-amber-300'
+                            }`}
+                          >
+                            <span>Collect (COD):</span>
+                            <span className="text-sm">{isFullyPrepaid ? '৳0 (Prepaid)' : formatCurrency(remainingCod)}</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex items-center space-x-2">
                       {order.status === 'confirmed' && (
@@ -1332,23 +1375,58 @@ export default function PackingDashboard() {
               })()}
 
               {/* Summary */}
-              <div className="flex justify-between items-end border-t border-slate-300 pt-4 text-xs">
-                <div>
-                  <div className="text-slate-500 font-semibold">Payment Method:</div>
-                  <div className="font-bold text-sm text-slate-900">{selectedOrderForSlip.payment_method}</div>
-                  {selectedOrderForSlip.coupon_used && (
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      Coupon: {selectedOrderForSlip.coupon_used}
+              {(() => {
+                const advance = getOrderAdvance(selectedOrderForSlip);
+                const discount = getOrderDiscount(selectedOrderForSlip);
+                const remainingCod = Math.max(0, Number(selectedOrderForSlip.total_amount || 0) - advance);
+                const isFullyPrepaid = (advance >= selectedOrderForSlip.total_amount && selectedOrderForSlip.total_amount > 0) || remainingCod === 0;
+
+                return (
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-t border-slate-300 pt-4 text-xs gap-4">
+                    <div>
+                      <div className="text-slate-500 font-semibold">Payment Method:</div>
+                      <div className="font-bold text-sm text-slate-900">{selectedOrderForSlip.payment_method}</div>
+                      {selectedOrderForSlip.coupon_used && (
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          Coupon: {selectedOrderForSlip.coupon_used}
+                        </div>
+                      )}
+                      {advance > 0 && (
+                        <div className="mt-1.5 inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+                          Paid in Advance: {formatCurrency(advance)}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className="text-slate-500 uppercase font-semibold">Total Amount To Collect</div>
-                  <div className="text-xl font-black text-slate-900">
-                    {formatCurrency(selectedOrderForSlip.total_amount)}
+
+                    <div className="w-full sm:w-auto text-right space-y-1 min-w-[240px]">
+                      <div className="flex justify-between text-slate-600 gap-4">
+                        <span>Order Total:</span>
+                        <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedOrderForSlip.total_amount)}</span>
+                      </div>
+                      {discount > 0 && (
+                        <div className="flex justify-between text-rose-600 gap-4">
+                          <span>Discount Applied:</span>
+                          <span className="font-mono font-bold">-{formatCurrency(discount)}</span>
+                        </div>
+                      )}
+                      {advance > 0 && (
+                        <div className="flex justify-between text-emerald-700 gap-4 font-semibold">
+                          <span>Advance Received:</span>
+                          <span className="font-mono font-bold">-{formatCurrency(advance)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-slate-300 pt-1.5 flex justify-between items-baseline gap-4">
+                        <span className="text-slate-900 uppercase font-bold text-xs">
+                          {isFullyPrepaid ? 'Status:' : 'Total COD To Collect:'}
+                        </span>
+                        <span className={`text-xl font-black font-mono ${isFullyPrepaid ? 'text-emerald-700' : 'text-slate-900'}`}>
+                          {isFullyPrepaid ? 'PAID (৳0)' : formatCurrency(remainingCod)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Footer Notice */}
               <div className="mt-8 pt-4 border-t border-dashed border-slate-300 text-[10px] text-slate-400 text-center">

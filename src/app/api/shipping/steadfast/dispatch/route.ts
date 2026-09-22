@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createSteadfastConsignment } from '@/lib/steadfast';
+import { getOrderAdvance } from '@/lib/utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,13 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Dispatch to Steadfast API (Deduct advance payment if customer made pre-payment)
-    let advanceDeduction = Number(order.advance_payment || 0);
-    if (advanceDeduction === 0 && order.note) {
-      const advMatch = order.note.match(/Advance Paid:\s*৳?([0-9,]+)/i);
-      if (advMatch) {
-        advanceDeduction = parseFloat(advMatch[1].replace(/,/g, '')) || 0;
-      }
-    }
+    const advanceDeduction = getOrderAdvance(order);
 
     const codAmount =
       order.payment_status === 'paid'

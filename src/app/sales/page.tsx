@@ -1314,45 +1314,63 @@ export default function SalesDashboard() {
                             </td>
 
                             <td className="p-4">
-                              <div className="font-semibold text-slate-900 font-mono">
-                                {formatCurrency(order.total_amount)}
-                              </div>
-                              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                <span>{order.order_items?.length || 0} items</span>
-                                {hasUpsell && (
-                                  <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
-                                    Upsell
-                                  </span>
-                                )}
-                                {hasReachout && (
-                                  <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
-                                    Reachout
-                                  </span>
-                                )}
-                                {(() => {
-                                  const disc = getOrderDiscount(order);
-                                  return disc > 0 ? (
-                                    <span
-                                      className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
-                                      title={`Discount applied: -৳${disc.toLocaleString()}`}
-                                    >
-                                      Disc: -৳{disc.toLocaleString()}
-                                    </span>
-                                  ) : null;
-                                })()}
-                                {(() => {
-                                  const adv = getOrderAdvance(order);
-                                  const cod = Math.max(0, order.total_amount - adv);
-                                  return adv > 0 ? (
-                                    <span
-                                      className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
-                                      title={`Advance: ৳${adv.toLocaleString()} | Remaining COD: ৳${cod.toLocaleString()}`}
-                                    >
-                                      Adv: ৳{adv.toLocaleString()} | COD: ৳{cod.toLocaleString()}
-                                    </span>
-                                  ) : null;
-                                })()}
-                              </div>
+                              {(() => {
+                                const disc = getOrderDiscount(order);
+                                const adv = getOrderAdvance(order);
+                                const cod = Math.max(0, order.total_amount - adv);
+
+                                return (
+                                  <>
+                                    <div className="flex flex-col">
+                                      {adv > 0 ? (
+                                        <div className="space-y-0.5">
+                                          <div className="flex items-center gap-1.5 font-mono">
+                                            <span className="font-bold text-slate-900 text-sm">
+                                              COD: {formatCurrency(cod)}
+                                            </span>
+                                          </div>
+                                          <div className="text-[11px] text-slate-400 font-mono">
+                                            Total: {formatCurrency(order.total_amount)}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="font-semibold text-slate-900 font-mono">
+                                          {formatCurrency(order.total_amount)}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                      <span>{order.order_items?.length || 0} items</span>
+                                      {hasUpsell && (
+                                        <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
+                                          Upsell
+                                        </span>
+                                      )}
+                                      {hasReachout && (
+                                        <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                          Reachout
+                                        </span>
+                                      )}
+                                      {disc > 0 && (
+                                        <span
+                                          className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
+                                          title={`Discount applied: -৳${disc.toLocaleString()}`}
+                                        >
+                                          Disc: -৳{disc.toLocaleString()}
+                                        </span>
+                                      )}
+                                      {adv > 0 && (
+                                        <span
+                                          className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
+                                          title={`Advance paid: ৳${adv.toLocaleString()}`}
+                                        >
+                                          Adv: ৳{adv.toLocaleString()}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </td>
 
                             <td className="p-4">
