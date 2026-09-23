@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { ShieldCheck, TrendingUp, Truck, ArrowRight, Lock, Mail, User } from 'lucide-react';
+import { TrendingUp, Truck, ArrowRight, Lock, Mail, User } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'admin' | 'sales' | 'packing'>('sales');
+  const [role, setRole] = useState<'sales' | 'packing'>('sales');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export default function LoginPage() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                     Select Your Role
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setRole('sales')}
@@ -181,18 +181,6 @@ export default function LoginPage() {
                     >
                       <Truck className="w-4 h-4 mx-auto mb-1 text-amber-600" />
                       <span className="text-xs">Packing</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('admin')}
-                      className={`p-2.5 rounded-xl border text-center transition-all ${
-                        role === 'admin'
-                          ? 'border-purple-500 bg-purple-50/80 text-purple-900 font-bold'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4 mx-auto mb-1 text-purple-600" />
-                      <span className="text-xs">Admin</span>
                     </button>
                   </div>
                 </div>

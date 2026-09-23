@@ -19,6 +19,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Disallow admin signup through public registration
+    if (role === 'admin') {
+      return NextResponse.json(
+        { error: 'Admin registration is disabled. Please contact an administrator.' },
+        { status: 403 }
+      );
+    }
+
+    const assignedRole = role === 'packing' ? 'packing' : 'sales';
+
     const supabaseAdmin = createAdminClient();
 
     // Create user using Supabase Admin API with email_confirm: true
@@ -29,7 +39,7 @@ export async function POST(req: NextRequest) {
       email_confirm: true,
       user_metadata: {
         full_name: fullName?.trim() || '',
-        role: role || 'sales',
+        role: assignedRole,
       },
     });
 
@@ -44,7 +54,7 @@ export async function POST(req: NextRequest) {
           id: data.user.id,
           email: data.user.email!,
           full_name: fullName?.trim() || '',
-          role: role || 'sales',
+          role: assignedRole,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' }
