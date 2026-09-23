@@ -61,6 +61,13 @@ export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
     const body = await req.json();
 
+    const cleanNum = (val: any) => {
+      if (val === undefined || val === null || val === '') return 0;
+      const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+      const parsed = parseFloat(cleaned);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
     // Mode A: Bulk CSV import: { items: [...] }
     if (Array.isArray(body.items)) {
       const items = body.items;
@@ -71,18 +78,18 @@ export async function POST(req: NextRequest) {
       let insertedCount = 0;
 
       for (const row of items) {
-        const title = row.title || row.Title || row.name || 'Untitled Product';
-        const sku = row.sku || row.SKU || null;
-        const price = parseFloat(row.price || row.Price || '0') || 0;
-        const costPrice = parseFloat(row.cost_price || row.cost || '0') || 0;
-        const stock = parseInt(row.stock_quantity || row.stock || row.quantity || '0', 10) || 0;
-        const imageUrl = row.image_url || row.image || null;
-        const description = row.description || null;
+        const title = (row.title || row.Title || row.name || row.product_name || 'Untitled Product').trim();
+        const sku = (row.sku || row.SKU || '').trim() || null;
+        const price = cleanNum(row.price || row.Price || row.variant_price);
+        const costPrice = cleanNum(row.cost_price || row.cost || row.Cost);
+        const stock = parseInt(String(row.stock_quantity || row.stock || row.quantity || '0').replace(/,/g, '').trim(), 10) || 0;
+        const imageUrl = (row.image_url || row.image || row.image_src || '').trim() || null;
+        const description = (row.description || row.Description || row.body_html || '').trim() || null;
 
         // Check if product with same title exists
         let { data: existingProd } = await supabase
           .from('products')
-          .select('id')
+          .select('id, is_active')
           .eq('title', title)
           .maybeSingle();
 
@@ -103,18 +110,68 @@ export async function POST(req: NextRequest) {
           if (!pErr && newProd) {
             prodId = newProd.id;
           }
+        } else {
+          // If existing product, update image/description if provided
+          const prodUpdates: Record<string, any> = {};
+          if (imageUrl) prodUpdates.image_url = imageUrl;
+          if (description) prodUpdates.description = description;
+          if (stock > 0 && !existingProd?.is_active) {
+            prodUpdates.is_active = true;
+          }
+          if (Object.keys(prodUpdates).length > 0) {
+            await supabase.from('products').update(prodUpdates).eq('id', prodId);
+          }
         }
 
         if (prodId) {
-          // Insert or update variant
-          await supabase.from('product_variants').insert({
-            product_id: prodId,
-            title: row.variant_title || 'Default Title',
-            sku,
-            price,
-            cost_price: costPrice,
-            stock_quantity: stock,
-          });
+          const variantTitle = (row.variant_title || 'Default Title').trim();
+
+          // Check if variant exists for this product
+          const { data: variants } = await supabase
+            .from('product_variants')
+            .select('id, title, price, cost_price, sku')
+            .eq('product_id', prodId);
+
+          let targetVariant = null;
+          if (variants && variants.length > 0) {
+            targetVariant = variants.find((v: any) => v.title === variantTitle) || variants[0];
+          }
+
+          if (targetVariant) {
+            const variantUpdate: Record<string, any> = {
+              stock_quantity: stock,
+            };
+            if (sku) variantUpdate.sku = sku;
+            if (price > 0) variantUpdate.price = price;
+            if (costPrice > 0) variantUpdate.cost_price = costPrice;
+
+            await supabase
+              .from('product_variants')
+              .update(variantUpdate)
+              .eq('id', targetVariant.id);
+          } else {
+            await supabase.from('product_variants').insert({
+              product_id: prodId,
+              title: variantTitle,
+              sku,
+              price,
+              cost_price: costPrice,
+              stock_quantity: stock,
+            });
+          }
+
+          // If stock <= 0, verify if all variants have 0 stock to update is_active
+          if (stock <= 0) {
+            const { data: allVariants } = await supabase
+              .from('product_variants')
+              .select('stock_quantity')
+              .eq('product_id', prodId);
+            const totalStock = (allVariants || []).reduce((acc: number, v: any) => acc + (v.stock_quantity || 0), 0);
+            if (totalStock <= 0) {
+              await supabase.from('products').update({ is_active: false }).eq('id', prodId);
+            }
+          }
+
           insertedCount++;
         }
       }
@@ -132,14 +189,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Product title is required' }, { status: 400 });
     }
 
-    const stockQtyNum = parseInt(stock_quantity || '0', 10) || 0;
+    const stockQtyNum = parseInt(String(stock_quantity || '0').replace(/,/g, '').trim(), 10) || 0;
+    const priceNum = cleanNum(price);
+    const costPriceNum = cleanNum(cost_price);
 
     const { data: product, error: prodErr } = await supabase
       .from('products')
       .insert({
-        title,
-        description: description || null,
-        image_url: image_url || null,
+        title: title.trim(),
+        description: description ? description.trim() : null,
+        image_url: image_url ? image_url.trim() : null,
         is_active: stockQtyNum > 0,
       })
       .select()
@@ -151,10 +210,10 @@ export async function POST(req: NextRequest) {
       .from('product_variants')
       .insert({
         product_id: product.id,
-        title: variant_title || 'Default Title',
-        sku: sku || null,
-        price: parseFloat(price || '0') || 0,
-        cost_price: parseFloat(cost_price || '0') || 0,
+        title: (variant_title || 'Default Title').trim(),
+        sku: sku ? sku.trim() : null,
+        price: priceNum,
+        cost_price: costPriceNum,
         stock_quantity: stockQtyNum,
       })
       .select()

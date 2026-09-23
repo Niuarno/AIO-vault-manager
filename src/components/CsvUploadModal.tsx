@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useRef } from 'react';
 import { Upload, FileSpreadsheet, Download, CheckCircle2, AlertCircle, X } from 'lucide-react';
@@ -40,31 +40,116 @@ export default function CsvUploadModal({
     document.body.removeChild(link);
   };
 
+  function parseCsvRows(text: string): string[][] {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentField = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          currentField += '"';
+          i += 2;
+          continue;
+        } else if (char === '"') {
+          inQuotes = false;
+          i++;
+          continue;
+        } else {
+          currentField += char;
+          i++;
+          continue;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+          continue;
+        } else if (char === ',') {
+          currentRow.push(currentField.trim());
+          currentField = '';
+          i++;
+          continue;
+        } else if (char === '\r') {
+          if (nextChar === '\n') {
+            i++;
+          }
+          currentRow.push(currentField.trim());
+          currentField = '';
+          if (currentRow.some((f) => f.length > 0)) {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          i++;
+          continue;
+        } else if (char === '\n') {
+          currentRow.push(currentField.trim());
+          currentField = '';
+          if (currentRow.some((f) => f.length > 0)) {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          i++;
+          continue;
+        } else {
+          currentField += char;
+          i++;
+          continue;
+        }
+      }
+    }
+
+    if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField.trim());
+      if (currentRow.some((f) => f.length > 0)) {
+        rows.push(currentRow);
+      }
+    }
+
+    return rows;
+  }
+
   const parseCSV = (text: string) => {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length < 2) {
+    const rawRows = parseCsvRows(text);
+    if (rawRows.length < 2) {
       throw new Error('CSV file must have at least a header line and one data row.');
     }
 
-    // Parse header
-    const headers = lines[0].split(',').map((h) => h.replace(/^["']|["']$/g, '').trim());
+    // Parse header and normalize to lowercase
+    const headers = rawRows[0].map((h) => h.replace(/^["']|["']$/g, '').trim().toLowerCase());
 
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      // Regex to parse comma-separated fields with quoted string support
-      const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
-      if (!matches || matches.length === 0) continue;
+    const cleanNum = (str: string | undefined) => (str || '').replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
 
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < rawRows.length; i++) {
+      const colValues = rawRows[i];
       const rowObj: Record<string, string> = {};
       headers.forEach((h, colIdx) => {
-        const rawVal = matches[colIdx] || '';
+        const rawVal = colValues[colIdx] || '';
         rowObj[h] = rawVal.replace(/^["']|["']$/g, '').trim();
       });
 
-      if (rowObj.title || rowObj.Title || rowObj.name) {
-        rows.push(rowObj);
-      }
+      const title = rowObj['title'] || rowObj['name'] || rowObj['product_name'] || rowObj['item_name'] || '';
+      if (!title) continue;
+
+      const price = cleanNum(rowObj['price'] || rowObj['variant_price'] || rowObj['sale_price']);
+      const costPrice = cleanNum(rowObj['cost_price'] || rowObj['cost']);
+      const stock = cleanNum(rowObj['stock_quantity'] || rowObj['stock'] || rowObj['quantity'] || rowObj['inventory']);
+
+      const normalized: Record<string, string> = {
+        ...rowObj,
+        title,
+        price,
+        cost_price: costPrice,
+        stock_quantity: stock,
+      };
+
+      rows.push(normalized);
     }
     return rows;
   };
@@ -211,15 +296,15 @@ export default function CsvUploadModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedRows.slice(0, 5).map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="p-2.5 font-bold text-slate-900 truncate max-w-[180px]">
-                          {row.title || row.Title || row.name}
+                        <td className="p-2.5 font-bold text-slate-900 truncate max-w-[220px]">
+                          {row.title}
                         </td>
-                        <td className="p-2.5 font-mono text-slate-500">{row.sku || row.SKU || 'N/A'}</td>
+                        <td className="p-2.5 font-mono text-slate-500">{row.sku || 'N/A'}</td>
                         <td className="p-2.5 font-mono font-bold text-slate-700">
-                          {formatCurrency(Number(row.price || row.Price || 0))}
+                          {formatCurrency(Number(row.price || 0))}
                         </td>
                         <td className="p-2.5 font-mono text-slate-600 font-bold">
-                          {row.stock_quantity || row.stock || row.quantity || 0}
+                          {row.stock_quantity || 0}
                         </td>
                       </tr>
                     ))}
