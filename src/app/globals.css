@@ -12,21 +12,6 @@ body {
   background: rgb(var(--background-rgb));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Safe Area Insets for Modern Edge-to-Edge Mobile Displays */
-.pb-safe {
-  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 1.25rem));
-}
-
-.pt-safe {
-  padding-top: max(0.75rem, env(safe-area-inset-top, 0.75rem));
-}
-
-/* Touch manipulation prevents double-tap zoom delay on mobile action buttons */
-button, a, input, select, textarea {
-  touch-action: manipulation;
 }
 
 /* Custom scrollbars */
