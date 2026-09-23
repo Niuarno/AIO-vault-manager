@@ -224,6 +224,11 @@ export default function EditOrderItemsModal({
     const variant = catalogVariants.find((v) => v.id === selectedVariantId);
     if (!variant) return;
 
+    if (variant.product?.is_active === false) {
+      alert(`"${variant.product.title || variant.title}" is currently disabled and cannot be added to orders.`);
+      return;
+    }
+
     const effectiveIsUpsell = isWebsite ? newItemIsUpsell : false;
     const effectiveIsReachout = !isWebsite && (newItemIsReachout || hasReachoutOrder);
     const existingIndex = items.findIndex(

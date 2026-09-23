@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     // 1. Fetch current variant stock
     const { data: variant, error: fetchErr } = await supabase
       .from('product_variants')
-      .select('id, stock_quantity, title')
+      .select('id, product_id, stock_quantity, title')
       .eq('id', variant_id)
       .single();
 
@@ -47,12 +47,33 @@ export async function POST(req: NextRequest) {
       adjusted_by: adjusted_by || null,
     });
 
+    // 4. Auto-disable product if cumulative stock of all variants is 0 or below
+    let isProductDisabled = false;
+    if (variant.product_id) {
+      const { data: siblings } = await supabase
+        .from('product_variants')
+        .select('stock_quantity')
+        .eq('product_id', variant.product_id);
+
+      const totalStock = (siblings || []).reduce((acc, s) => acc + (s.stock_quantity || 0), 0);
+      if (totalStock <= 0) {
+        await supabase
+          .from('products')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', variant.product_id);
+        isProductDisabled = true;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       variant_id,
       previous_stock: prevStock,
       new_stock: newStock,
-      message: `Stock for ${variant.title} updated from ${prevStock} to ${newStock}`,
+      product_disabled: isProductDisabled,
+      message: `Stock for ${variant.title} updated from ${prevStock} to ${newStock}${
+        isProductDisabled ? ' (Product auto-disabled due to 0 stock)' : ''
+      }`,
     });
   } catch (err: any) {
     console.error('Inventory adjustment error:', err);

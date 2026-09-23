@@ -26,8 +26,6 @@ import {
   Eye,
   ShieldCheck,
   Check,
-  Archive,
-  ArchiveRestore,
   Image as ImageIcon,
   User,
   X,
@@ -91,10 +89,15 @@ export default function AdminDashboard() {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
   const [editingCostVal, setEditingCostVal] = useState<string>('');
   const [savingCostId, setSavingCostId] = useState<string | null>(null);
+  const [editingSellingId, setEditingSellingId] = useState<string | null>(null);
+  const [editingSellingVal, setEditingSellingVal] = useState<string>('');
+  const [savingSellingId, setSavingSellingId] = useState<string | null>(null);
+  const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   // Sales Team & Performance State
   const [salesTeam, setSalesTeam] = useState<Profile[]>([]);
@@ -430,9 +433,22 @@ export default function AdminDashboard() {
       const json = await res.json();
       if (json.success) {
         setVariants((prev) =>
-          prev.map((v) =>
-            v.id === variantId ? { ...v, stock_quantity: json.new_stock } : v
-          )
+          prev.map((v) => {
+            if (v.id === variantId) {
+              const updatedV = { ...v, stock_quantity: json.new_stock };
+              if (json.product_disabled) {
+                return {
+                  ...updatedV,
+                  product: {
+                    ...(v.product as any),
+                    is_active: false,
+                  },
+                };
+              }
+              return updatedV;
+            }
+            return v;
+          })
         );
       } else {
         alert(json.error || 'Failed to adjust stock');
@@ -444,25 +460,70 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle Archive Status for Product
-  const handleToggleArchiveProduct = async (productId: string, currentArchived: boolean) => {
+  // Toggle Product Status (Enable / Disable)
+  const handleToggleProductStatus = async (productId: string, newActiveStatus: boolean) => {
+    setTogglingProductId(productId);
     try {
       const res = await fetch('/api/products', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: productId,
-          is_archived: !currentArchived,
+          is_active: newActiveStatus,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        fetchInventory();
+        setVariants((prev) =>
+          prev.map((v) => {
+            const pId = v.product_id || (v.product as any)?.id;
+            if (pId === productId) {
+              return {
+                ...v,
+                product: {
+                  ...(v.product as any),
+                  is_active: newActiveStatus,
+                },
+              };
+            }
+            return v;
+          })
+        );
       } else {
-        alert(json.error || 'Failed to update product');
+        alert(json.error || 'Failed to update product status');
       }
     } catch (e: any) {
-      alert(e.message);
+      alert(e.message || 'Failed to update product status');
+    } finally {
+      setTogglingProductId(null);
+    }
+  };
+
+  // Permanently Delete Product
+  const handleDeleteProduct = async (productId: string, productTitle: string) => {
+    const confirmMsg = `Are you sure you want to permanently delete "${productTitle}"?\n\nThis will permanently delete this product and all its variants. This action cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeletingProductId(productId);
+    try {
+      const res = await fetch(`/api/products?id=${productId}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (json.success) {
+        setVariants((prev) =>
+          prev.filter((v) => {
+            const pId = v.product_id || (v.product as any)?.id;
+            return pId !== productId;
+          })
+        );
+      } else {
+        alert(json.error || 'Failed to delete product');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error deleting product');
+    } finally {
+      setDeletingProductId(null);
     }
   };
 
@@ -501,6 +562,44 @@ export default function AdminDashboard() {
       alert(err.message || 'Error updating buying price');
     } finally {
       setSavingCostId(null);
+    }
+  };
+
+  // Save / Update Selling Price for Variant
+  const handleSaveSellingPrice = async (variantId: string) => {
+    const priceNum = parseFloat(editingSellingVal);
+    if (isNaN(priceNum) || priceNum < 0) {
+      alert('Please enter a valid non-negative selling price.');
+      return;
+    }
+
+    setSavingSellingId(variantId);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant_id: variantId,
+          price: priceNum,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.variant) {
+        setVariants((prev) =>
+          prev.map((v) =>
+            v.id === variantId ? { ...v, price: json.variant.price } : v
+          )
+        );
+        setEditingSellingId(null);
+        setEditingSellingVal('');
+      } else {
+        alert(json.error || 'Failed to update selling price');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating selling price');
+    } finally {
+      setSavingSellingId(null);
     }
   };
 
@@ -916,8 +1015,10 @@ export default function AdminDashboard() {
   const filteredVariants = useMemo(() => {
     return variants.filter((v) => {
       const product = v.product as any;
-      const isArchived = product?.is_archived ?? false;
-      if (!showArchived && isArchived) return false;
+      const isProductDisabled = product?.is_active === false;
+
+      if (inventoryStatusFilter === 'active' && isProductDisabled) return false;
+      if (inventoryStatusFilter === 'disabled' && !isProductDisabled) return false;
 
       const q = inventorySearch.toLowerCase();
       const matchName = product?.name?.toLowerCase().includes(q) || product?.title?.toLowerCase().includes(q);
@@ -925,7 +1026,7 @@ export default function AdminDashboard() {
       const matchVariant = (v.title?.toLowerCase() || '').includes(q);
       return !q || matchName || matchSku || matchVariant;
     });
-  }, [variants, inventorySearch, showArchived]);
+  }, [variants, inventorySearch, inventoryStatusFilter]);
 
   // Inventory Analytics (Admin-Only Financial Overview)
   const inventoryAnalytics = useMemo(() => {
@@ -1374,15 +1475,15 @@ export default function AdminDashboard() {
                   />
                 </div>
 
-                <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={showArchived}
-                    onChange={(e) => setShowArchived(e.target.checked)}
-                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span>Show Archived</span>
-                </label>
+                <select
+                  value={inventoryStatusFilter}
+                  onChange={(e) => setInventoryStatusFilter(e.target.value as any)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                >
+                  <option value="all">All Products (Active & Disabled)</option>
+                  <option value="active">Active Only</option>
+                  <option value="disabled">Disabled Only</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-2.5">
@@ -1425,7 +1526,7 @@ export default function AdminDashboard() {
                       <th className="p-4">Unit Margin</th>
                       <th className="p-4">Current Stock</th>
                       <th className="p-4 text-center">Quick Stock Adjust</th>
-                      <th className="p-4 text-right">Status</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1444,7 +1545,7 @@ export default function AdminDashboard() {
                     ) : (
                       filteredVariants.map((variant) => {
                         const product = variant.product as any;
-                        const isArchived = product?.is_archived ?? false;
+                        const isProductDisabled = product?.is_active === false;
                         const isLowStock = variant.stock_quantity <= 5;
                         const isAdjusting = adjustingId === variant.id;
 
@@ -1452,12 +1553,17 @@ export default function AdminDashboard() {
                           <tr
                             key={variant.id}
                             className={`hover:bg-slate-50/70 transition-colors ${
-                              isArchived ? 'opacity-60 bg-slate-50/40' : ''
+                              isProductDisabled ? 'opacity-70 bg-slate-50/50' : ''
                             }`}
                           >
                             <td className="p-4">
-                              <div className="font-semibold text-slate-900">
-                                {product?.name || product?.title || 'Product'}
+                              <div className="font-semibold text-slate-900 flex items-center gap-2">
+                                <span>{product?.name || product?.title || 'Product'}</span>
+                                {isProductDisabled && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">
+                                    Disabled
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-slate-500 mt-0.5">
                                 Variant: {variant.title}
@@ -1548,9 +1654,72 @@ export default function AdminDashboard() {
                               )}
                             </td>
 
-                            {/* Selling Price */}
-                            <td className="p-4 font-semibold text-slate-900 font-mono text-xs">
-                              {formatCurrency(variant.price)}
+                            {/* Selling Price - Admin Editable */}
+                            <td className="p-4">
+                              {editingSellingId === variant.id ? (
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">৳</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      autoFocus
+                                      disabled={savingSellingId === variant.id}
+                                      value={editingSellingVal}
+                                      onChange={(e) => setEditingSellingVal(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleSaveSellingPrice(variant.id);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingSellingId(null);
+                                          setEditingSellingVal('');
+                                        }
+                                      }}
+                                      className="w-24 pl-5 pr-2 py-1 text-xs font-mono font-semibold text-slate-900 bg-white border-2 border-brand-500 rounded-lg shadow-xs focus:outline-none"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={savingSellingId === variant.id}
+                                    onClick={() => handleSaveSellingPrice(variant.id)}
+                                    className="w-7 h-7 rounded-lg bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center transition-colors shadow-2xs disabled:opacity-50"
+                                    title="Save selling price"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingSellingId === variant.id}
+                                    onClick={() => {
+                                      setEditingSellingId(null);
+                                      setEditingSellingVal('');
+                                    }}
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="group flex items-center gap-1.5">
+                                  <span className="font-semibold text-slate-900 font-mono text-xs">
+                                    {formatCurrency(variant.price)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSellingId(variant.id);
+                                      setEditingSellingVal(String(variant.price || ''));
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                                    title="Click to edit selling price"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </td>
 
                             {/* Unit Margin / Profit */}
@@ -1625,30 +1794,52 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4 text-right">
-                              {product && (
-                                <button
-                                  onClick={() =>
-                                    handleToggleArchiveProduct(product.id, isArchived)
-                                  }
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                                    isArchived
-                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {isArchived ? (
-                                    <>
-                                      <ArchiveRestore className="w-3.5 h-3.5" />
-                                      <span>Unarchive</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Archive className="w-3.5 h-3.5" />
-                                      <span>Archive</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
+                              <div className="flex items-center justify-end gap-2">
+                                {product && (
+                                  <>
+                                    {/* Toggle Disable / Enable */}
+                                    <button
+                                      type="button"
+                                      disabled={togglingProductId === product.id}
+                                      onClick={() => handleToggleProductStatus(product.id, !isProductDisabled)}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-50 ${
+                                        isProductDisabled
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                          : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                      }`}
+                                      title={isProductDisabled ? 'Click to Enable Product' : 'Click to Disable Product'}
+                                    >
+                                      {isProductDisabled ? (
+                                        <>
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                          <span>Enable</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                                          <span>Disable</span>
+                                        </>
+                                      )}
+                                    </button>
+
+                                    {/* Delete Product Permanently */}
+                                    <button
+                                      type="button"
+                                      disabled={deletingProductId === product.id}
+                                      onClick={() =>
+                                        handleDeleteProduct(
+                                          product.id,
+                                          product.name || product.title || 'Product'
+                                        )
+                                      }
+                                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all disabled:opacity-50"
+                                      title="Permanently Delete Product"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );

@@ -367,6 +367,11 @@ export default function SalesDashboard() {
     const v = variants.find((variant) => variant.id === selectedVariantId);
     if (!v) return;
 
+    if ((v.product as any)?.is_active === false) {
+      alert(`"${(v.product as any)?.name || (v.product as any)?.title || 'This product'}" is disabled and cannot be added to orders.`);
+      return;
+    }
+
     if (itemQuantity > v.stock_quantity) {
       alert(`Only ${v.stock_quantity} units available in live stock.`);
       return;
@@ -1491,8 +1496,13 @@ export default function SalesDashboard() {
                       filteredVariants.map((v) => (
                         <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="p-4">
-                            <div className="font-semibold text-slate-900">
-                              {(v.product as any)?.name || (v.product as any)?.title || 'Product'}
+                            <div className="font-semibold text-slate-900 flex items-center gap-2">
+                              <span>{(v.product as any)?.name || (v.product as any)?.title || 'Product'}</span>
+                              {(v.product as any)?.is_active === false && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
+                                  Disabled
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-slate-500 mt-0.5">
                               Variant: {v.title}

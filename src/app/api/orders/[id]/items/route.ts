@@ -86,6 +86,26 @@ export async function PATCH(
       new Set([...Object.keys(oldVariantQty), ...Object.keys(newVariantQty)])
     );
 
+    // Validate that newly added items are not disabled
+    for (const item of newItems) {
+      if (!item.variant_id) continue;
+      const oldQ = oldVariantQty[item.variant_id] || 0;
+      const newQ = newVariantQty[item.variant_id] || 0;
+      if (newQ > oldQ) {
+        const { data: v } = await supabase
+          .from('product_variants')
+          .select('title, product:products(title, is_active)')
+          .eq('id', item.variant_id)
+          .single();
+        if ((v?.product as any)?.is_active === false) {
+          return NextResponse.json(
+            { error: `Cannot add "${(v?.product as any)?.title || item.title}": this product is currently disabled.` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // 4. Validate and apply inventory deltas
     for (const variantId of allVariantIds) {
       const oldQty = oldVariantQty[variantId] || 0;
@@ -139,6 +159,21 @@ export async function PATCH(
         reason: delta > 0 ? 'order_created' : 'restock',
         order_id: orderId,
       });
+
+      // Auto-disable parent product if total stock depleted to 0 or below
+      if (variant.product_id) {
+        const { data: siblings } = await supabase
+          .from('product_variants')
+          .select('stock_quantity')
+          .eq('product_id', variant.product_id);
+        const totalStock = (siblings || []).reduce((acc, s) => acc + (s.stock_quantity || 0), 0);
+        if (totalStock <= 0) {
+          await supabase
+            .from('products')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('id', variant.product_id);
+        }
+      }
     }
 
     // 5. Replace line items in order_items table

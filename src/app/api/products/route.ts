@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
       .select('*, variants:product_variants(*)')
       .order('title', { ascending: true });
 
-    if (!includeArchived) {
+    // Only filter active products if explicitly requested via active_only=true
+    if (searchParams.get('active_only') === 'true') {
       query = query.eq('is_active', true);
     }
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
               title,
               description,
               image_url: imageUrl,
-              is_active: true,
+              is_active: stock > 0,
             })
             .select('id')
             .single();
@@ -131,13 +132,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Product title is required' }, { status: 400 });
     }
 
+    const stockQtyNum = parseInt(stock_quantity || '0', 10) || 0;
+
     const { data: product, error: prodErr } = await supabase
       .from('products')
       .insert({
         title,
         description: description || null,
         image_url: image_url || null,
-        is_active: true,
+        is_active: stockQtyNum > 0,
       })
       .select()
       .single();
@@ -152,7 +155,7 @@ export async function POST(req: NextRequest) {
         sku: sku || null,
         price: parseFloat(price || '0') || 0,
         cost_price: parseFloat(cost_price || '0') || 0,
-        stock_quantity: parseInt(stock_quantity || '0', 10) || 0,
+        stock_quantity: stockQtyNum,
       })
       .select()
       .single();
@@ -173,7 +176,7 @@ export async function PATCH(req: NextRequest) {
     const supabase = createAdminClient();
     const body = await req.json();
 
-    // Mode 1: Update Variant Buying Price (cost_price) or Selling Price
+    // Mode 1: Update Variant Selling Price or Buying Price (cost_price)
     if (body.variant_id) {
       const { variant_id, cost_price, price } = body;
       const updates: Record<string, any> = {
@@ -184,7 +187,7 @@ export async function PATCH(req: NextRequest) {
         updates.cost_price = parseFloat(cost_price) || 0;
       }
       if (price !== undefined) {
-        updates.price = parseFloat(price) || 0;
+        updates.price = Math.max(0, parseFloat(price) || 0);
       }
 
       const { data, error } = await supabase
@@ -203,7 +206,7 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    // Mode 2: Archive / Unarchive Product
+    // Mode 2: Toggle Product Status (Enable / Disable)
     const { product_id, is_active } = body;
 
     if (!product_id || typeof is_active !== 'boolean') {
@@ -225,9 +228,110 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({
       success: true,
       product: data,
-      message: `Product ${is_active ? 'unarchived' : 'archived'} successfully.`,
+      message: `Product ${is_active ? 'enabled' : 'disabled'} successfully.`,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createAdminClient();
+    const { searchParams } = new URL(req.url);
+    let productId = searchParams.get('id') || searchParams.get('product_id');
+
+    if (!productId) {
+      try {
+        const body = await req.json();
+        productId = body?.product_id || body?.id;
+      } catch {
+        // No json body
+      }
+    }
+
+    if (!productId) {
+      return NextResponse.json(
+        { error: 'Product ID is required for deletion.' },
+        { status: 400 }
+      );
+    }
+
+    // Verify Admin Authorization
+    let isAdmin = false;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        isAdmin = profile?.role === 'admin';
+      }
+    } catch {
+      isAdmin = false;
+    }
+
+    // Check Authorization header fallback
+    if (!isAdmin) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          isAdmin = profile?.role === 'admin';
+        }
+      }
+    }
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Only administrators can permanently delete products.' },
+        { status: 403 }
+      );
+    }
+
+    // Verify product exists
+    const { data: existingProd, error: fetchErr } = await supabase
+      .from('products')
+      .select('id, title')
+      .eq('id', productId)
+      .single();
+
+    if (fetchErr || !existingProd) {
+      return NextResponse.json(
+        { error: 'Product not found.' },
+        { status: 404 }
+      );
+    }
+
+    // Permanently delete product from database
+    // Cascades automatically to product_variants and inventory_logs.
+    // Order items have ON DELETE SET NULL, preserving line item historical snapshot.
+    const { error: deleteErr } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', productId);
+
+    if (deleteErr) throw deleteErr;
+
+    return NextResponse.json({
+      success: true,
+      message: `Product "${existingProd.title}" permanently deleted successfully.`,
+      product_id: productId,
+    });
+  } catch (err: any) {
+    console.error('❌ [Product DELETE Error]:', err);
+    return NextResponse.json(
+      { error: err.message || 'Failed to permanently delete product.' },
+      { status: 500 }
+    );
   }
 }

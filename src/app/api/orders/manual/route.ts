@@ -35,6 +35,29 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
+    // Check if any selected variant belongs to a disabled product
+    const orderedVariantIds = items.map((it: any) => it.variant_id).filter(Boolean);
+    if (orderedVariantIds.length > 0) {
+      const { data: variantsData } = await supabase
+        .from('product_variants')
+        .select('id, title, product:products(id, title, is_active)')
+        .in('id', orderedVariantIds);
+
+      for (const it of items) {
+        if (!it.variant_id) continue;
+        const matchedVar = (variantsData || []).find((v: any) => v.id === it.variant_id);
+        const prod = (matchedVar?.product as any);
+        if (prod && prod.is_active === false) {
+          return NextResponse.json(
+            {
+              error: `Cannot add "${prod.title || it.title}" (${matchedVar?.title || it.variant_title || 'Variant'}) to order because this product is currently disabled.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // 1. Resolve Creator (Auto-assignment for non-website orders)
     let authenticatedUserId: string | null = null;
     let staffFullName = 'Staff';
@@ -209,6 +232,29 @@ export async function POST(req: NextRequest) {
 
     if (itemsError) {
       throw itemsError;
+    }
+
+    // Auto-disable products whose cumulative inventory has depleted to 0 or below
+    if (orderedVariantIds.length > 0) {
+      const { data: updatedVars } = await supabase
+        .from('product_variants')
+        .select('product_id')
+        .in('id', orderedVariantIds);
+
+      const prodIds = Array.from(new Set((updatedVars || []).map((v) => v.product_id).filter(Boolean)));
+      for (const pid of prodIds) {
+        const { data: siblings } = await supabase
+          .from('product_variants')
+          .select('stock_quantity')
+          .eq('product_id', pid);
+        const totalStock = (siblings || []).reduce((acc, s) => acc + (s.stock_quantity || 0), 0);
+        if (totalStock <= 0) {
+          await supabase
+            .from('products')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('id', pid);
+        }
+      }
     }
 
     // 3. Reachout Commission processing (Flat percentage on reachout items)

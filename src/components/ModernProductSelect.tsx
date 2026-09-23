@@ -122,16 +122,19 @@ export default function ModernProductSelect({
             ) : (
               filteredVariants.map((variant) => {
                 const isSelected = variant.id === selectedVariantId;
+                const isProductDisabled = (variant.product as any)?.is_active === false;
                 const isOutOfStock = variant.stock_quantity <= 0;
                 const isLowStock = variant.stock_quantity <= 5 && !isOutOfStock;
+                const isDisabled = isOutOfStock || isProductDisabled;
                 const prodName = (variant.product as any)?.name || (variant.product as any)?.title || 'Product';
 
                 return (
                   <button
                     key={variant.id}
                     type="button"
-                    disabled={isOutOfStock}
+                    disabled={isDisabled}
                     onClick={() => {
+                      if (isDisabled) return;
                       onSelect(variant.id);
                       setIsOpen(false);
                       setSearch('');
@@ -139,6 +142,8 @@ export default function ModernProductSelect({
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
                       isSelected
                         ? 'bg-emerald-50 text-emerald-950 font-medium'
+                        : isProductDisabled
+                        ? 'opacity-40 cursor-not-allowed bg-slate-100/70'
                         : isOutOfStock
                         ? 'opacity-40 cursor-not-allowed bg-slate-50/50'
                         : 'hover:bg-slate-50 text-slate-700'
@@ -146,13 +151,22 @@ export default function ModernProductSelect({
                   >
                     <div className="flex items-start space-x-2.5 truncate min-w-0 flex-1 mr-3">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                        isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                        isSelected
+                          ? 'bg-emerald-600 text-white'
+                          : isProductDisabled
+                          ? 'bg-slate-200 text-slate-400'
+                          : 'bg-slate-100 text-slate-500'
                       }`}>
                         <Package className="w-3.5 h-3.5" />
                       </div>
                       <div className="truncate min-w-0 flex-1">
-                        <div className="text-xs font-semibold text-slate-900 truncate">
-                          {prodName}
+                        <div className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
+                          <span>{prodName}</span>
+                          {isProductDisabled && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 border border-slate-300">
+                              Disabled
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <span className="font-medium text-slate-600">Variant: {variant.title}</span>
@@ -170,17 +184,23 @@ export default function ModernProductSelect({
                       <span className="font-bold text-xs text-slate-900 font-mono">
                         {formatCurrency(variant.price)}
                       </span>
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                          isOutOfStock
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : isLowStock
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}
-                      >
-                        {variant.stock_quantity} in stock
-                      </span>
+                      {isProductDisabled ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-slate-200 text-slate-700 border-slate-300">
+                          Disabled
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                            isOutOfStock
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : isLowStock
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}
+                        >
+                          {variant.stock_quantity} in stock
+                        </span>
+                      )}
                       {isSelected && <Check className="w-4 h-4 text-emerald-600 ml-1" />}
                     </div>
                   </button>
