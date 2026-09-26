@@ -353,6 +353,26 @@ export async function syncWebsiteUpsellQuotaRewards(
         status: 'pending',
         note: `Website Upsell Quota: Reached ৳${reachedTier?.min_quota.toLocaleString()}+ tier (Total: ৳${targetBonus} BDT bonus)`,
       });
+    } else if (targetBonus < currentAwardedBonus) {
+      // Adjust down pending quota rewards if orders were reassigned or canceled
+      let toReduce = currentAwardedBonus - targetBonus;
+      for (const reward of (existingRewards || []).reverse()) {
+        if (toReduce <= 0) break;
+        const rewardAmount = Number(reward.bonus_amount || 0);
+        if (rewardAmount <= toReduce) {
+          await supabase.from('upsell_rewards').delete().eq('id', reward.id);
+          toReduce -= rewardAmount;
+        } else {
+          await supabase
+            .from('upsell_rewards')
+            .update({
+              bonus_amount: rewardAmount - toReduce,
+              note: `Website Upsell Quota (Adjusted): Reached ${reachedTier ? `৳${reachedTier.min_quota.toLocaleString()}+ tier` : 'Below Tier 1'} (Total: ৳${targetBonus} BDT bonus)`,
+            })
+            .eq('id', reward.id);
+          toReduce = 0;
+        }
+      }
     }
 
     return {
@@ -467,6 +487,26 @@ export async function syncNonWebsiteSalesRewards(
         status: 'pending',
         note: `Non-Website Sales Milestone: Reached ${reachedTier?.name || `৳${reachedTier?.min_quota.toLocaleString()}+`} (Total: ৳${targetBonus} BDT Extra Commission)`,
       });
+    } else if (targetBonus < currentAwardedBonus) {
+      // Adjust down pending milestone rewards if orders were reassigned or canceled
+      let toReduce = currentAwardedBonus - targetBonus;
+      for (const reward of (existingRewards || []).reverse()) {
+        if (toReduce <= 0) break;
+        const rewardAmount = Number(reward.bonus_amount || 0);
+        if (rewardAmount <= toReduce) {
+          await supabase.from('upsell_rewards').delete().eq('id', reward.id);
+          toReduce -= rewardAmount;
+        } else {
+          await supabase
+            .from('upsell_rewards')
+            .update({
+              bonus_amount: rewardAmount - toReduce,
+              note: `Non-Website Sales Milestone (Adjusted): ${reachedTier?.name || 'Below Tier 1'} (Total: ৳${targetBonus} BDT Extra Commission)`,
+            })
+            .eq('id', reward.id);
+          toReduce = 0;
+        }
+      }
     }
 
     return {
@@ -496,5 +536,101 @@ export async function syncStaffCommissionRewards(
     return await syncWebsiteUpsellQuotaRewards(supabase, staffId, orderId);
   } else {
     return await syncNonWebsiteSalesRewards(supabase, staffId, orderId);
+  }
+}
+
+/**
+ * Transfers all earned commissions for an order from the previous staff to the newly assigned staff,
+ * and synchronizes daily quota/milestone calculations for both staff members.
+ */
+export async function transferOrderCommission(
+  supabase: SupabaseClient,
+  orderId: string,
+  previousSalesRepId: string | null | undefined,
+  newSalesRepId: string | null | undefined
+) {
+  if (!orderId) return null;
+
+  try {
+    const prevRep = previousSalesRepId || null;
+    const newRep = newSalesRepId || null;
+
+    if (prevRep === newRep) {
+      return { transferred: false, reason: 'same_staff' };
+    }
+
+    // 1. Fetch order details to know source and items
+    const { data: order } = await supabase
+      .from('orders')
+      .select('id, source, status, created_at, order_items(id, price, quantity, is_upsell, is_reachout)')
+      .eq('id', orderId)
+      .single();
+
+    const orderSource = order?.source || 'website';
+    const orderItems = order?.order_items || [];
+
+    // Calculate reachout subtotal for this order
+    const reachoutSubtotal = orderItems
+      .filter((i: any) => i.is_reachout)
+      .reduce((sum: number, it: any) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1), 0);
+
+    // 2. If reassigned to a new staff member:
+    if (newRep) {
+      // 2a. Reassign all existing pending/unpaid commissions on this order to the new staff member
+      const { data: updatedRewards, error: updateErr } = await supabase
+        .from('upsell_rewards')
+        .update({
+          sales_rep_id: newRep,
+        })
+        .eq('order_id', orderId)
+        .neq('status', 'paid')
+        .select();
+
+      if (updateErr) {
+        console.error('Failed to transfer upsell_rewards to new staff:', updateErr);
+      }
+
+      // 2b. If there are reachout items on this order, ensure reachout commission is computed & attributed to new staff
+      if (reachoutSubtotal > 0) {
+        await syncReachoutCommissionReward(supabase, newRep, orderId, reachoutSubtotal);
+      }
+
+      // 2c. Synchronize daily quota tier rewards for the newly assigned staff
+      await syncStaffCommissionRewards(supabase, newRep, orderId, orderSource);
+
+      // 2d. If previous staff existed and is different, re-synchronize previous staff's daily quota rewards
+      if (prevRep) {
+        await syncStaffCommissionRewards(supabase, prevRep, undefined, orderSource);
+      }
+
+      return {
+        transferred: true,
+        newSalesRepId: newRep,
+        previousSalesRepId: prevRep,
+        transferredRewardsCount: (updatedRewards || []).length,
+      };
+    } else {
+      // 3. Order is unassigned (newRep is null)
+      // Remove pending/unpaid rewards for this order so previous staff does not retain unearned commission
+      await supabase
+        .from('upsell_rewards')
+        .delete()
+        .eq('order_id', orderId)
+        .neq('status', 'paid');
+
+      // Re-sync previous staff's quota rewards if they were previously assigned
+      if (prevRep) {
+        await syncStaffCommissionRewards(supabase, prevRep, undefined, orderSource);
+      }
+
+      return {
+        transferred: false,
+        unassigned: true,
+        previousSalesRepId: prevRep,
+      };
+    }
+  } catch (err) {
+    console.error('Error transferring order commission:', err);
+    return null;
   }
 }

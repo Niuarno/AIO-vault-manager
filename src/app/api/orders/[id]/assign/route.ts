@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { syncStaffCommissionRewards } from '@/lib/commission';
+import { syncStaffCommissionRewards, transferOrderCommission } from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -144,13 +144,14 @@ export async function PATCH(
         .single();
 
       if (fallbackErr) throw fallbackErr;
-      if (sales_rep_id) {
-        try {
-          await syncStaffCommissionRewards(supabase, sales_rep_id, orderId, order.source);
-        } catch (e) {
-          console.error('Failed to sync rewards on assignment fallback:', e);
-        }
+
+      // Transfer earned commission & sync quotas for fallback branch
+      try {
+        await transferOrderCommission(supabase, orderId, order.sales_rep_id, sales_rep_id);
+      } catch (e) {
+        console.error('Failed to transfer commission on assignment fallback:', e);
       }
+
       return NextResponse.json({
         success: true,
         order: fallbackOrder,
@@ -158,12 +159,11 @@ export async function PATCH(
       });
     }
 
-    if (sales_rep_id) {
-      try {
-        await syncStaffCommissionRewards(supabase, sales_rep_id, orderId, order.source);
-      } catch (e) {
-        console.error('Failed to sync rewards on assignment:', e);
-      }
+    // 5. Transfer all earned commissions and sync quota ledgers for both staff members
+    try {
+      await transferOrderCommission(supabase, orderId, order.sales_rep_id, sales_rep_id);
+    } catch (e) {
+      console.error('Failed to transfer commission on assignment:', e);
     }
 
     return NextResponse.json({

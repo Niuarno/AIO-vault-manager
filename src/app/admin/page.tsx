@@ -418,6 +418,8 @@ export default function AdminDashboard() {
               : o
           )
         );
+        // Refresh team rewards ledger & commission stats immediately
+        fetchTeamAndRewards();
       } else {
         alert(data.error || 'Failed to assign order');
       }

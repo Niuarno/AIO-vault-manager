@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { syncStaffCommissionRewards, syncReachoutCommissionReward } from '@/lib/commission';
+import {
+  syncStaffCommissionRewards,
+  syncReachoutCommissionReward,
+  transferOrderCommission,
+} from '@/lib/commission';
 
 export async function PATCH(
   req: NextRequest,
@@ -413,8 +417,10 @@ export async function PATCH(
       updatedOrder = fullUpdateData;
     }
 
-    // 9. If attributed to a staff member, synchronize quota / sales bonus rewards & reachout commission
-    if (resolvedSalesRepId) {
+    // 9. If assigned staff changed, transfer commission; otherwise sync quota & reachout commission
+    if (resolvedSalesRepId !== order.sales_rep_id) {
+      await transferOrderCommission(supabase, orderId, order.sales_rep_id, resolvedSalesRepId);
+    } else if (resolvedSalesRepId) {
       await syncStaffCommissionRewards(
         supabase,
         resolvedSalesRepId,
