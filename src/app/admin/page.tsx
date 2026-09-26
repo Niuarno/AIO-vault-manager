@@ -34,6 +34,7 @@ import {
   Radio,
   Download,
   Percent,
+  Loader2,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -498,6 +499,7 @@ export default function AdminDashboard() {
             return v;
           })
         );
+        fetchInventory();
       } else {
         alert(json.error || 'Failed to update product status');
       }
@@ -1810,7 +1812,7 @@ export default function AdminDashboard() {
                                     <button
                                       type="button"
                                       disabled={togglingProductId === product.id}
-                                      onClick={() => handleToggleProductStatus(product.id, !isProductDisabled)}
+                                      onClick={() => handleToggleProductStatus(product.id, isProductDisabled ? true : false)}
                                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-50 ${
                                         isProductDisabled
                                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
@@ -1818,7 +1820,12 @@ export default function AdminDashboard() {
                                       }`}
                                       title={isProductDisabled ? 'Click to Enable Product' : 'Click to Disable Product'}
                                     >
-                                      {isProductDisabled ? (
+                                      {togglingProductId === product.id ? (
+                                        <>
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                          <span>{isProductDisabled ? 'Enabling...' : 'Disabling...'}</span>
+                                        </>
+                                      ) : isProductDisabled ? (
                                         <>
                                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                           <span>Enable</span>
