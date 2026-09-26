@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { RewardRule } from '@/types/database';
+import { getDhakaStartOfDayIso, getDhakaEndOfDayIso } from './dateUtils';
 
 export interface QuotaTier {
   id: string;
@@ -290,15 +291,17 @@ export async function syncWebsiteUpsellQuotaRewards(
       return null;
     }
 
-    // 2. Fetch all qualifying website orders for this staff member created today
-    const today = new Date().toISOString().split('T')[0];
+    // 2. Fetch all qualifying website orders for this staff member created today (Dhaka 12 AM reset)
+    const startOfDayIso = getDhakaStartOfDayIso();
+    const endOfDayIso = getDhakaEndOfDayIso();
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
       .select('id, source, sales_rep_id, status, created_at, order_items(price, quantity, is_upsell)')
       .eq('source', 'website')
       .eq('sales_rep_id', staffId)
       .neq('status', 'canceled')
-      .gte('created_at', today + 'T00:00:00.000Z');
+      .gte('created_at', startOfDayIso)
+      .lte('created_at', endOfDayIso);
 
     if (ordersErr) {
       console.error('Failed to fetch website orders for quota calculation:', ordersErr);
@@ -330,7 +333,8 @@ export async function syncWebsiteUpsellQuotaRewards(
       .from('upsell_rewards')
       .select('*')
       .eq('sales_rep_id', staffId)
-      .gte('created_at', today + 'T00:00:00.000Z')
+      .gte('created_at', startOfDayIso)
+      .lte('created_at', endOfDayIso)
       .like('note', 'Website Upsell Quota%')
       .neq('status', 'paid');
 
@@ -406,15 +410,17 @@ export async function syncNonWebsiteSalesRewards(
       })).sort((a, b) => b.min_quota - a.min_quota);
     }
 
-    // 2. Fetch all qualifying non-website orders for this staff member created today
-    const today = new Date().toISOString().split('T')[0];
+    // 2. Fetch all qualifying non-website orders for this staff member created today (Dhaka 12 AM reset)
+    const startOfDayIso = getDhakaStartOfDayIso();
+    const endOfDayIso = getDhakaEndOfDayIso();
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
       .select('id, source, sales_rep_id, status, total_amount, created_at')
       .neq('source', 'website')
       .eq('sales_rep_id', staffId)
       .neq('status', 'canceled')
-      .gte('created_at', today + 'T00:00:00.000Z');
+      .gte('created_at', startOfDayIso)
+      .lte('created_at', endOfDayIso);
 
     if (ordersErr) {
       console.error('Failed to fetch non-website orders for daily sales bonus:', ordersErr);
@@ -441,7 +447,8 @@ export async function syncNonWebsiteSalesRewards(
       .from('upsell_rewards')
       .select('*')
       .eq('sales_rep_id', staffId)
-      .gte('created_at', today + 'T00:00:00.000Z')
+      .gte('created_at', startOfDayIso)
+      .lte('created_at', endOfDayIso)
       .or('note.like.Daily Sales Bonus%,note.like.Non-Website Sales Milestone%')
       .neq('status', 'paid');
 

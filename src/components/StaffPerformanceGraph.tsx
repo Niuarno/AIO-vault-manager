@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TrendingUp, Calendar, ChevronDown } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getDhakaParts } from '@/lib/utils';
 
 export interface DailyStaffStat {
   dateKey: string;     // e.g. '2026-09-18'
@@ -42,9 +42,10 @@ export default function StaffPerformanceGraph({
   const [metric, setMetric] = useState<'commission' | 'orders'>('commission');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-  const todayDate = new Date().getDate();
+  const dhakaParts = getDhakaParts();
+  const currentYear = dhakaParts.year;
+  const currentMonth = dhakaParts.month;
+  const todayDate = dhakaParts.day;
 
   const years = yearOptions || [currentYear, currentYear - 1, currentYear - 2];
 

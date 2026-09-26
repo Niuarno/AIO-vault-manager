@@ -1,5 +1,5 @@
 import { Profile, Order, UpsellReward } from '@/types/database';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getDhakaPeriodBounds } from '@/lib/utils';
 
 export interface ExportReportOptions {
   staffMember: Profile;
@@ -38,21 +38,9 @@ export function exportStaffReportCsv({
   const staffId = staffMember.id;
   const staffCode = staffMember.coupon_code?.trim().toUpperCase();
 
-  // 1. Determine Date Filter Range
-  let startDate: Date;
-  let endDate: Date;
-  let periodLabel: string;
-
-  if (periodType === 'monthly') {
-    startDate = new Date(year, month, 1, 0, 0, 0, 0);
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    endDate = new Date(year, month, lastDay, 23, 59, 59, 999);
-    periodLabel = `${MONTH_NAMES[month]} ${year}`;
-  } else {
-    startDate = new Date(year, 0, 1, 0, 0, 0, 0);
-    endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-    periodLabel = `Full Year ${year}`;
-  }
+  // 1. Determine Date Filter Range in Dhaka local time (GMT+6)
+  const { startDate, endDate } = getDhakaPeriodBounds(periodType, year, month);
+  const periodLabel = periodType === 'monthly' ? `${MONTH_NAMES[month]} ${year}` : `Full Year ${year}`;
 
   // 2. Filter Orders for this staff member in this date range
   const filteredOrders = orders.filter((o) => {
@@ -92,7 +80,7 @@ export function exportStaffReportCsv({
   csvLines.push(`"Role:",${escapeCsvField(staffMember.role)}`);
   csvLines.push(`"Coupon Code:",${escapeCsvField(staffMember.coupon_code || 'N/A')}`);
   csvLines.push(`"Report Period:",${escapeCsvField(periodLabel)}`);
-  csvLines.push(`"Generated On:",${escapeCsvField(new Date().toLocaleString())}`);
+  csvLines.push(`"Generated On (Dhaka BST):",${escapeCsvField(formatDate(new Date().toISOString()))}`);
   csvLines.push(''); // Blank line
 
   // Column Headers

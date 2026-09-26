@@ -11,9 +11,12 @@ export function formatCurrency(amount: number | string | null | undefined, curre
   return `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
+export * from './dateUtils';
+
 export function formatDate(dateString: string | null | undefined) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('en-US', {
+    timeZone: 'Asia/Dhaka',
     month: 'short',
     day: 'numeric',
     year: 'numeric',

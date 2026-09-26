@@ -53,7 +53,15 @@ import {
   PayoutRequest,
 } from '@/types/database';
 import { QuotaTier } from '@/lib/commission';
-import { formatCurrency, formatDate, getOrderDiscount, getOrderAdvance } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  getOrderDiscount,
+  getOrderAdvance,
+  getDhakaDateString,
+  getDhakaParts,
+  isSameDhakaDay,
+} from '@/lib/utils';
 
 export default function SalesDashboard() {
   const supabase = createClient();
@@ -128,9 +136,10 @@ export default function SalesDashboard() {
   const [itemQuantity, setItemQuantity] = useState(1);
   const [isReachoutItem, setIsReachoutItem] = useState(false);
 
-  // Performance Graph Month/Year State
-  const [graphYear, setGraphYear] = useState<number>(new Date().getFullYear());
-  const [graphMonth, setGraphMonth] = useState<number>(new Date().getMonth());
+  // Performance Graph Month/Year State (Dhaka local time GMT+6)
+  const dhakaParts = getDhakaParts();
+  const [graphYear, setGraphYear] = useState<number>(dhakaParts.year);
+  const [graphMonth, setGraphMonth] = useState<number>(dhakaParts.month);
 
   // Realtime Online / Away Presence State (defaults to false / Away if not toggled)
   const [isOnline, setIsOnline] = useState<boolean>(false);
@@ -535,19 +544,24 @@ export default function SalesDashboard() {
   };
 
   // Calculations:
-  // Today's Earnings (resets at 12:00 AM midnight)
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Today's Earnings (resets strictly at 12:00 AM midnight Bangladesh / Dhaka time GMT+6)
+  const todayStr = getDhakaDateString();
   const todayEarnings = useMemo(() => {
     return rewards
-      .filter((r) => r.created_at.startsWith(todayStr))
+      .filter((r) => isSameDhakaDay(r.created_at, todayStr))
       .reduce((sum, r) => sum + Number(r.bonus_amount || 0), 0);
   }, [rewards, todayStr]);
 
-  // Website Upsells (Extra Sales) achieved today by this staff member
+  // Website Upsells (Extra Sales) achieved today by this staff member (Dhaka 12 AM reset)
   const todayWebsiteUpsells = useMemo(() => {
     if (!currentProfile?.id) return 0;
     return orders
-      .filter((o) => o.sales_rep_id === currentProfile.id && o.source === 'website' && o.created_at.startsWith(todayStr))
+      .filter(
+        (o) =>
+          o.sales_rep_id === currentProfile.id &&
+          o.source === 'website' &&
+          isSameDhakaDay(o.created_at, todayStr)
+      )
       .reduce((sum, order) => {
         const upsellVal = (order.order_items || [])
           .filter((item) => item.is_upsell)
@@ -570,7 +584,7 @@ export default function SalesDashboard() {
       .sort((a, b) => a.min_quota - b.min_quota);
   }, [quotaTiers]);
 
-  // Today's Non-Website Sales achieved by this staff member
+  // Today's Non-Website Sales achieved by this staff member (Dhaka 12 AM reset)
   const todayOtherSales = useMemo(() => {
     if (!currentProfile?.id) return 0;
     return orders
@@ -579,7 +593,7 @@ export default function SalesDashboard() {
           o.sales_rep_id === currentProfile.id &&
           o.source !== 'website' &&
           o.status !== 'canceled' &&
-          o.created_at.startsWith(todayStr)
+          isSameDhakaDay(o.created_at, todayStr)
       )
       .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
   }, [orders, currentProfile, todayStr]);
@@ -729,14 +743,14 @@ export default function SalesDashboard() {
     }
 
     rewards.forEach((r) => {
-      const dayKey = r.created_at.split('T')[0];
+      const dayKey = getDhakaDateString(r.created_at);
       if (days[dayKey]) {
         days[dayKey].commission += Number(r.bonus_amount || 0);
       }
     });
 
     myOrders.forEach((o) => {
-      const dayKey = o.created_at.split('T')[0];
+      const dayKey = getDhakaDateString(o.created_at);
       if (days[dayKey]) {
         days[dayKey].ordersCount++;
       }

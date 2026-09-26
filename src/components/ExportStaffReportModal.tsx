@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Download, Calendar, FileSpreadsheet, CheckCircle2, User, Award } from 'lucide-react';
 import { Profile, Order, UpsellReward } from '@/types/database';
 import { exportStaffReportCsv } from '@/lib/exportCsv';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getDhakaParts, getDhakaPeriodBounds } from '@/lib/utils';
 
 interface ExportStaffReportModalProps {
   isOpen: boolean;
@@ -26,8 +26,9 @@ export default function ExportStaffReportModal({
   orders,
   rewards,
 }: ExportStaffReportModalProps) {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
+  const dhakaParts = getDhakaParts();
+  const currentYear = dhakaParts.year;
+  const currentMonth = dhakaParts.month;
 
   const [periodType, setPeriodType] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -42,17 +43,11 @@ export default function ExportStaffReportModal({
     const staffId = staffMember.id;
     const staffCode = staffMember.coupon_code?.trim().toUpperCase();
 
-    let startDate: Date;
-    let endDate: Date;
-
-    if (periodType === 'monthly') {
-      startDate = new Date(selectedYear, selectedMonth, 1, 0, 0, 0, 0);
-      const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-      endDate = new Date(selectedYear, selectedMonth, lastDay, 23, 59, 59, 999);
-    } else {
-      startDate = new Date(selectedYear, 0, 1, 0, 0, 0, 0);
-      endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-    }
+    const { startDate, endDate } = getDhakaPeriodBounds(
+      periodType,
+      selectedYear,
+      selectedMonth
+    );
 
     const matchedOrders = orders.filter((o) => {
       const d = new Date(o.created_at);

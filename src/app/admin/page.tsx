@@ -63,7 +63,15 @@ import {
   PayoutRequest,
   UpsellReward,
 } from '@/types/database';
-import { formatCurrency, formatDate, getOrderDiscount, getOrderAdvance } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  getOrderDiscount,
+  getOrderAdvance,
+  getDhakaDateString,
+  getDhakaParts,
+  isSameDhakaDay,
+} from '@/lib/utils';
 import { QuotaTier } from '@/lib/commission';
 
 export default function AdminDashboard() {
@@ -106,8 +114,9 @@ export default function AdminDashboard() {
   const [teamRewards, setTeamRewards] = useState<UpsellReward[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [selectedStaffForGraph, setSelectedStaffForGraph] = useState<Profile | null>(null);
-  const [adminGraphYear, setAdminGraphYear] = useState<number>(new Date().getFullYear());
-  const [adminGraphMonth, setAdminGraphMonth] = useState<number>(new Date().getMonth());
+  const dhakaParts = getDhakaParts();
+  const [adminGraphYear, setAdminGraphYear] = useState<number>(dhakaParts.year);
+  const [adminGraphMonth, setAdminGraphMonth] = useState<number>(dhakaParts.month);
   const [staffToExport, setStaffToExport] = useState<Profile | null>(null);
   const [staffToDelete, setStaffToDelete] = useState<Profile | null>(null);
 
@@ -885,9 +894,9 @@ export default function AdminDashboard() {
       }));
   }, [orders]);
 
-  // Team Commission & Piggybank Statistics
+  // Team Commission & Piggybank Statistics (resets at 12:00 AM midnight Dhaka time GMT+6)
   const teamStats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getDhakaDateString();
     const stats: Record<
       string,
       {
@@ -924,7 +933,7 @@ export default function AdminDashboard() {
         };
       }
       const amount = Number(r.bonus_amount || 0);
-      if (r.created_at.startsWith(today)) {
+      if (isSameDhakaDay(r.created_at, today)) {
         stats[repId].todayEarnings += amount;
       }
       if (r.status === 'pending') {
@@ -938,8 +947,8 @@ export default function AdminDashboard() {
       const repId = o.sales_rep_id;
       if (repId && stats[repId]) {
         stats[repId].orderCount++;
-        // If order from website and created today, accumulate upsells
-        if (o.source === 'website' && o.created_at?.startsWith(today) && o.status !== 'canceled') {
+        // If order from website and created today in Dhaka time, accumulate upsells
+        if (o.source === 'website' && isSameDhakaDay(o.created_at, today) && o.status !== 'canceled') {
           (o.order_items || []).forEach((item) => {
             if (item.is_upsell) {
               stats[repId].todayWebsiteUpsells +=
@@ -981,7 +990,7 @@ export default function AdminDashboard() {
 
     teamRewards.forEach((r) => {
       if (r.sales_rep_id === staffId) {
-        const dayKey = r.created_at.split('T')[0];
+        const dayKey = getDhakaDateString(r.created_at);
         if (days[dayKey]) {
           days[dayKey].commission += Number(r.bonus_amount || 0);
         }
@@ -992,7 +1001,7 @@ export default function AdminDashboard() {
       const isRep = o.sales_rep_id === staffId;
       const isCoupon = staffCode && o.coupon_used?.trim().toUpperCase() === staffCode;
       if (isRep || isCoupon) {
-        const dayKey = o.created_at.split('T')[0];
+        const dayKey = getDhakaDateString(o.created_at);
         if (days[dayKey]) {
           days[dayKey].ordersCount++;
         }
