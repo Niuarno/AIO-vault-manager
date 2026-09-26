@@ -37,6 +37,7 @@ import {
   getOrderDiscount,
   getOrderAdvance,
   getOrderDeliveryCharge,
+  shrinkProductTitle,
 } from '@/lib/utils';
 import {
   getSteadfastTrackingUrl,
@@ -1119,7 +1120,8 @@ export default function PackingDashboard() {
                           const defaultDesc = allItems
                             .map((i: any) => {
                               const qty = i.quantity || 1;
-                              const title = (i.title || i.name || 'Product').trim();
+                              const rawTitle = (i.title || i.name || 'Product').trim();
+                              const title = shrinkProductTitle(rawTitle, 32);
                               const variant =
                                 i.variant_title && i.variant_title !== 'Default Title'
                                   ? ` (${i.variant_title.trim()})`

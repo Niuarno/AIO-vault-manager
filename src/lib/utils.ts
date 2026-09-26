@@ -121,3 +121,37 @@ export function getOrderDeliveryCharge(order: any): number {
   }
   return 80;
 }
+
+/**
+ * Automatically shrinks a product title to ~25-32 characters for courier consignment labels.
+ * Strips verbose specifications (e.g. measurements, flower count, parentheticals)
+ * and cleanly isolates the primary product name.
+ */
+export function shrinkProductTitle(title: string | null | undefined, maxChars = 32): string {
+  if (!title) return 'Product';
+  let t = title.trim();
+
+  // If title has a dash/pipe separator (e.g. " – 65cm (25 Inch)...", " - 72cm Decorative..."),
+  // isolate the primary product name first
+  const delimiterSplit = t.split(/\s+[-–—|]\s+/);
+  if (delimiterSplit[0] && delimiterSplit[0].length >= 8) {
+    t = delimiterSplit[0].trim();
+  }
+
+  // Remove trailing parentheses like "(25 Inch)" or specs if any
+  t = t.replace(/\s*\([^)]*\)$/, '').trim();
+
+  // If still longer than maxChars, cleanly trim to ~25-32 chars at word boundary
+  if (t.length > maxChars) {
+    const sub = t.slice(0, maxChars).trim();
+    const lastSpace = sub.lastIndexOf(' ');
+    if (lastSpace >= 20) {
+      t = sub.slice(0, lastSpace).trim();
+    } else {
+      t = sub;
+    }
+  }
+
+  return t;
+}
+

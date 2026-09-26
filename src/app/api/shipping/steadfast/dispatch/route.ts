@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createSteadfastConsignment } from '@/lib/steadfast';
-import { getOrderAdvance } from '@/lib/utils';
+import { getOrderAdvance, shrinkProductTitle } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +48,8 @@ async function dispatchSingleOrder(orderId: string, supabase: any, overrideItemD
     itemDescription = items
       .map((item: any) => {
         const qty = item.quantity || 1;
-        const title = (item.title || item.name || 'Product').trim();
+        const rawTitle = (item.title || item.name || 'Product').trim();
+        const title = shrinkProductTitle(rawTitle, 32);
         const variant =
           item.variant_title && item.variant_title !== 'Default Title'
             ? ` (${item.variant_title.trim()})`
