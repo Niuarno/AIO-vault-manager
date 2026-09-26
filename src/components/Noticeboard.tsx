@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Megaphone, Edit3, X, Check, Loader2 } from 'lucide-react';
 import { Profile } from '@/types/database';
+import DailyResetCountdown from '@/components/DailyResetCountdown';
 
 interface NoticeboardProps {
   currentProfile?: Profile | null;
@@ -71,6 +72,22 @@ export default function Noticeboard({ currentProfile }: NoticeboardProps) {
     }
   };
 
+  // Prepare repeated announcements to ensure continuous, gapless infinite ticker loop
+  const repeatedAnnouncements = React.useMemo(() => {
+    if (!headline) return [];
+    const parts = headline
+      .split(/\r?\n|\|/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const baseItems = parts.length > 0 ? parts : [headline];
+    const repeatCount = Math.max(3, Math.ceil(5 / baseItems.length));
+    const list: string[] = [];
+    for (let i = 0; i < repeatCount; i++) {
+      list.push(...baseItems);
+    }
+    return list;
+  }, [headline]);
+
   if (loading && !headline) {
     return null;
   }
@@ -85,33 +102,59 @@ export default function Noticeboard({ currentProfile }: NoticeboardProps) {
             <span className="hidden sm:inline">Noticeboard</span>
           </div>
 
-          {/* Marquee Scroller Container */}
-          <div className="flex-1 overflow-hidden relative mx-3 group cursor-default">
-            <div className="whitespace-nowrap inline-block animate-[noticeboard-scroll_35s_linear_infinite] group-hover:[animation-play-state:paused]">
-              <span className="font-medium text-slate-200 tracking-wide inline-block pr-16">
-                {headline}
-              </span>
-              <span className="font-medium text-slate-200 tracking-wide inline-block pr-16">
-                {headline}
-              </span>
+          {/* Marquee Scroller Container - Seamless Mathematically Infinite Loop */}
+          <div className="flex-1 overflow-hidden relative mx-2 sm:mx-4 group cursor-default [mask-image:linear-gradient(to_right,transparent,black_24px,black_calc(100%-24px),transparent)]">
+            <div className="flex overflow-hidden">
+              {/* Primary Track */}
+              <div className="flex shrink-0 min-w-full items-center whitespace-nowrap animate-marquee-infinite group-hover:[animation-play-state:paused]">
+                {repeatedAnnouncements.map((item, idx) => (
+                  <div key={`track1-${idx}`} className="inline-flex items-center gap-2.5 pr-12">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.8)] shrink-0" />
+                    <span className="font-medium text-slate-200 tracking-wide text-xs">
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Seamless Duplicate Track 2 (Identical Copy for Infinite Seamless Continuity) */}
+              <div
+                aria-hidden="true"
+                className="flex shrink-0 min-w-full items-center whitespace-nowrap animate-marquee-infinite group-hover:[animation-play-state:paused]"
+              >
+                {repeatedAnnouncements.map((item, idx) => (
+                  <div key={`track2-${idx}`} className="inline-flex items-center gap-2.5 pr-12">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.8)] shrink-0" />
+                    <span className="font-medium text-slate-200 tracking-wide text-xs">
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Admin Edit Trigger */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => {
-                setDraftHeadline(headline);
-                setIsEditOpen(true);
-              }}
-              className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-800 transition-colors shrink-0 z-10"
-              title="Edit noticeboard announcement"
-            >
-              <Edit3 className="w-3 h-3 text-slate-400" />
-              <span className="hidden md:inline">Edit</span>
-            </button>
-          )}
+          {/* Right Action Area: Realtime Countdown & Admin Edit Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 pl-2">
+            {/* Realtime Dhaka 12 AM Reset Countdown */}
+            <DailyResetCountdown variant="header" />
+
+            {/* Admin Edit Trigger */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftHeadline(headline);
+                  setIsEditOpen(true);
+                }}
+                className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-white px-2 py-0.5 rounded-md hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors shrink-0"
+                title="Edit noticeboard announcement"
+              >
+                <Edit3 className="w-3 h-3 text-slate-400" />
+                <span className="hidden md:inline">Edit</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -189,18 +232,6 @@ export default function Noticeboard({ currentProfile }: NoticeboardProps) {
           </div>
         </div>
       )}
-
-      {/* Scroller Animation Keyframe */}
-      <style jsx global>{`
-        @keyframes noticeboard-scroll {
-          0% {
-            transform: translateX(0%);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-      `}</style>
     </>
   );
 }

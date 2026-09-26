@@ -36,6 +36,7 @@ import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
 import ModernProductSelect from '@/components/ModernProductSelect';
+import DailyResetCountdown from '@/components/DailyResetCountdown';
 import {
   WhatsAppFlatIcon,
   MessengerFlatIcon,
@@ -896,9 +897,7 @@ export default function SalesDashboard() {
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Today's Earnings
                 </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                  <Clock className="w-3 h-3 text-emerald-600" /> Resets 12 AM
-                </span>
+                <DailyResetCountdown variant="kpi" />
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 font-mono truncate">
                 {formatCurrency(todayEarnings)}

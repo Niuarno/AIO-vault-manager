@@ -41,3 +41,22 @@ body {
     display: block !important;
   }
 }
+
+/* Infinite Marquee Animation for Noticeboard */
+@keyframes marquee-infinite {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-marquee-infinite {
+  animation: marquee-infinite 45s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-infinite:hover {
+  animation-play-state: paused;
+}

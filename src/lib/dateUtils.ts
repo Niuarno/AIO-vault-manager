@@ -89,3 +89,51 @@ export function getDhakaPeriodBounds(
     endDate: new Date(`${year}-12-31T23:59:59.999+06:00`),
   };
 }
+
+export interface DhakaCountdownInfo {
+  remainingMs: number;
+  totalSeconds: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  progressPercent: number; // 0 (start of day at 12am) to 100 (end of day at 11:59:59pm)
+  formatted: string; // e.g. "08:07:21"
+  hh: string;
+  mm: string;
+  ss: string;
+}
+
+/**
+ * Calculates remaining time until next 12:00:00 AM midnight in Dhaka local time (GMT+6).
+ */
+export function getTimeUntilDhakaMidnight(now: Date = new Date()): DhakaCountdownInfo {
+  const dhakaOffsetMs = 6 * 60 * 60 * 1000;
+  const dhakaTimeMs = now.getTime() + dhakaOffsetMs;
+  const msInDay = 24 * 60 * 60 * 1000;
+  const msElapsed = ((dhakaTimeMs % msInDay) + msInDay) % msInDay;
+  const remainingMs = msInDay - msElapsed;
+
+  const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600) % 24;
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+
+  const progressPercent = Math.min(100, Math.max(0, ((msInDay - remainingMs) / msInDay) * 100));
+
+  return {
+    remainingMs,
+    totalSeconds,
+    hours,
+    minutes,
+    seconds,
+    progressPercent,
+    formatted: `${hh}:${mm}:${ss}`,
+    hh,
+    mm,
+    ss,
+  };
+}
