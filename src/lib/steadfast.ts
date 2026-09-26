@@ -260,7 +260,15 @@ export async function createSteadfastConsignment(
     requestBody.alternative_phone = normalizeBdPhoneNumber(payload.alternative_phone);
   }
   if (payload.item_description?.trim()) {
-    requestBody.item_description = payload.item_description.slice(0, 300);
+    let cleanDesc = payload.item_description.trim();
+    if (cleanDesc.length > 255) {
+      let truncated = cleanDesc.slice(0, 252).trim();
+      if (truncated.endsWith(',')) {
+        truncated = truncated.slice(0, -1).trim();
+      }
+      cleanDesc = truncated + '...';
+    }
+    requestBody.item_description = cleanDesc;
   }
 
   try {

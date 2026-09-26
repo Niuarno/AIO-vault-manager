@@ -42,21 +42,28 @@ async function dispatchSingleOrder(orderId: string, supabase: any, overrideItemD
     }
   }
 
-  // 4. Construct comprehensive item description for Steadfast package details (max 400 chars)
+  // 4. Construct comprehensive item description for Steadfast package details (Steadfast strictly enforces max 255 chars)
   let itemDescription = (overrideItemDescription || '').trim();
   if (!itemDescription && items.length > 0) {
     itemDescription = items
       .map((item: any) => {
         const qty = item.quantity || 1;
         const title = (item.title || item.name || 'Product').trim();
-        const variant = item.variant_title ? ` (${item.variant_title.trim()})` : '';
+        const variant =
+          item.variant_title && item.variant_title !== 'Default Title'
+            ? ` (${item.variant_title.trim()})`
+            : '';
         return `${qty}x ${title}${variant}`;
       })
       .join(', ');
   }
 
-  if (itemDescription.length > 390) {
-    itemDescription = itemDescription.slice(0, 387) + '...';
+  if (itemDescription.length > 255) {
+    let truncated = itemDescription.slice(0, 252).trim();
+    if (truncated.endsWith(',')) {
+      truncated = truncated.slice(0, -1).trim();
+    }
+    itemDescription = truncated + '...';
   }
 
   // 5. Dispatch to Steadfast API

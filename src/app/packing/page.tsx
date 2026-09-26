@@ -78,6 +78,10 @@ export default function PackingDashboard() {
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
 
+  // Custom Steadfast Item Description per order (strictly limited to 255 chars)
+  const [customItemDescs, setCustomItemDescs] = useState<Record<string, string>>({});
+  const [editingDescOrderId, setEditingDescOrderId] = useState<string | null>(null);
+
   // Robustly resolve consignment ID across schema variations, external_id, notes, and edit history
   const getOrderConsignmentId = (order: Order): string | null => {
     if (order.consignment_id) return String(order.consignment_id);
@@ -1108,20 +1112,96 @@ export default function PackingDashboard() {
                           </div>
                         )}
 
-                        {/* Steadfast Item Description Preview */}
+                        {/* Steadfast Item Description Preview & Quick Edit */}
                         {(() => {
                           const allItems = [...mainItems, ...upsellItems];
                           if (allItems.length === 0) return null;
-                          const desc = allItems
-                            .map((i: any) => `${i.quantity || 1}x ${i.title}${i.variant_title ? ` (${i.variant_title})` : ''}`)
+                          const defaultDesc = allItems
+                            .map((i: any) => {
+                              const qty = i.quantity || 1;
+                              const title = (i.title || i.name || 'Product').trim();
+                              const variant =
+                                i.variant_title && i.variant_title !== 'Default Title'
+                                  ? ` (${i.variant_title.trim()})`
+                                  : '';
+                              return `${qty}x ${title}${variant}`;
+                            })
                             .join(', ');
+
+                          const currentDesc =
+                            customItemDescs[order.id] !== undefined
+                              ? customItemDescs[order.id]
+                              : defaultDesc;
+                          const isEditing = editingDescOrderId === order.id;
+                          const displayDesc =
+                            currentDesc.length > 255
+                              ? currentDesc.slice(0, 252).trim() + '...'
+                              : currentDesc;
+
                           return (
-                            <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-2 text-xs">
-                              <Box className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                              <div className="flex-1 min-w-0">
-                                <span className="font-bold text-slate-800">Steadfast Item Description:</span>{' '}
-                                <span className="text-slate-600 font-mono text-[11px]">{desc}</span>
+                            <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                  <Box className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span>Steadfast Item Description:</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`text-[10px] font-mono ${
+                                      currentDesc.length > 255
+                                        ? 'text-amber-600 font-bold'
+                                        : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {Math.min(currentDesc.length, 255)}/255 chars
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isEditing) {
+                                        setEditingDescOrderId(null);
+                                      } else {
+                                        if (customItemDescs[order.id] === undefined) {
+                                          setCustomItemDescs((prev) => ({
+                                            ...prev,
+                                            [order.id]: displayDesc,
+                                          }));
+                                        }
+                                        setEditingDescOrderId(order.id);
+                                      }
+                                    }}
+                                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+                                  >
+                                    {isEditing ? 'Save' : 'Edit'}
+                                  </button>
+                                </div>
                               </div>
+
+                              {isEditing ? (
+                                <div className="mt-2 space-y-1.5">
+                                  <textarea
+                                    maxLength={255}
+                                    value={customItemDescs[order.id] || ''}
+                                    onChange={(e) =>
+                                      setCustomItemDescs((prev) => ({
+                                        ...prev,
+                                        [order.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="w-full text-xs font-mono p-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    rows={2}
+                                    placeholder="Enter item description for Steadfast parcel sticker (max 255 chars)..."
+                                  />
+                                  <div className="flex justify-between items-center text-[10px] text-slate-400">
+                                    <span>This text will appear on the Steadfast parcel sticker.</span>
+                                    <span>{255 - (customItemDescs[order.id]?.length || 0)} left</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-600 font-mono text-[11px] block mt-1 break-words">
+                                  {displayDesc}
+                                </span>
+                              )}
                             </div>
                           );
                         })()}
@@ -1192,7 +1272,7 @@ export default function PackingDashboard() {
                       {order.status === 'ready_to_ship' && (
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => handleSendToSteadfast(order)}
+                            onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                             disabled={dispatchingId === order.id}
                             className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Create consignment in Steadfast Courier and advance to With Courier"
@@ -1220,7 +1300,7 @@ export default function PackingDashboard() {
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
                           {!getOrderConsignmentId(order) && (
                             <button
-                              onClick={() => handleSendToSteadfast(order)}
+                              onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                               disabled={dispatchingId === order.id}
                               className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                               title="Create consignment in Steadfast Courier"
