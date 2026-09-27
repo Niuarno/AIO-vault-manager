@@ -170,16 +170,32 @@ export async function POST(req: NextRequest) {
             if (totalStock <= 0) {
               await supabase.from('products').update({ is_active: false }).eq('id', prodId);
             }
+          } else {
+            // Re-enable product if stock is now positive
+            await supabase.from('products').update({ is_active: true }).eq('id', prodId);
           }
 
           insertedCount++;
         }
       }
 
+      // Auto-release any delayed delivery orders waiting for newly imported stock
+      let autoReleasedCount = 0;
+      try {
+        const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
+        const releaseResult = await autoReleaseDelayedOrders(supabase);
+        autoReleasedCount = releaseResult.releasedCount;
+      } catch (relErr) {
+        console.error('Failed to auto release delayed orders after CSV import:', relErr);
+      }
+
       return NextResponse.json({
         success: true,
-        message: `Successfully imported ${insertedCount} product items.`,
+        message: `Successfully imported ${insertedCount} product items.${
+          autoReleasedCount > 0 ? ` ${autoReleasedCount} waiting delayed orders were automatically released to packing!` : ''
+        }`,
         count: insertedCount,
+        released_delayed_orders: autoReleasedCount,
       });
     }
 
@@ -220,6 +236,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (varErr) throw varErr;
+
+    if (stockQtyNum > 0) {
+      try {
+        const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
+        await autoReleaseDelayedOrders(supabase, variant.id);
+      } catch (relErr) {
+        console.error('Failed to auto release delayed orders on manual product creation:', relErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

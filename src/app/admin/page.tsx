@@ -1080,6 +1080,8 @@ export default function AdminDashboard() {
         return { dot: 'bg-amber-400', label: 'Pending' };
       case 'not_reachable':
         return { dot: 'bg-orange-500', label: 'Not Reachable' };
+      case 'delayed_delivery':
+        return { dot: 'bg-amber-600', label: 'Delayed Delivery' };
       case 'confirmed':
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
@@ -1154,6 +1156,7 @@ export default function AdminDashboard() {
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
                     <option value="not_reachable">Not Reachable</option>
+                    <option value="delayed_delivery">Delayed Delivery</option>
                     <option value="confirmed">Confirmed</option>
                     <option value="ready_to_ship">Ready to Ship</option>
                     <option value="on_the_way">On the Way</option>
@@ -1370,6 +1373,7 @@ export default function AdminDashboard() {
                                 >
                                   <option value="pending">Pending</option>
                                   <option value="not_reachable">Not Reachable</option>
+                                  <option value="delayed_delivery">Delayed Delivery</option>
                                   <option value="confirmed">Confirmed</option>
                                   <option value="ready_to_ship">Ready to Ship</option>
                                   <option value="on_the_way">On the Way</option>

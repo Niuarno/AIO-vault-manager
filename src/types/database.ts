@@ -5,6 +5,7 @@ export type OrderSource = 'website' | 'messenger' | 'whatsapp' | 'phone' | 'manu
 export type OrderStatus =
   | 'pending'
   | 'not_reachable'
+  | 'delayed_delivery'
   | 'confirmed'
   | 'ready_to_ship'
   | 'on_the_way'

@@ -28,6 +28,7 @@ import {
   Sparkles,
   Send,
   Radio,
+  Zap,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile, Product, ProductVariant } from '@/types/database';
 import {
@@ -56,7 +57,7 @@ export default function PackingDashboard() {
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'delayed_delivery' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingAll, setSyncingAll] = useState(false);
 
@@ -152,7 +153,7 @@ export default function PackingDashboard() {
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*)')
-      .in('status', ['confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -193,6 +194,11 @@ export default function PackingDashboard() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to adjust stock');
+      }
+
+      if (data.released_delayed_orders > 0) {
+        alert(`Stock updated! ${data.released_delayed_orders} waiting delayed order(s) were automatically released to packing queue! 🚀`);
+        fetchPackingOrders();
       }
 
       setInventoryProducts((prev) =>
@@ -530,10 +536,27 @@ export default function PackingDashboard() {
   });
 
   // Status counts for pipeline tabs
+  const delayedDeliveryCount = orders.filter((o) => o.status === 'delayed_delivery').length;
   const confirmedCount = orders.filter((o) => o.status === 'confirmed').length;
   const readyCount = orders.filter((o) => o.status === 'ready_to_ship').length;
   const onTheWayCount = orders.filter((o) => o.status === 'on_the_way').length;
   const shippedCount = orders.filter((o) => o.status === 'shipped').length;
+
+  // Track customer demand for out-of-stock items (delayed orders) per variant
+  const delayedDemandMap = useMemo(() => {
+    const map = new Map<string, number>();
+    orders
+      .filter((o) => o.status === 'delayed_delivery')
+      .forEach((o) => {
+        (o.order_items || []).forEach((item) => {
+          if (item.variant_id) {
+            const current = map.get(item.variant_id) || 0;
+            map.set(item.variant_id, current + (item.quantity || 1));
+          }
+        });
+      });
+    return map;
+  }, [orders]);
 
   // Filtered products for stock management
   const filteredProducts = useMemo(() => {
@@ -667,7 +690,25 @@ export default function PackingDashboard() {
         </div>
 
         {/* Pipeline Navigation / Metrics */}
-        <div className="no-print grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="no-print grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          <button
+            onClick={() => setActiveFilter('delayed_delivery')}
+            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+              activeFilter === 'delayed_delivery'
+                ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400/40'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                0. Delayed (Restock)
+              </span>
+              <Clock className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-2xl font-black text-slate-900 mt-2">{delayedDeliveryCount}</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">Awaiting stock arrival</p>
+          </button>
+
           <button
             onClick={() => setActiveFilter('confirmed')}
             className={`p-4 rounded-2xl border text-left transition-all ${
@@ -817,6 +858,31 @@ export default function PackingDashboard() {
               </>
             )}
 
+            {activeFilter === 'delayed_delivery' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const res = await fetch('/api/orders/release-delayed', { method: 'POST' });
+                    const json = await res.json();
+                    alert(json.message || 'Checked waiting delayed orders.');
+                    fetchPackingOrders();
+                    fetchInventory();
+                  } catch (err: any) {
+                    alert(err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                title="Automatically check live inventory and release all fulfilled delayed orders to packing"
+              >
+                <Zap className="w-3.5 h-3.5 text-emerald-200" />
+                <span>Auto-Release In-Stock Orders ⚡</span>
+              </button>
+            )}
+
             <button
               onClick={() => setActiveFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
@@ -843,6 +909,8 @@ export default function PackingDashboard() {
             <p className="text-sm text-slate-500 mt-1">
               {activeFilter === 'confirmed'
                 ? 'All confirmed orders have been packed! Wait for new confirmations.'
+                : activeFilter === 'delayed_delivery'
+                ? 'No orders are currently waiting for delayed delivery restock.'
                 : 'No orders match your current filter criteria.'}
             </p>
           </div>
@@ -1257,6 +1325,21 @@ export default function PackingDashboard() {
                     })()}
 
                     <div className="flex items-center space-x-2">
+                      {order.status === 'delayed_delivery' && (
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(order.id, 'confirmed')}
+                          disabled={updatingId === order.id}
+                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                          title="Release this order to packing queue (mark as Confirmed)"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                          <span>
+                            {updatingId === order.id ? 'Releasing...' : 'Release to Packing (Confirmed)'}
+                          </span>
+                        </button>
+                      )}
+
                       {order.status === 'confirmed' && (
                         <button
                           onClick={() => handleStatusChange(order.id, 'ready_to_ship')}
@@ -1486,6 +1569,12 @@ export default function PackingDashboard() {
                                     {variant.sku && (
                                       <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
                                         SKU: {variant.sku}
+                                      </span>
+                                    )}
+                                    {((delayedDemandMap.get(variant.id) || 0) > 0) && (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shadow-2xs">
+                                        <Clock className="w-3 h-3 text-amber-600" />
+                                        <span>{delayedDemandMap.get(variant.id)} Pre-Order(s) Waiting</span>
                                       </span>
                                     )}
                                   </div>

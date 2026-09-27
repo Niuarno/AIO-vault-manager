@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
 import confetti from 'canvas-confetti';
@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock,
   X,
+  XCircle,
   Search,
   Tag,
   PackageOpen,
@@ -517,7 +518,7 @@ export default function SalesDashboard() {
   };
 
   // Status Change Handler
-  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus, customNote?: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -525,17 +526,21 @@ export default function SalesDashboard() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
+      const bodyPayload: Record<string, any> = { status: newStatus };
+      if (customNote) bodyPayload.note = customNote;
+
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json();
       if (data.success) {
         setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, note: data.order?.note || o.note } : o))
         );
         fetchInventory();
+        fetchRewards();
       } else {
         alert(data.error);
       }
@@ -789,6 +794,8 @@ export default function SalesDashboard() {
         return { dot: 'bg-amber-400', label: 'Pending' };
       case 'not_reachable':
         return { dot: 'bg-orange-500', label: 'Not Reachable' };
+      case 'delayed_delivery':
+        return { dot: 'bg-amber-600', label: 'Delayed Delivery' };
       case 'confirmed':
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
@@ -803,6 +810,26 @@ export default function SalesDashboard() {
         return { dot: 'bg-slate-400', label: status };
     }
   };
+
+  // Fast map to lookup live variant inventory and product active state
+  const variantStockMap = useMemo(() => {
+    return new Map(variants.map((v) => [v.id, v]));
+  }, [variants]);
+
+  // Check if an order contains any out-of-stock items (stock <= 0 or disabled product)
+  const isOrderOutOfStock = useCallback(
+    (order: Order) => {
+      if (!order.order_items || order.order_items.length === 0) return false;
+      return order.order_items.some((item) => {
+        if (!item.variant_id) return false;
+        const v = variantStockMap.get(item.variant_id);
+        if (!v) return false;
+        const isProductDisabled = (v.product as any)?.is_active === false;
+        return (v.stock_quantity ?? 0) <= 0 || isProductDisabled;
+      });
+    },
+    [variantStockMap]
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
@@ -1246,6 +1273,7 @@ export default function SalesDashboard() {
                   <option value="all">All Statuses</option>
                   <option value="pending">Pending</option>
                   <option value="not_reachable">Not Reachable</option>
+                  <option value="delayed_delivery">Delayed Delivery</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="ready_to_ship">Ready to Ship</option>
                   <option value="on_the_way">On the Way</option>
@@ -1329,6 +1357,14 @@ export default function SalesDashboard() {
                                 <Phone className="w-3 h-3 text-slate-400" />
                                 {order.customer_phone}
                               </div>
+                              {isOrderOutOfStock(order) && (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-amber-600" />
+                                    Out of Stock (Delay Agreement)
+                                  </span>
+                                </div>
+                              )}
                             </td>
 
                             <td className="p-4">
@@ -1417,21 +1453,98 @@ export default function SalesDashboard() {
                                   <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
                                 </span>
                               ) : order.status === 'pending' || order.status === 'not_reachable' ? (
-                                <div className="relative inline-block">
-                                  <select
-                                    value={order.status}
-                                    onChange={(e) =>
-                                      handleStatusChange(order.id, e.target.value as OrderStatus)
-                                    }
-                                    className="text-xs font-semibold pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-                                  >
-                                    <option value="pending">Pending</option>
-                                    <option value="not_reachable">Not Reachable</option>
-                                    <option value="confirmed">Confirm Order</option>
-                                  </select>
+                                <div className="space-y-1.5">
+                                  <div className="relative inline-block">
+                                    <select
+                                      value={order.status}
+                                      onChange={(e) => {
+                                        const val = e.target.value as OrderStatus;
+                                        if (val === 'confirmed' && isOrderOutOfStock(order)) {
+                                          const proceed = window.confirm(
+                                            '⚠️ Warning: This order contains OUT-OF-STOCK items!\n\nIf the customer agreed to wait for the shipment, please select "Confirm Delayed Delivery" instead.\n\nDo you still want to force normal confirmation to packing?'
+                                          );
+                                          if (!proceed) return;
+                                        }
+                                        const note =
+                                          val === 'delayed_delivery'
+                                            ? 'Customer agreed to delayed delivery'
+                                            : val === 'canceled'
+                                            ? 'Customer refused delayed delivery (Stockout)'
+                                            : undefined;
+                                        handleStatusChange(order.id, val, note);
+                                      }}
+                                      className="text-xs font-semibold pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                                    >
+                                      <option value="pending">Pending</option>
+                                      <option value="not_reachable">Not Reachable</option>
+                                      <option value="confirmed">Confirm Order (In Stock)</option>
+                                      <option value="delayed_delivery">🕒 Confirm Delayed Delivery</option>
+                                      <option value="canceled">❌ Refused Delay (Decline)</option>
+                                    </select>
+                                    <span
+                                      className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                    />
+                                  </div>
+
+                                  {/* 1-Click Quick Action Buttons (Simple, no extra fields) */}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleStatusChange(
+                                          order.id,
+                                          'delayed_delivery',
+                                          'Customer agreed to delayed delivery'
+                                        )
+                                      }
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                                      title="1-Click: Customer agreed to wait for delayed delivery"
+                                    >
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      Delay Agreed
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleStatusChange(
+                                          order.id,
+                                          'canceled',
+                                          'Customer refused delayed delivery (Stockout)'
+                                        )
+                                      }
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                                      title="1-Click: Customer refused delay due to stockout"
+                                    >
+                                      <XCircle className="w-3 h-3 text-rose-500" />
+                                      Refused Delay
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : order.status === 'delayed_delivery' ? (
+                                <div className="space-y-1.5">
                                   <span
-                                    className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
-                                  />
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
+                                    title="Delayed delivery agreed. Order will automatically release to packing upon restock."
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                    <span>Delayed Delivery</span>
+                                  </span>
+                                  {!isOtherStaffOrder && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (window.confirm('Cancel this delayed delivery order (Customer called to cancel)?')) {
+                                            handleStatusChange(order.id, 'canceled', 'Customer canceled delayed delivery');
+                                          }
+                                        }}
+                                        className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <XCircle className="w-3 h-3 text-rose-500" />
+                                        Cancel Order
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <span

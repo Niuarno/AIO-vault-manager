@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
       adjusted_by: adjusted_by || null,
     });
 
-    // 4. Auto-disable product if cumulative stock of all variants is 0 or below
+    // 4. Auto-disable product if cumulative stock of all variants is 0 or below, or re-enable if stock added
     let isProductDisabled = false;
+    let isProductReenabled = false;
     if (variant.product_id) {
       const { data: siblings } = await supabase
         .from('product_variants')
@@ -62,6 +63,25 @@ export async function POST(req: NextRequest) {
           .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq('id', variant.product_id);
         isProductDisabled = true;
+      } else {
+        // Re-enable if stock was added
+        await supabase
+          .from('products')
+          .update({ is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', variant.product_id);
+        isProductReenabled = true;
+      }
+    }
+
+    // 5. Fully Automatic: Release delayed delivery orders if stock is replenished
+    let releasedCount = 0;
+    if (newStock > 0) {
+      try {
+        const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
+        const releaseResult = await autoReleaseDelayedOrders(supabase, variant_id);
+        releasedCount = releaseResult.releasedCount;
+      } catch (releaseErr) {
+        console.error('Auto release error after stock adjustment:', releaseErr);
       }
     }
 
@@ -71,8 +91,12 @@ export async function POST(req: NextRequest) {
       previous_stock: prevStock,
       new_stock: newStock,
       product_disabled: isProductDisabled,
+      product_reenabled: isProductReenabled,
+      released_delayed_orders: releasedCount,
       message: `Stock for ${variant.title} updated from ${prevStock} to ${newStock}${
         isProductDisabled ? ' (Product auto-disabled due to 0 stock)' : ''
+      }${isProductReenabled ? ' (Product re-enabled)' : ''}${
+        releasedCount > 0 ? ` (${releasedCount} delayed order(s) auto-released to packing!)` : ''
       }`,
     });
   } catch (err: any) {

@@ -33,6 +33,18 @@ export function getStatusBadgeInfo(status: OrderStatus) {
         bg: 'bg-amber-50 text-amber-700 border-amber-200',
         dot: 'bg-amber-400',
       };
+    case 'not_reachable':
+      return {
+        label: 'Not Reachable',
+        bg: 'bg-orange-50 text-orange-700 border-orange-200',
+        dot: 'bg-orange-400',
+      };
+    case 'delayed_delivery':
+      return {
+        label: 'Delayed Delivery',
+        bg: 'bg-amber-100 text-amber-900 border-amber-300',
+        dot: 'bg-amber-500',
+      };
     case 'confirmed':
       return {
         label: 'Confirmed',

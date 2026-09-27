@@ -13,6 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const allowedStatuses: OrderStatus[] = [
       'pending',
       'not_reachable',
+      'delayed_delivery',
       'confirmed',
       'ready_to_ship',
       'on_the_way',
@@ -81,7 +82,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // 2. Check existing order
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, sales_rep_id, source')
+      .select('id, status, order_number, sales_rep_id, source, note')
       .eq('id', id)
       .single();
 
@@ -91,11 +92,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     // 3. Permission Enforcement:
     // - Admin: Full permissions
-    // - Packing / Delivery team: Can transition fulfillment statuses ('confirmed', 'ready_to_ship', 'on_the_way', 'shipped', 'delivered', 'canceled')
-    // - Sales staff: Strictly limited to their assigned pending/not_reachable orders to confirm or mark not reachable
+    // - Packing / Delivery team: Can transition fulfillment & delayed delivery statuses
+    // - Sales staff: Can transition their assigned pending/not_reachable/delayed_delivery orders
     if (!isAdmin) {
       if (isPacking) {
         const packingAllowedTargets: OrderStatus[] = [
+          'delayed_delivery',
           'confirmed',
           'ready_to_ship',
           'on_the_way',
@@ -123,8 +125,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           );
         }
 
-        // Sales staff can only act if current status is 'pending' or 'not_reachable'
-        if (order.status !== 'pending' && order.status !== 'not_reachable') {
+        // Sales staff can act if current status is 'pending', 'not_reachable', or 'delayed_delivery'
+        if (
+          order.status !== 'pending' &&
+          order.status !== 'not_reachable' &&
+          order.status !== 'delayed_delivery'
+        ) {
           return NextResponse.json(
             {
               error: `Order is already '${order.status}' and locked for sales staff. Delivery and fulfillment team will process this order.`,
@@ -133,12 +139,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           );
         }
 
-        // Sales staff can only transition to 'confirmed', 'not_reachable', or 'pending'
-        const salesAllowedTargets: OrderStatus[] = ['pending', 'not_reachable', 'confirmed'];
+        // Sales staff can transition to 'confirmed', 'not_reachable', 'pending', 'delayed_delivery', or 'canceled' (e.g. refused delay)
+        const salesAllowedTargets: OrderStatus[] = [
+          'pending',
+          'not_reachable',
+          'confirmed',
+          'delayed_delivery',
+          'canceled',
+        ];
         if (!salesAllowedTargets.includes(status)) {
           return NextResponse.json(
             {
-              error: `Permission denied: Sales staff can only set status to 'Confirmed' or 'Not-Reachable'.`,
+              error: `Permission denied: Sales staff cannot set status to '${status}'.`,
             },
             { status: 403 }
           );
@@ -151,7 +163,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       status,
       updated_at: new Date().toISOString(),
     };
-    if (note) updateData.note = note;
+    if (note) {
+      updateData.note = (order as any).note ? `${(order as any).note} | ${note}` : note;
+    }
 
     const { data: updatedOrder, error: updateErr } = await supabase
       .from('orders')
