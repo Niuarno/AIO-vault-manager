@@ -35,25 +35,24 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Check if any selected variant belongs to a disabled product
+    // Check if any selected variant is out of stock or belongs to a disabled product -> auto-flags as Delayed Delivery
+    let isDelayedDelivery = Boolean(body.is_delayed_delivery);
     const orderedVariantIds = items.map((it: any) => it.variant_id).filter(Boolean);
     if (orderedVariantIds.length > 0) {
       const { data: variantsData } = await supabase
         .from('product_variants')
-        .select('id, title, product:products(id, title, is_active)')
+        .select('id, title, stock_quantity, product:products(id, title, is_active)')
         .in('id', orderedVariantIds);
 
       for (const it of items) {
         if (!it.variant_id) continue;
         const matchedVar = (variantsData || []).find((v: any) => v.id === it.variant_id);
-        const prod = (matchedVar?.product as any);
-        if (prod && prod.is_active === false) {
-          return NextResponse.json(
-            {
-              error: `Cannot add "${prod.title || it.title}" (${matchedVar?.title || it.variant_title || 'Variant'}) to order because this product is currently disabled.`,
-            },
-            { status: 400 }
-          );
+        const prod = matchedVar?.product as any;
+        const isOutOfStock = (matchedVar?.stock_quantity ?? 0) <= 0;
+        const isProdDisabled = prod && prod.is_active === false;
+
+        if (isOutOfStock || isProdDisabled) {
+          isDelayedDelivery = true;
         }
       }
     }
@@ -160,6 +159,12 @@ export async function POST(req: NextRequest) {
         `[Advance Paid: ৳${finalAdvance.toLocaleString()}${methodLabel}${trxLabel} | Remaining COD: ৳${remainingCod.toLocaleString()}]`;
     }
 
+    if (isDelayedDelivery) {
+      finalNote =
+        (finalNote ? finalNote + '\n' : '') +
+        `[Customer Agreed to Delayed Delivery via ${orderSource.toUpperCase()}]`;
+    }
+
     const isWebsite = orderSource === 'website';
 
     // 1. Insert Order with fallback handling for newer columns
@@ -175,7 +180,7 @@ export async function POST(req: NextRequest) {
           ? advance_method || 'Prepaid'
           : payment_method || 'Cash on Delivery (COD)',
       payment_status: paymentStatus,
-      status: 'pending', // Pending sales confirmation
+      status: isDelayedDelivery ? 'delayed_delivery' : 'pending',
       total_amount: grandTotal,
       delivery_charge: finalDeliveryFee,
       discount_amount: finalDiscount,

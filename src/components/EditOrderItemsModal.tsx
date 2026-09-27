@@ -224,9 +224,17 @@ export default function EditOrderItemsModal({
     const variant = catalogVariants.find((v) => v.id === selectedVariantId);
     if (!variant) return;
 
-    if (variant.product?.is_active === false) {
-      alert(`"${variant.product.title || variant.title}" is currently disabled and cannot be added to orders.`);
-      return;
+    const isOutOfStock = (variant.stock_quantity ?? 0) <= 0;
+    const isProdDisabled = variant.product?.is_active === false;
+
+    if (isOutOfStock || isProdDisabled) {
+      const prodName = variant.product?.title || variant.title;
+      const confirmed = window.confirm(
+        `⚠️ "${prodName}" is currently OUT OF STOCK.\n\nDid the customer agree to DELAYED DELIVERY for this item? Saving this will queue this order for Delayed Delivery until restocked.`
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     const effectiveIsUpsell = isWebsite ? newItemIsUpsell : false;
@@ -292,6 +300,12 @@ export default function EditOrderItemsModal({
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
+      const hasDelayedItems = items.some((item) => {
+        const v = catalogVariants.find((cv) => cv.id === item.variant_id);
+        return (v?.stock_quantity ?? 0) <= 0 || (v?.product as any)?.is_active === false;
+      });
+      const isDelayed = order.status === 'delayed_delivery' || hasDelayedItems;
+
       const res = await fetch(`/api/orders/${order.id}/items`, {
         method: 'PATCH',
         headers,
@@ -301,6 +315,7 @@ export default function EditOrderItemsModal({
           edited_by: currentUserLabel,
           sales_rep_id: currentUserId || order.sales_rep_id,
           is_reachout: hasReachoutOrder || items.some((i: any) => i.is_reachout),
+          is_delayed_delivery: isDelayed,
           delivery_charge: Number(deliveryCharge) || 0,
           discount_amount: Number(discountAmount) || 0,
           advance_payment: Number(advancePayment) || 0,

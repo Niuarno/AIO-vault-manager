@@ -90,22 +90,27 @@ export async function PATCH(
       new Set([...Object.keys(oldVariantQty), ...Object.keys(newVariantQty)])
     );
 
-    // Validate that newly added items are not disabled
-    for (const item of newItems) {
-      if (!item.variant_id) continue;
-      const oldQ = oldVariantQty[item.variant_id] || 0;
-      const newQ = newVariantQty[item.variant_id] || 0;
-      if (newQ > oldQ) {
-        const { data: v } = await supabase
-          .from('product_variants')
-          .select('title, product:products(title, is_active)')
-          .eq('id', item.variant_id)
-          .single();
-        if ((v?.product as any)?.is_active === false) {
-          return NextResponse.json(
-            { error: `Cannot add "${(v?.product as any)?.title || item.title}": this product is currently disabled.` },
-            { status: 400 }
-          );
+    // Check if order is or should be marked as delayed delivery
+    const isDelayedDelivery = Boolean(body.is_delayed_delivery) || order.status === 'delayed_delivery';
+
+    // Validate that newly added items are not disabled (unless order is delayed delivery pre-order)
+    if (!isDelayedDelivery) {
+      for (const item of newItems) {
+        if (!item.variant_id) continue;
+        const oldQ = oldVariantQty[item.variant_id] || 0;
+        const newQ = newVariantQty[item.variant_id] || 0;
+        if (newQ > oldQ) {
+          const { data: v } = await supabase
+            .from('product_variants')
+            .select('title, product:products(title, is_active)')
+            .eq('id', item.variant_id)
+            .single();
+          if ((v?.product as any)?.is_active === false) {
+            return NextResponse.json(
+              { error: `Cannot add "${(v?.product as any)?.title || item.title}": this product is currently disabled.` },
+              { status: 400 }
+            );
+          }
         }
       }
     }
@@ -133,16 +138,20 @@ export async function PATCH(
       }
 
       const prevStock = variant.stock_quantity;
-      const nextStock = prevStock - delta;
+      let nextStock = prevStock - delta;
 
-      // Only block if deducting and stock goes below 0
+      // Only block if deducting and stock goes below 0, unless order is delayed delivery
       if (delta > 0 && nextStock < 0) {
-        return NextResponse.json(
-          {
-            error: `Insufficient stock for "${variant.title}". Available: ${prevStock}, requested additional: ${delta}`,
-          },
-          { status: 400 }
-        );
+        if (!isDelayedDelivery) {
+          return NextResponse.json(
+            {
+              error: `Insufficient stock for "${variant.title}". Available: ${prevStock}, requested additional: ${delta}`,
+            },
+            { status: 400 }
+          );
+        }
+        // For delayed delivery, keep stock at minimum 0
+        nextStock = Math.max(0, nextStock);
       }
 
       // Update variant stock
@@ -155,14 +164,17 @@ export async function PATCH(
         .eq('id', variantId);
 
       // Audit log
-      await supabase.from('inventory_logs').insert({
-        variant_id: variantId,
-        previous_stock: prevStock,
-        change_amount: -delta,
-        new_stock: nextStock,
-        reason: delta > 0 ? 'order_created' : 'restock',
-        order_id: orderId,
-      });
+      const actualChange = nextStock - prevStock;
+      if (actualChange !== 0) {
+        await supabase.from('inventory_logs').insert({
+          variant_id: variantId,
+          previous_stock: prevStock,
+          change_amount: actualChange,
+          new_stock: nextStock,
+          reason: delta > 0 ? 'order_created' : 'restock',
+          order_id: orderId,
+        });
+      }
 
       // Auto-disable parent product if total stock depleted to 0 or below
       if (variant.product_id) {
@@ -371,6 +383,10 @@ export async function PATCH(
       updatedNote += `\n[Advance Paid: ৳${finalAdvance.toLocaleString()} | Remaining COD: ৳${recalculatedRemainingCod.toLocaleString()}]`;
     }
 
+    if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+      updatedNote += '\n[Order moved to Delayed Delivery due to out-of-stock items]';
+    }
+
     let updatedOrder: any = null;
 
     // Try updating with all columns
@@ -385,6 +401,10 @@ export async function PATCH(
       original_items: originalItems,
       sales_rep_id: resolvedSalesRepId,
     };
+
+    if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+      updatePayload.status = 'delayed_delivery';
+    }
 
     const { data: fullUpdateData, error: fullUpdateErr } = await supabase
       .from('orders')
@@ -401,6 +421,10 @@ export async function PATCH(
         note: updatedNote,
         sales_rep_id: resolvedSalesRepId,
       };
+
+      if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+        fallbackPayload.status = 'delayed_delivery';
+      }
 
       const { data: fallbackData, error: fallbackErr } = await supabase
         .from('orders')

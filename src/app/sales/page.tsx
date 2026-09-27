@@ -130,6 +130,7 @@ export default function SalesDashboard() {
       quantity: number;
       is_upsell: boolean;
       is_reachout?: boolean;
+      is_delayed_preorder?: boolean;
     }>
   >([]);
 
@@ -378,14 +379,22 @@ export default function SalesDashboard() {
     const v = variants.find((variant) => variant.id === selectedVariantId);
     if (!v) return;
 
-    if ((v.product as any)?.is_active === false) {
-      alert(`"${(v.product as any)?.name || (v.product as any)?.title || 'This product'}" is disabled and cannot be added to orders.`);
-      return;
-    }
+    const isOutOfStock = (v.stock_quantity ?? 0) <= 0;
+    const isExceedingStock = itemQuantity > (v.stock_quantity ?? 0);
+    const isProdDisabled = (v.product as any)?.is_active === false;
 
-    if (itemQuantity > v.stock_quantity) {
-      alert(`Only ${v.stock_quantity} units available in live stock.`);
-      return;
+    let isPreOrder = false;
+
+    if (isOutOfStock || isExceedingStock || isProdDisabled) {
+      const prodName = (v.product as any)?.name || (v.product as any)?.title || 'This product';
+      const reason = isProdDisabled || isOutOfStock ? 'is currently OUT OF STOCK' : `only has ${v.stock_quantity} units available`;
+      const confirmed = window.confirm(
+        `⚠️ "${prodName}" (${v.title}) ${reason}.\n\nDid the customer agree over ${source.toUpperCase()} to DELAYED DELIVERY for this pre-order?`
+      );
+      if (!confirmed) {
+        return;
+      }
+      isPreOrder = true;
     }
 
     setOrderItems((prev) => [
@@ -399,6 +408,7 @@ export default function SalesDashboard() {
         quantity: itemQuantity,
         is_upsell: false,
         is_reachout: isReachoutItem,
+        is_delayed_preorder: isPreOrder,
       },
     ]);
 
@@ -407,6 +417,11 @@ export default function SalesDashboard() {
     setItemQuantity(1);
     setIsReachoutItem(false);
   };
+
+  const hasDelayedPreOrderItems = useMemo(
+    () => orderItems.some((it) => it.is_delayed_preorder),
+    [orderItems]
+  );
 
   // Remove Item
   const handleRemoveItem = (index: number) => {
@@ -473,6 +488,7 @@ export default function SalesDashboard() {
           sales_rep_id: currentProfile?.id,
           coupon_used: couponUsed || null,
           is_reachout_order: orderItems.some((i) => i.is_reachout),
+          is_delayed_delivery: hasDelayedPreOrderItems,
           delivery_type: deliveryType,
           delivery_charge: deliveryCharge,
           discount_amount: discountAmount,
@@ -2368,6 +2384,11 @@ export default function SalesDashboard() {
                                   <span className="text-slate-500 text-[11px]">({item.variant_title})</span>
                                 )}
                                 <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
+                                {item.is_delayed_preorder && (
+                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] flex items-center gap-1">
+                                    🕒 Pre-Order
+                                  </span>
+                                )}
                                 {item.is_reachout && (
                                   <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[9px]">
                                     Reachout
@@ -2639,15 +2660,38 @@ export default function SalesDashboard() {
                         </p>
                       </div>
 
+                      {/* Delayed Delivery Pre-Order Notice */}
+                      {hasDelayedPreOrderItems && (
+                        <div className="p-3 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2.5">
+                          <span className="text-base leading-none">🕒</span>
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-[11px]">Delayed Delivery Pre-Order</p>
+                            <p className="text-[10px] text-amber-800 leading-normal">
+                              This order contains out-of-stock items and will be queued under <strong>Delayed Delivery</strong>. It will automatically release to Packing once stock is replenished!
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Submit Actions */}
                       <div className="pt-2 space-y-2">
                         <button
                           type="submit"
                           disabled={submittingOrder || orderItems.length === 0}
-                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-all disabled:opacity-50 text-center flex items-center justify-center gap-1.5"
+                          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 text-center flex items-center justify-center gap-1.5 ${
+                            hasDelayedPreOrderItems
+                              ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
                         >
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>{submittingOrder ? 'Placing Order...' : 'Confirm & Create Order'}</span>
+                          <span>
+                            {submittingOrder
+                              ? 'Placing Order...'
+                              : hasDelayedPreOrderItems
+                              ? 'Confirm & Create Delayed Pre-Order 🕒'
+                              : 'Confirm & Create Order'}
+                          </span>
                         </button>
                         <button
                           type="button"

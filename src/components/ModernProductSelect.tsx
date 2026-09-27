@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, Check, Package, AlertCircle } from 'lucide-react';
+import { Search, ChevronDown, Check, Package, AlertCircle, Clock } from 'lucide-react';
 import { ProductVariant } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
 
@@ -72,16 +72,22 @@ export default function ModernProductSelect({
             <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
               <Package className="w-3.5 h-3.5" />
             </div>
-            <div className="truncate min-w-0 flex-1">
+            <div className="truncate min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
               <span className="font-semibold text-slate-800">
                 {(selectedVariant.product as any)?.name || (selectedVariant.product as any)?.title || 'Product'}
               </span>
-              <span className="text-slate-500 text-xs ml-1.5">
+              <span className="text-slate-500 text-xs">
                 ({selectedVariant.title})
               </span>
-              <span className="font-semibold text-emerald-700 text-xs ml-2 font-mono shrink-0">
+              <span className="font-semibold text-emerald-700 text-xs font-mono shrink-0">
                 {formatCurrency(selectedVariant.price)}
               </span>
+              {(selectedVariant.stock_quantity <= 0 || (selectedVariant.product as any)?.is_active === false) && (
+                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold shrink-0 flex items-center gap-1 shadow-2xs">
+                  <Clock className="w-2.5 h-2.5 text-amber-600" />
+                  Delayed Pre-Order
+                </span>
+              )}
             </div>
           </div>
         ) : (
@@ -125,27 +131,23 @@ export default function ModernProductSelect({
                 const isProductDisabled = (variant.product as any)?.is_active === false;
                 const isOutOfStock = variant.stock_quantity <= 0;
                 const isLowStock = variant.stock_quantity <= 5 && !isOutOfStock;
-                const isDisabled = isOutOfStock || isProductDisabled;
+                const isDelayedPreOrderItem = isOutOfStock || isProductDisabled;
                 const prodName = (variant.product as any)?.name || (variant.product as any)?.title || 'Product';
 
                 return (
                   <button
                     key={variant.id}
                     type="button"
-                    disabled={isDisabled}
                     onClick={() => {
-                      if (isDisabled) return;
                       onSelect(variant.id);
                       setIsOpen(false);
                       setSearch('');
                     }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-50 text-emerald-950 font-medium'
-                        : isProductDisabled
-                        ? 'opacity-40 cursor-not-allowed bg-slate-100/70'
-                        : isOutOfStock
-                        ? 'opacity-40 cursor-not-allowed bg-slate-50/50'
+                        : isDelayedPreOrderItem
+                        ? 'hover:bg-amber-50/70 text-slate-800'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
@@ -153,8 +155,8 @@ export default function ModernProductSelect({
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                         isSelected
                           ? 'bg-emerald-600 text-white'
-                          : isProductDisabled
-                          ? 'bg-slate-200 text-slate-400'
+                          : isDelayedPreOrderItem
+                          ? 'bg-amber-100 text-amber-700'
                           : 'bg-slate-100 text-slate-500'
                       }`}>
                         <Package className="w-3.5 h-3.5" />
@@ -162,9 +164,9 @@ export default function ModernProductSelect({
                       <div className="truncate min-w-0 flex-1">
                         <div className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
                           <span>{prodName}</span>
-                          {isProductDisabled && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 border border-slate-300">
-                              Disabled
+                          {isDelayedPreOrderItem && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                              Pre-Order (0 Stock)
                             </span>
                           )}
                         </div>
@@ -184,16 +186,15 @@ export default function ModernProductSelect({
                       <span className="font-bold text-xs text-slate-900 font-mono">
                         {formatCurrency(variant.price)}
                       </span>
-                      {isProductDisabled ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-slate-200 text-slate-700 border-slate-300">
-                          Disabled
+                      {isDelayedPreOrderItem ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-900 border-amber-300 flex items-center gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          <span>Pre-Order</span>
                         </span>
                       ) : (
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                            isOutOfStock
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : isLowStock
+                            isLowStock
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}
