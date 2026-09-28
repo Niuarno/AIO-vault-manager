@@ -29,6 +29,7 @@ import {
   Send,
   Radio,
   Zap,
+  Lock,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile, Product, ProductVariant } from '@/types/database';
 import {
@@ -53,6 +54,8 @@ export default function PackingDashboard() {
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingQueue, setRefreshingQueue] = useState(false);
+  const [releasingDelayed, setReleasingDelayed] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -147,8 +150,10 @@ export default function PackingDashboard() {
   }, [router]);
 
   // Fetch only fulfilled / confirmed pipeline orders (NEVER pending or canceled)
-  const fetchPackingOrders = async () => {
-    setLoading(true);
+  const fetchPackingOrders = async (isInitial = false) => {
+    if (isInitial) {
+      setLoading(true);
+    }
     // Strict query: ONLY allowed statuses
     const { data, error } = await supabase
       .from('orders')
@@ -159,7 +164,22 @@ export default function PackingDashboard() {
     if (!error && data) {
       setOrders(data as Order[]);
     }
-    setLoading(false);
+    if (isInitial) {
+      setLoading(false);
+    }
+  };
+
+  // Silent background refresh for real-time updates without screen wipes or UI jumps
+  const silentRefreshOrders = async () => {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setOrders(data as Order[]);
+    }
   };
 
   // Fetch Live Inventory for Stock Management
@@ -198,7 +218,7 @@ export default function PackingDashboard() {
 
       if (data.released_delayed_orders > 0) {
         alert(`Stock updated! ${data.released_delayed_orders} waiting delayed order(s) were automatically released to packing queue! 🚀`);
-        fetchPackingOrders();
+        silentRefreshOrders();
       }
 
       setInventoryProducts((prev) =>
@@ -235,31 +255,56 @@ export default function PackingDashboard() {
   };
 
   useEffect(() => {
-    fetchPackingOrders();
+    fetchPackingOrders(true);
     fetchSteadfastBalance();
 
-    // Auto-refresh polling every 12 seconds for packing queue
-    const timer = setInterval(() => {
-      fetchPackingOrders();
-    }, 12000);
-
-    // Supabase Realtime channel subscription for instant dispatch on status changes
+    // Supabase Realtime channel subscription for instant, silent updates with zero page flicker
     const channel = supabase
       .channel('packing-realtime-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         () => {
-          fetchPackingOrders();
+          // Silent background update - updates state without wiping out UI
+          silentRefreshOrders();
         }
       )
       .subscribe();
 
+    // Quiet background sync with Steadfast for in-transit parcels every 3 minutes
+    const backgroundSteadfastSync = setInterval(async () => {
+      try {
+        const { data: activeOrders } = await supabase
+          .from('orders')
+          .select('id, consignment_id, courier_name')
+          .eq('status', 'on_the_way')
+          .not('consignment_id', 'is', null);
+
+        if (activeOrders && activeOrders.length > 0) {
+          for (const ord of activeOrders.slice(0, 5)) {
+            await fetch('/api/shipping/steadfast/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId: ord.id }),
+            }).catch(() => {});
+          }
+        }
+      } catch {
+        // silent
+      }
+    }, 180000);
+
     return () => {
-      clearInterval(timer);
+      clearInterval(backgroundSteadfastSync);
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const handleManualRefresh = async () => {
+    setRefreshingQueue(true);
+    await Promise.all([fetchPackingOrders(false), fetchSteadfastBalance()]);
+    setRefreshingQueue(false);
+  };
 
   // Update Status Progression
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
@@ -679,12 +724,13 @@ export default function PackingDashboard() {
               <span>Steadfast Webhook Setup</span>
             </button>
             <button
-              onClick={fetchPackingOrders}
-              disabled={loading}
-              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold shadow-xs transition-all"
+              onClick={handleManualRefresh}
+              disabled={refreshingQueue || loading}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              title="Quietly refresh orders and Steadfast balance"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh Queue</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingQueue ? 'animate-spin text-amber-600' : ''}`} />
+              <span>{refreshingQueue ? 'Updating...' : 'Refresh Queue'}</span>
             </button>
           </div>
         </div>
@@ -826,7 +872,7 @@ export default function PackingDashboard() {
                     className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     <Send className={`w-3.5 h-3.5 ${bulkDispatching ? 'animate-spin' : ''}`} />
-                    <span>{bulkDispatching ? 'Dispatching...' : `Bulk Dispatch (${selectedOrderIds.length}) to Steadfast 🚀`}</span>
+                    <span>{bulkDispatching ? 'Requesting Pickup...' : `Request Pickup for (${selectedOrderIds.length}) Orders 🚀`}</span>
                   </button>
                 )}
               </>
@@ -862,24 +908,25 @@ export default function PackingDashboard() {
               <button
                 type="button"
                 onClick={async () => {
-                  setLoading(true);
+                  setReleasingDelayed(true);
                   try {
                     const res = await fetch('/api/orders/release-delayed', { method: 'POST' });
                     const json = await res.json();
                     alert(json.message || 'Checked waiting delayed orders.');
-                    fetchPackingOrders();
+                    silentRefreshOrders();
                     fetchInventory();
                   } catch (err: any) {
                     alert(err.message);
                   } finally {
-                    setLoading(false);
+                    setReleasingDelayed(false);
                   }
                 }}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                disabled={releasingDelayed}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
                 title="Automatically check live inventory and release all fulfilled delayed orders to packing"
               >
-                <Zap className="w-3.5 h-3.5 text-emerald-200" />
-                <span>Auto-Release In-Stock Orders ⚡</span>
+                <Zap className="w-3.5 h-3.5 text-amber-200" />
+                <span>{releasingDelayed ? 'Releasing...' : 'Auto-Release In-Stock Orders ⚡'}</span>
               </button>
             )}
 
@@ -980,6 +1027,9 @@ export default function PackingDashboard() {
                         const tracking = getOrderTrackingCode(order);
 
                         if (cid) {
+                          const isAwaitingPickup = !order.courier_status || order.courier_status === 'in_review' || order.courier_status === 'pending';
+                          const isDelivered = order.courier_status === 'delivered' || order.status === 'shipped';
+
                           return (
                             <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
                               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 font-mono text-xs font-bold shadow-2xs">
@@ -998,6 +1048,41 @@ export default function PackingDashboard() {
                                   Copy
                                 </button>
                               </span>
+
+                              {/* Physical Parcel Label Reminder */}
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold shadow-2xs">
+                                <span>🏷️ Attach CID to Physical Parcel</span>
+                              </span>
+
+                              {/* Rider Pickup Progress Indicator */}
+                              {isAwaitingPickup && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-300 text-sky-900 text-[11px] font-bold shadow-2xs">
+                                  <span>🛵 Awaiting Steadfast Rider Pickup</span>
+                                </span>
+                              )}
+
+                              {!isAwaitingPickup && !isDelivered && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-bold shadow-2xs">
+                                  <span>🚚 In Transit with Steadfast</span>
+                                </span>
+                              )}
+
+                              {isDelivered && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold shadow-2xs">
+                                  <span>✅ Delivered</span>
+                                </span>
+                              )}
+
+                              {/* Quick Print Parcel Slip */}
+                              <button
+                                type="button"
+                                onClick={() => triggerPrint(order)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                title="Print Packing Slip with Consignment ID"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>Print Parcel Slip</span>
+                              </button>
 
                               {tracking && (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px]">
@@ -1341,37 +1426,51 @@ export default function PackingDashboard() {
                       )}
 
                       {order.status === 'confirmed' && (
-                        <button
-                          onClick={() => handleStatusChange(order.id, 'ready_to_ship')}
-                          disabled={updatingId === order.id}
-                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                        >
-                          <Package className="w-4 h-4" />
-                          <span>
-                            {updatingId === order.id ? 'Updating...' : 'Mark Packed (Ready to Ship)'}
-                          </span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                        <div className="flex items-center space-x-2 flex-wrap gap-2">
+                          <button
+                            onClick={() => handleStatusChange(order.id, 'ready_to_ship')}
+                            disabled={updatingId === order.id}
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                          >
+                            <Package className="w-4 h-4" />
+                            <span>
+                              {updatingId === order.id ? 'Updating...' : 'Mark Packed (Ready to Ship)'}
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
 
-                      {order.status === 'ready_to_ship' && (
-                        <div className="flex items-center space-x-2">
                           <button
                             onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                             disabled={dispatchingId === order.id}
-                            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                            title="Create consignment in Steadfast Courier and advance to With Courier"
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            title="Pack and instantly request Steadfast Courier pickup to get Consignment ID"
                           >
                             <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
                             <span>
-                              {dispatchingId === order.id ? 'Sending to Steadfast...' : 'Send to Steadfast'}
+                              {dispatchingId === order.id ? 'Requesting Pickup...' : 'Pack & Request Pickup (Get CID) 🚀'}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      {order.status === 'ready_to_ship' && (
+                        <div className="flex items-center space-x-2 flex-wrap gap-2">
+                          <button
+                            onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
+                            disabled={dispatchingId === order.id}
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            title="Request Steadfast Courier rider to pickup from warehouse and generate Consignment ID"
+                          >
+                            <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
+                            <span>
+                              {dispatchingId === order.id ? 'Requesting Pickup...' : 'Request Steadfast Pickup (Get CID) 🚀'}
                             </span>
                           </button>
 
                           <button
                             onClick={() => handleStatusChange(order.id, 'on_the_way')}
                             disabled={updatingId === order.id}
-                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Manual handover without Steadfast API"
                           >
                             <Truck className="w-3.5 h-3.5 text-slate-500" />
@@ -1383,45 +1482,54 @@ export default function PackingDashboard() {
 
                       {order.status === 'on_the_way' && (
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
-                          {!getOrderConsignmentId(order) && (
-                            <button
-                              onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
-                              disabled={dispatchingId === order.id}
-                              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                              title="Create consignment in Steadfast Courier"
-                            >
-                              <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
-                              <span>
-                                {dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast'}
+                          {getOrderConsignmentId(order) ? (
+                            <>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-2xs">
+                                <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>🔒 Automated by Steadfast (Locked)</span>
                               </span>
-                            </button>
+
+                              <button
+                                onClick={() => handleSyncSteadfast(order)}
+                                disabled={syncingId === order.id}
+                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                title="Query Steadfast to update live tracking and consignment status"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${syncingId === order.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingId === order.id ? 'Syncing...' : 'Sync Status'}</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
+                                disabled={dispatchingId === order.id}
+                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                title="Create consignment in Steadfast Courier"
+                              >
+                                <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
+                                <span>
+                                  {dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast (Get CID)'}
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={() => handleStatusChange(order.id, 'shipped')}
+                                disabled={updatingId === order.id}
+                                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>
+                                  {updatingId === order.id ? 'Updating...' : 'Mark as Shipped'}
+                                </span>
+                              </button>
+                            </>
                           )}
-
-                          <button
-                            onClick={() => handleSyncSteadfast(order)}
-                            disabled={syncingId === order.id}
-                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                            title="Query Steadfast to update live tracking and consignment status"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${syncingId === order.id ? 'animate-spin' : ''}`} />
-                            <span>{syncingId === order.id ? 'Syncing...' : 'Sync Steadfast'}</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleStatusChange(order.id, 'shipped')}
-                            disabled={updatingId === order.id}
-                            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>
-                              {updatingId === order.id ? 'Updating...' : 'Mark as Shipped'}
-                            </span>
-                          </button>
                         </div>
                       )}
 
                       {order.status === 'shipped' && (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap gap-2">
                           {(() => {
                             const cid = getOrderConsignmentId(order);
                             return cid ? (
@@ -1433,7 +1541,7 @@ export default function PackingDashboard() {
                           })()}
                           <span className="text-xs text-emerald-700 font-semibold flex items-center">
                             <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-600" />
-                            Order Shipped & Complete
+                            Order Delivered & Complete
                           </span>
                         </div>
                       )}
@@ -1684,12 +1792,17 @@ export default function PackingDashboard() {
                 <div className="text-right">
                   <h2 className="text-xl font-bold font-mono">{selectedOrderForSlip.order_number}</h2>
                   <p className="text-xs text-slate-500">{formatDate(selectedOrderForSlip.created_at)}</p>
-                  {selectedOrderForSlip.consignment_id && (
-                    <div className="mt-1 text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded inline-block">
-                      Steadfast CID: #{selectedOrderForSlip.consignment_id}
-                      {selectedOrderForSlip.tracking_code && ` · Trk: ${selectedOrderForSlip.tracking_code}`}
-                    </div>
-                  )}
+                  {(() => {
+                    const cid = getOrderConsignmentId(selectedOrderForSlip);
+                    const trk = getOrderTrackingCode(selectedOrderForSlip);
+                    if (!cid) return null;
+                    return (
+                      <div className="mt-1 text-xs font-mono font-bold text-indigo-900 bg-indigo-50 border-2 border-indigo-300 px-2 py-0.5 rounded inline-block">
+                        STEADFAST CID: #{cid}
+                        {trk && ` · TRK: ${trk}`}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 

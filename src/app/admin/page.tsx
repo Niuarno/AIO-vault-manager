@@ -1363,46 +1363,99 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4">
-                              <div className="relative inline-block">
-                                <select
-                                  value={order.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(order.id, e.target.value as OrderStatus)
-                                  }
-                                  className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
-                                >
-                                  <option value="pending">Pending</option>
-                                  <option value="not_reachable">Not Reachable</option>
-                                  <option value="delayed_delivery">Delayed Delivery</option>
-                                  <option value="confirmed">Confirmed</option>
-                                  <option value="ready_to_ship">Ready to Ship</option>
-                                  <option value="on_the_way">On the Way</option>
-                                  <option value="delivered">Delivered</option>
-                                  <option value="canceled">Canceled</option>
-                                </select>
-                                <span
-                                  className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
-                                />
-                              </div>
+                              {(() => {
+                                const isManagedByCourier = Boolean(
+                                  order.consignment_id ||
+                                  (order.external_id && /^\d+$/.test(order.external_id)) ||
+                                  order.courier_name === 'steadfast' ||
+                                  order.note?.includes('CID: #')
+                                );
+                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+
+                                if (isManagedByCourier && isCourierStage) {
+                                  return (
+                                    <div className="flex flex-col gap-1 items-start">
+                                      <span
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
+                                        title="Steadfast Automated: This parcel has been handed over to Steadfast Courier. Status updates automatically via tracking and cannot be modified manually."
+                                      >
+                                        <Lock className="w-3 h-3 text-amber-600" />
+                                        <span>{statusBadge.label} (Automated)</span>
+                                      </span>
+                                      {order.consignment_id && (
+                                        <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                          CID: #{order.consignment_id}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div className="relative inline-block">
+                                    <select
+                                      value={order.status}
+                                      onChange={(e) =>
+                                        handleStatusChange(order.id, e.target.value as OrderStatus)
+                                      }
+                                      className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
+                                    >
+                                      <option value="pending">Pending</option>
+                                      <option value="not_reachable">Not Reachable</option>
+                                      <option value="delayed_delivery">Delayed Delivery</option>
+                                      <option value="confirmed">Confirmed</option>
+                                      <option value="ready_to_ship">Ready to Ship</option>
+                                      <option value="on_the_way">On the Way</option>
+                                      <option value="delivered">Delivered</option>
+                                      <option value="canceled">Canceled</option>
+                                    </select>
+                                    <span
+                                      className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                    />
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             <td className="p-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() => setEditingOrderForItems(order)}
-                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
-                                  title="Edit items & view history timeline"
-                                >
-                                  <PackageOpen className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => setDeletingOrder(order)}
-                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                                  title="Delete order"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
+                              {(() => {
+                                const isManagedByCourier = Boolean(
+                                  order.consignment_id ||
+                                  (order.external_id && /^\d+$/.test(order.external_id)) ||
+                                  order.courier_name === 'steadfast' ||
+                                  order.note?.includes('CID: #')
+                                );
+                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+
+                                return (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => setEditingOrderForItems(order)}
+                                      className={`p-1.5 rounded-lg transition-colors ${
+                                        isManagedByCourier && isCourierStage
+                                          ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                                      }`}
+                                      title={isManagedByCourier && isCourierStage ? 'View items (Locked with Steadfast)' : 'Edit items & view history timeline'}
+                                    >
+                                      {isManagedByCourier && isCourierStage ? (
+                                        <Lock className="w-4 h-4 text-amber-600" />
+                                      ) : (
+                                        <PackageOpen className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    {!isManagedByCourier && (
+                                      <button
+                                        onClick={() => setDeletingOrder(order)}
+                                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                                        title="Delete order"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );

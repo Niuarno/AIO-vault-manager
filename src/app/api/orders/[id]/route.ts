@@ -30,12 +30,26 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     // Verify order exists
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('id, order_number')
+      .select('id, order_number, status, consignment_id, courier_name, external_id')
       .eq('id', id)
       .single();
 
     if (fetchErr || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const hasConsignment = Boolean(
+      order.consignment_id ||
+      (order.external_id && /^\d+$/.test(order.external_id)) ||
+      order.courier_name === 'steadfast'
+    );
+    if (hasConsignment || order.status === 'on_the_way' || order.status === 'shipped') {
+      return NextResponse.json(
+        {
+          error: `Cannot delete order #${order.order_number}: This parcel has already been registered with Steadfast Courier (CID: #${order.consignment_id || order.external_id || 'Assigned'}).`,
+        },
+        { status: 403 }
+      );
     }
 
     // Clean up dependencies

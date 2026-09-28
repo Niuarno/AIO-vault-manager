@@ -97,12 +97,26 @@ export default function EditOrderItemsModal({
     );
   }, [order]);
 
+  // Hard Lock: Once an order has been registered with Steadfast Courier (has consignment ID or is on_the_way / shipped),
+  // NO ONE can edit any products in that parcel, not even administrators.
+  const isLockedByCourier = useMemo(() => {
+    const hasConsignment = Boolean(
+      order.consignment_id ||
+      (order.external_id && /^\d+$/.test(order.external_id)) ||
+      order.courier_name === 'steadfast' ||
+      order.note?.includes('CID: #')
+    );
+    const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+    return hasConsignment || isCourierStage;
+  }, [order]);
+
   // Rule: "when any order has already been assigned to a staff member it will only editable for that specifc staff member and admins no one else"
   const canEdit = useMemo(() => {
+    if (isLockedByCourier) return false;
     if (isAdmin) return true;
     if (!order.sales_rep_id) return true;
     return order.sales_rep_id === currentUserId;
-  }, [isAdmin, order.sales_rep_id, currentUserId]);
+  }, [isLockedByCourier, isAdmin, order.sales_rep_id, currentUserId]);
 
   // Load user name & id & role
   useEffect(() => {
@@ -275,6 +289,11 @@ export default function EditOrderItemsModal({
   const upsellItems = items.filter((i) => i.is_upsell);
 
   const handleSaveOrderItems = async () => {
+    if (isLockedByCourier) {
+      setErrorMsg('This parcel has been registered with Steadfast Courier and cannot be edited by anyone, including administrators.');
+      return;
+    }
+
     if (!canEdit) {
       setErrorMsg('Permission denied: This order is assigned to another staff member and can only be edited by them or an administrator.');
       return;
@@ -402,6 +421,20 @@ export default function EditOrderItemsModal({
               <div className="p-3.5 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {isLockedByCourier && (
+              <div className="p-3.5 mb-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-center space-x-2.5 shadow-2xs">
+                <Lock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-[11px]">
+                    Parcel Locked with Steadfast Courier (CID: #{order.consignment_id || (order as any).external_id || 'Assigned'})
+                  </p>
+                  <p className="text-[10px] text-amber-800 leading-relaxed mt-0.5">
+                    This parcel has been registered for pickup with Steadfast Courier. Products and quantities are physically sealed and cannot be modified by any user or administrator.
+                  </p>
+                </div>
               </div>
             )}
 

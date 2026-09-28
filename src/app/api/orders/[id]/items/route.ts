@@ -59,6 +59,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    // Hard Lock: Once an order has been registered with Steadfast Courier (has consignment ID or is on_the_way / shipped),
+    // NO ONE can edit any products in that parcel, not even administrators.
+    const hasConsignment = Boolean(
+      order.consignment_id ||
+      (order.external_id && /^\d+$/.test(order.external_id)) ||
+      order.courier_name === 'steadfast' ||
+      order.note?.includes('CID: #')
+    );
+    const isWithCourier = order.status === 'on_the_way' || order.status === 'shipped';
+    if (hasConsignment || isWithCourier) {
+      return NextResponse.json(
+        {
+          error: `LOCKED: This parcel has already been registered with Steadfast Courier (Consignment ID: #${order.consignment_id || order.external_id || 'Assigned'}). Products cannot be modified after courier pickup registration (locked for all users and administrators).`,
+        },
+        { status: 403 }
+      );
+    }
+
     // 2. Fetch existing order items
     const { data: oldItems, error: oldItemsErr } = await supabase
       .from('order_items')
