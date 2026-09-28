@@ -271,30 +271,30 @@ export default function PackingDashboard() {
       )
       .subscribe();
 
-    // Quiet background sync with Steadfast for in-transit parcels every 3 minutes
-    const backgroundSteadfastSync = setInterval(async () => {
+    // Automatic Zero-Click Background Sync with Steadfast for in-transit parcels:
+    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s without any button clicks
+    const runAutoSync = async () => {
       try {
-        const { data: activeOrders } = await supabase
-          .from('orders')
-          .select('id, consignment_id, courier_name')
-          .eq('status', 'on_the_way')
-          .not('consignment_id', 'is', null);
-
-        if (activeOrders && activeOrders.length > 0) {
-          for (const ord of activeOrders.slice(0, 5)) {
-            await fetch('/api/shipping/steadfast/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId: ord.id }),
-            }).catch(() => {});
-          }
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
         }
+        await fetch('/api/shipping/steadfast/sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ syncAll: true }),
+        });
       } catch {
         // silent
       }
-    }, 180000);
+    };
+
+    const initialSyncTimeout = setTimeout(runAutoSync, 5000);
+    const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
 
     return () => {
+      clearTimeout(initialSyncTimeout);
       clearInterval(backgroundSteadfastSync);
       supabase.removeChannel(channel);
     };
@@ -1054,22 +1054,64 @@ export default function PackingDashboard() {
                                 <span>🏷️ Attach CID to Physical Parcel</span>
                               </span>
 
-                              {/* Rider Pickup Progress Indicator */}
+                              {/* Granular Rider Pickup & Delivery Progress Indicator */}
                               {isAwaitingPickup && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-300 text-sky-900 text-[11px] font-bold shadow-2xs">
                                   <span>🛵 Awaiting Steadfast Rider Pickup</span>
                                 </span>
                               )}
 
-                              {!isAwaitingPickup && !isDelivered && (
+                              {order.courier_status === 'hold' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-300 text-orange-900 text-[11px] font-bold shadow-2xs">
+                                  <span>⚠️ On Hold (Customer Rescheduled)</span>
+                                </span>
+                              )}
+
+                              {order.courier_status === 'delivered_approval_pending' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-300 text-teal-900 text-[11px] font-bold shadow-2xs">
+                                  <span>⏳ Delivered (Awaiting Hub Verification)</span>
+                                </span>
+                              )}
+
+                              {order.courier_status === 'partial_delivered_approval_pending' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-50 border border-cyan-300 text-cyan-900 text-[11px] font-bold shadow-2xs">
+                                  <span>⏳ Partial Delivery (Awaiting Hub Verification)</span>
+                                </span>
+                              )}
+
+                              {order.courier_status === 'partial_delivered' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-300 text-blue-900 text-[11px] font-bold shadow-2xs">
+                                  <span>📦 Partially Delivered (Partial Return)</span>
+                                </span>
+                              )}
+
+                              {order.courier_status === 'cancelled_approval_pending' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold shadow-2xs">
+                                  <span>⚠️ Return Initiated (Awaiting Hub Verification)</span>
+                                </span>
+                              )}
+
+                              {(order.courier_status === 'cancelled' || order.status === 'canceled') && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-900 text-[11px] font-bold shadow-2xs">
+                                  <span>❌ Returned / Cancelled by Steadfast</span>
+                                </span>
+                              )}
+
+                              {(order.courier_status === 'in_transit' || (!isAwaitingPickup && !isDelivered && order.courier_status !== 'hold' && !order.courier_status?.includes('pending') && order.courier_status !== 'partial_delivered')) && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-bold shadow-2xs">
                                   <span>🚚 In Transit with Steadfast</span>
                                 </span>
                               )}
 
-                              {isDelivered && (
+                              {isDelivered && order.courier_status !== 'partial_delivered' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold shadow-2xs">
                                   <span>✅ Delivered</span>
+                                </span>
+                              )}
+
+                              {order.courier_status === 'unknown' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-medium shadow-2xs">
+                                  <span>ℹ️ Pending Tracking Update</span>
                                 </span>
                               )}
 

@@ -161,6 +161,24 @@ export function parseSteadfastStatus(rawStatus?: string | null): {
         isApprovalPending: false,
         badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300',
       };
+    case 'in_transit':
+      return {
+        key: 'in_transit',
+        label: 'In Transit',
+        isDeliveredFinal: false,
+        isCancelledFinal: false,
+        isApprovalPending: false,
+        badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
+      };
+    case 'unknown':
+      return {
+        key: 'unknown',
+        label: 'Pending Tracking Update',
+        isDeliveredFinal: false,
+        isCancelledFinal: false,
+        isApprovalPending: false,
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
+      };
     case 'pending':
     default:
       return {

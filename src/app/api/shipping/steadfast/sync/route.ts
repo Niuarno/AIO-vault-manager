@@ -80,14 +80,14 @@ async function syncSingleOrder(orderId: string, supabase: any) {
   // 2. Map status carefully to prevent premature cancellation or completion
   if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
     if (parsed.isDeliveredFinal) {
-      // Final delivery confirmed by Steadfast
+      // Final delivery or partial delivery confirmed by Steadfast
       targetOrderStatus = 'shipped';
-      paymentStatus = 'paid';
+      paymentStatus = rawStatus === 'partial_delivered' ? 'partially_paid' : 'paid';
     } else if (parsed.isCancelledFinal) {
       // Final cancellation/return confirmed by Steadfast
       targetOrderStatus = 'canceled';
     } else {
-      // Any intermediate or approval-pending state keeps order safely in "on_the_way"
+      // Any intermediate or approval-pending state (in_transit, hold, delivered_approval_pending, cancelled_approval_pending, partial_delivered_approval_pending, unknown) keeps order safely in "on_the_way"
       targetOrderStatus = 'on_the_way';
     }
   }
@@ -114,6 +114,17 @@ async function syncSingleOrder(orderId: string, supabase: any) {
     courier_updated_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+
+  if (rawStatus === 'partial_delivered' && !order.note?.includes('Partially Delivered')) {
+    const partialTag = `[Steadfast: Partially Delivered - Customer accepted partial shipment]`;
+    updatePayload.note = order.note ? `${order.note}\n${partialTag}` : partialTag;
+  } else if (rawStatus === 'cancelled' && !order.note?.includes('Steadfast: Returned')) {
+    const cancelTag = `[Steadfast: Returned / Cancelled by courier]`;
+    updatePayload.note = order.note ? `${order.note}\n${cancelTag}` : cancelTag;
+  } else if (rawStatus === 'hold' && !order.note?.includes('Steadfast: On Hold')) {
+    const holdTag = `[Steadfast: On Hold - Delivery delayed / rescheduled]`;
+    updatePayload.note = order.note ? `${order.note}\n${holdTag}` : holdTag;
+  }
 
   if (cid) {
     updatePayload.consignment_id = String(cid);
@@ -165,11 +176,11 @@ async function syncSingleOrder(orderId: string, supabase: any) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { orderId, orderIds } = body;
+    const body = await req.json().catch(() => ({}));
+    const { orderId, orderIds, syncAll } = body;
 
-    if (!orderId && (!Array.isArray(orderIds) || orderIds.length === 0)) {
-      return NextResponse.json({ error: 'Order ID or array of orderIds is required' }, { status: 400 });
+    if (!syncAll && !orderId && (!Array.isArray(orderIds) || orderIds.length === 0)) {
+      return NextResponse.json({ error: 'Order ID, array of orderIds, or syncAll: true is required' }, { status: 400 });
     }
 
     const supabase = createAdminClient();
@@ -197,11 +208,57 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Allow cron key header
+    const cronKey = req.headers.get('x-cron-key') || req.nextUrl.searchParams.get('cron_key');
+    if (cronKey && (cronKey === process.env.CRON_SECRET || cronKey === process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+      isAuthorized = true;
+    }
+
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Handle Bulk Sync
+    // 2. Handle syncAll (Automated background sync of all active in-transit parcels)
+    if (syncAll) {
+      const { data: activeOrders, error: activeErr } = await supabase
+        .from('orders')
+        .select('id, order_number, status, consignment_id, external_id')
+        .in('status', ['on_the_way', 'ready_to_ship'])
+        .or('consignment_id.not.is.null,external_id.not.is.null')
+        .order('updated_at', { ascending: true })
+        .limit(60);
+
+      if (activeErr) {
+        return NextResponse.json({ error: activeErr.message }, { status: 500 });
+      }
+
+      const results = [];
+      let successCount = 0;
+      let deliveredCount = 0;
+      let canceledCount = 0;
+
+      for (const ord of (activeOrders || [])) {
+        const res = await syncSingleOrder(ord.id, supabase);
+        results.push(res);
+        if (res.success && !res.skipped) {
+          successCount++;
+          if (res.order?.status === 'shipped') deliveredCount++;
+          if (res.order?.status === 'canceled') canceledCount++;
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        autoSyncAll: true,
+        total: (activeOrders || []).length,
+        successCount,
+        deliveredCount,
+        canceledCount,
+        results,
+      });
+    }
+
+    // 3. Handle Bulk Sync
     if (Array.isArray(orderIds) && orderIds.length > 0) {
       const results = [];
       let successCount = 0;
@@ -221,7 +278,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Handle Single Sync
+    // 4. Handle Single Sync
     const singleResult = await syncSingleOrder(orderId, supabase);
     if (!singleResult.success) {
       return NextResponse.json({
@@ -237,5 +294,78 @@ export async function POST(req: NextRequest) {
       { error: err.message || 'Internal error while syncing with Steadfast' },
       { status: 500 }
     );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const supabase = createAdminClient();
+
+    let isAuthorized = false;
+    try {
+      const serverSupabase = await createServerClient();
+      const {
+        data: { user },
+      } = await serverSupabase.auth.getUser();
+      if (user) isAuthorized = true;
+    } catch {}
+
+    const authHeader = req.headers.get('authorization');
+    if (!isAuthorized && authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1].trim();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser(token);
+      if (user) isAuthorized = true;
+    }
+
+    const cronKey = req.headers.get('x-cron-key') || req.nextUrl.searchParams.get('cron_key');
+    if (cronKey && (cronKey === process.env.CRON_SECRET || cronKey === process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: activeOrders, error: activeErr } = await supabase
+      .from('orders')
+      .select('id, order_number, status, consignment_id, external_id')
+      .in('status', ['on_the_way', 'ready_to_ship'])
+      .or('consignment_id.not.is.null,external_id.not.is.null')
+      .order('updated_at', { ascending: true })
+      .limit(60);
+
+    if (activeErr) {
+      return NextResponse.json({ error: activeErr.message }, { status: 500 });
+    }
+
+    const results = [];
+    let successCount = 0;
+    let deliveredCount = 0;
+    let canceledCount = 0;
+
+    for (const ord of (activeOrders || [])) {
+      const res = await syncSingleOrder(ord.id, supabase);
+      results.push(res);
+      if (res.success && !res.skipped) {
+        successCount++;
+        if (res.order?.status === 'shipped') deliveredCount++;
+        if (res.order?.status === 'canceled') canceledCount++;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      autoSyncAll: true,
+      total: (activeOrders || []).length,
+      successCount,
+      deliveredCount,
+      canceledCount,
+      timestamp: new Date().toISOString(),
+      results,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
   }
 }

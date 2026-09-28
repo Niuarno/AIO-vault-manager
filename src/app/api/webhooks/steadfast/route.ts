@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
         // Stage 4: Shipped / Fulfilled (only for orders currently in fulfillment)
         if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
           targetOrderStatus = 'shipped';
-          paymentStatus = 'paid';
+          paymentStatus = normalizedStatus === 'partial_delivered' ? 'partially_paid' : 'paid';
         }
       } else if (normalizedStatus === 'cancelled') {
         // Only final confirmed cancellation transitions the order to canceled
@@ -147,6 +147,7 @@ export async function POST(req: NextRequest) {
       } else if (
         normalizedStatus === 'pending' ||
         normalizedStatus === 'in_review' ||
+        normalizedStatus === 'in_transit' ||
         normalizedStatus === 'hold' ||
         normalizedStatus === 'cancelled_approval_pending' ||
         normalizedStatus === 'delivered_approval_pending' ||

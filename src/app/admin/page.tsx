@@ -74,6 +74,7 @@ import {
   isSameDhakaDay,
 } from '@/lib/utils';
 import { QuotaTier } from '@/lib/commission';
+import { parseSteadfastStatus } from '@/lib/steadfast';
 
 export default function AdminDashboard() {
   const supabase = createClient();
@@ -363,7 +364,31 @@ export default function AdminDashboard() {
       )
       .subscribe();
 
+    // Automatic Zero-Click Background Sync with Steadfast for in-transit parcels:
+    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s without any button clicks
+    const runAutoSync = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        await fetch('/api/shipping/steadfast/sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ syncAll: true }),
+        });
+      } catch {
+        // silent
+      }
+    };
+
+    const initialSyncTimeout = setTimeout(runAutoSync, 5000);
+    const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
+
     return () => {
+      clearTimeout(initialSyncTimeout);
+      clearInterval(backgroundSteadfastSync);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -1373,6 +1398,10 @@ export default function AdminDashboard() {
                                 const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
 
                                 if (isManagedByCourier && isCourierStage) {
+                                  const parsedCourier = order.courier_status
+                                    ? parseSteadfastStatus(order.courier_status)
+                                    : null;
+
                                   return (
                                     <div className="flex flex-col gap-1 items-start">
                                       <span
@@ -1382,6 +1411,11 @@ export default function AdminDashboard() {
                                         <Lock className="w-3 h-3 text-amber-600" />
                                         <span>{statusBadge.label} (Automated)</span>
                                       </span>
+                                      {parsedCourier && (
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${parsedCourier.badgeClass}`}>
+                                          {parsedCourier.label}
+                                        </span>
+                                      )}
                                       {order.consignment_id && (
                                         <span className="text-[10px] font-mono text-slate-500 font-semibold">
                                           CID: #{order.consignment_id}
