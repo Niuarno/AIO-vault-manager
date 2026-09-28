@@ -30,7 +30,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     // Verify order exists
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('id, order_number, status, consignment_id, courier_name, external_id')
+      .select('id, order_number, status, external_id, note')
       .eq('id', id)
       .single();
 
@@ -39,14 +39,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
 
     const hasConsignment = Boolean(
-      order.consignment_id ||
-      (order.external_id && /^\d+$/.test(order.external_id)) ||
-      order.courier_name === 'steadfast'
+      (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id)) ||
+      order.note?.includes('CID: #') ||
+      order.note?.toLowerCase().includes('steadfast')
     );
     if (hasConsignment || order.status === 'on_the_way' || order.status === 'shipped') {
       return NextResponse.json(
         {
-          error: `Cannot delete order #${order.order_number}: This parcel has already been registered with Steadfast Courier (CID: #${order.consignment_id || order.external_id || 'Assigned'}).`,
+          error: `Cannot delete order #${order.order_number}: This parcel has already been registered with Steadfast Courier (CID: #${order.external_id || 'Assigned'}).`,
         },
         { status: 403 }
       );

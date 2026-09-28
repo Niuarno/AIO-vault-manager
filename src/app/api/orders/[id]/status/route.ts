@@ -79,14 +79,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       );
     }
 
-    // 2. Check existing order
+    // 2. Check existing order (only select valid database columns that exist in schema)
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, sales_rep_id, source, note, consignment_id, courier_name, external_id')
+      .select('id, status, order_number, sales_rep_id, source, note, external_id')
       .eq('id', id)
       .single();
 
     if (fetchErr || !order) {
+      console.error('[Status Route] Fetch error:', fetchErr?.message);
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
@@ -94,17 +95,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // status progression is 100% automated via Steadfast tracking webhook/sync.
     // NO ONE can manually change the status - not even administrators!
     const isManagedByCourier = Boolean(
-      order.consignment_id ||
-      (order.external_id && /^\d+$/.test(order.external_id)) ||
-      order.courier_name === 'steadfast' ||
-      order.note?.includes('CID: #')
+      (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id)) ||
+      order.note?.includes('CID: #') ||
+      order.note?.toLowerCase().includes('steadfast')
     );
     const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
 
     if (isManagedByCourier && isCourierStage && !body.is_system_automated) {
       return NextResponse.json(
         {
-          error: `LOCKED: This parcel is actively managed by Steadfast Courier (Consignment ID: #${order.consignment_id || order.external_id || 'Assigned'}). Status progression is fully automated via Steadfast Courier and cannot be manually modified by anyone (including administrators).`,
+          error: `LOCKED: This parcel is actively managed by Steadfast Courier (Consignment ID: #${order.external_id || 'Assigned'}). Status progression is fully automated via Steadfast Courier and cannot be manually modified by anyone (including administrators).`,
         },
         { status: 403 }
       );

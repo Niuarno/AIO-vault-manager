@@ -105,34 +105,41 @@ async function syncSingleOrder(orderId: string, supabase: any) {
     order.tracking_code ||
     (cid ? String(cid) : null);
 
-  // 3. Update database
+  // 3. Update database using strictly valid schema columns (status, payment_status, external_id, note, edit_history, updated_at)
+  let newNote = order.note || '';
+  if (cid && !newNote.includes(`CID: #${cid}`)) {
+    const cidTag = `[Steadfast CID: #${cid}${trackingCode ? `, Tracking: ${trackingCode}` : ''}]`;
+    newNote = newNote ? `${newNote}\n${cidTag}` : cidTag;
+  }
+  if (rawStatus === 'partial_delivered' && !newNote.includes('Partially Delivered')) {
+    const partialTag = `[Steadfast: Partially Delivered - Customer accepted partial shipment]`;
+    newNote = newNote ? `${newNote}\n${partialTag}` : partialTag;
+  } else if (rawStatus === 'cancelled' && !newNote.includes('Steadfast: Returned')) {
+    const cancelTag = `[Steadfast: Returned / Cancelled by courier]`;
+    newNote = newNote ? `${newNote}\n${cancelTag}` : cancelTag;
+  } else if (rawStatus === 'hold' && !newNote.includes('Steadfast: On Hold')) {
+    const holdTag = `[Steadfast: On Hold - Delivery delayed / rescheduled]`;
+    newNote = newNote ? `${newNote}\n${holdTag}` : holdTag;
+  }
+
+  const historyEntry = {
+    timestamp: new Date().toISOString(),
+    action: 'steadfast_sync',
+    courier_status: rawStatus,
+    tracking_message: parsed.label,
+    consignment_id: cid,
+    tracking_code: trackingCode,
+  };
+  const currentHistory = Array.isArray(order.edit_history) ? order.edit_history : [];
+
   const updatePayload: any = {
     status: targetOrderStatus,
     payment_status: paymentStatus,
-    courier_status: rawStatus || order.courier_status,
-    tracking_message: parsed.label,
-    courier_updated_at: new Date().toISOString(),
+    external_id: cid ? String(cid) : (order.external_id || null),
+    note: newNote,
+    edit_history: [...currentHistory, historyEntry],
     updated_at: new Date().toISOString(),
   };
-
-  if (rawStatus === 'partial_delivered' && !order.note?.includes('Partially Delivered')) {
-    const partialTag = `[Steadfast: Partially Delivered - Customer accepted partial shipment]`;
-    updatePayload.note = order.note ? `${order.note}\n${partialTag}` : partialTag;
-  } else if (rawStatus === 'cancelled' && !order.note?.includes('Steadfast: Returned')) {
-    const cancelTag = `[Steadfast: Returned / Cancelled by courier]`;
-    updatePayload.note = order.note ? `${order.note}\n${cancelTag}` : cancelTag;
-  } else if (rawStatus === 'hold' && !order.note?.includes('Steadfast: On Hold')) {
-    const holdTag = `[Steadfast: On Hold - Delivery delayed / rescheduled]`;
-    updatePayload.note = order.note ? `${order.note}\n${holdTag}` : holdTag;
-  }
-
-  if (cid) {
-    updatePayload.consignment_id = String(cid);
-    updatePayload.courier_name = 'steadfast';
-  }
-  if (trackingCode) {
-    updatePayload.tracking_code = String(trackingCode);
-  }
 
   let { data: updatedOrder, error: updateError } = await supabase
     .from('orders')
@@ -142,25 +149,7 @@ async function syncSingleOrder(orderId: string, supabase: any) {
     .single();
 
   if (updateError) {
-    console.warn('[Steadfast Sync] Fallback update:', updateError.message);
-    const fallbackPayload: any = {
-      status: targetOrderStatus,
-      payment_status: paymentStatus,
-      updated_at: new Date().toISOString(),
-    };
-    if (cid) {
-      fallbackPayload.external_id = String(cid);
-    }
-    const fallbackRes = await supabase
-      .from('orders')
-      .update(fallbackPayload)
-      .eq('id', order.id)
-      .select('*, order_items(*)')
-      .single();
-
-    if (!fallbackRes.error) {
-      updatedOrder = fallbackRes.data;
-    }
+    console.error('[Steadfast Sync] Update error:', updateError.message);
   }
 
   return {
@@ -168,8 +157,14 @@ async function syncSingleOrder(orderId: string, supabase: any) {
     consignment_id: cid,
     tracking_code: trackingCode,
     delivery_status: rawStatus,
+    courier_status: rawStatus,
     status_label: parsed.label,
-    order: updatedOrder || order,
+    order: {
+      ...(updatedOrder || order),
+      consignment_id: cid,
+      tracking_code: trackingCode,
+      courier_status: rawStatus,
+    },
     orderId,
   };
 }
@@ -222,9 +217,9 @@ export async function POST(req: NextRequest) {
     if (syncAll) {
       const { data: activeOrders, error: activeErr } = await supabase
         .from('orders')
-        .select('id, order_number, status, consignment_id, external_id')
+        .select('id, order_number, status, external_id, note')
         .in('status', ['on_the_way', 'ready_to_ship'])
-        .or('consignment_id.not.is.null,external_id.not.is.null')
+        .not('external_id', 'is', null)
         .order('updated_at', { ascending: true })
         .limit(60);
 
@@ -330,9 +325,9 @@ export async function GET(req: NextRequest) {
 
     const { data: activeOrders, error: activeErr } = await supabase
       .from('orders')
-      .select('id, order_number, status, consignment_id, external_id')
+      .select('id, order_number, status, external_id, note')
       .in('status', ['on_the_way', 'ready_to_ship'])
-      .or('consignment_id.not.is.null,external_id.not.is.null')
+      .not('external_id', 'is', null)
       .order('updated_at', { ascending: true })
       .limit(60);
 
