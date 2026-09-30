@@ -19,6 +19,7 @@ import {
   ChevronDown,
   DollarSign,
   Layers,
+  BarChart3,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile, UserRole } from '@/types/database';
@@ -104,6 +105,7 @@ export default function Navbar({
 
   // Admin Navigation Items
   const adminNavItems = [
+    { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
     { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/admin' },
     { key: 'inventory', label: 'Inventory & Stock', icon: Boxes, href: '/admin?tab=inventory' },
     { key: 'team', label: 'Staff & Performance', icon: Users, href: '/admin?tab=team' },
@@ -168,7 +170,7 @@ export default function Navbar({
                       : pathname === item.href || pathname.startsWith(`${item.href}?`);
                   const badgeCount = tabBadges[item.key];
 
-                  return onTabChange && (pathname === '/admin' || pathname === '/sales') ? (
+                  return onTabChange && (pathname === '/admin' || pathname === '/sales') && item.href !== '/admin/analytics' ? (
                     <button
                       key={item.key}
                       type="button"
@@ -352,7 +354,7 @@ export default function Navbar({
                       key={item.key}
                       type="button"
                       onClick={() => {
-                        if (onTabChange) {
+                        if (onTabChange && item.href !== '/admin/analytics') {
                           onTabChange(item.key);
                         } else {
                           router.push(item.href);

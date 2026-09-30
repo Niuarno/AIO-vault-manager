@@ -24,7 +24,10 @@ export function getDhakaDateString(date: Date | string | number = new Date()): s
  * For example, 12:00 AM on 2026-09-26 in Dhaka corresponds to 2026-09-25T18:00:00.000Z in UTC.
  */
 export function getDhakaStartOfDayIso(date: Date | string | number = new Date()): string {
-  const dateStr = getDhakaDateString(date);
+  const dateStr =
+    typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? date
+      : getDhakaDateString(date);
   return new Date(`${dateStr}T00:00:00+06:00`).toISOString();
 }
 
@@ -33,7 +36,10 @@ export function getDhakaStartOfDayIso(date: Date | string | number = new Date())
  * For example, 11:59:59.999 PM on 2026-09-26 in Dhaka corresponds to 2026-09-26T17:59:59.999Z in UTC.
  */
 export function getDhakaEndOfDayIso(date: Date | string | number = new Date()): string {
-  const dateStr = getDhakaDateString(date);
+  const dateStr =
+    typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? date
+      : getDhakaDateString(date);
   return new Date(`${dateStr}T23:59:59.999+06:00`).toISOString();
 }
 
@@ -65,6 +71,274 @@ export function getDhakaParts(date: Date | string | number = new Date()) {
     day: d,
     dateString: dateStr,
   };
+}
+
+/**
+ * Adds or subtracts days from a YYYY-MM-DD date string using pure UTC calendar math.
+ */
+export function addDhakaDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  const resY = dt.getUTCFullYear();
+  const resM = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const resD = String(dt.getUTCDate()).padStart(2, '0');
+  return `${resY}-${resM}-${resD}`;
+}
+
+/**
+ * Calculates number of days between two YYYY-MM-DD dates inclusive (end - start + 1).
+ */
+export function diffDhakaDays(startDateStr: string, endDateStr: string): number {
+  const [y1, m1, d1] = startDateStr.split('-').map(Number);
+  const [y2, m2, d2] = endDateStr.split('-').map(Number);
+  const ms1 = Date.UTC(y1, m1 - 1, d1);
+  const ms2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((ms2 - ms1) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/**
+ * Formats "YYYY-MM-DD" into human-friendly format like "Aug 24, 2026".
+ */
+export function formatDhakaDisplayDate(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return `${monthNames[m - 1]} ${d}, ${y}`;
+}
+
+/**
+ * Formats "YYYY-MM-DD" into short month & day like "Aug 24".
+ */
+export function formatDhakaShortDate(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '';
+  const [, m, d] = dateStr.split('-').map(Number);
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return `${monthNames[m - 1]} ${d}`;
+}
+
+/**
+ * Formats "YYYY-MM-DD" into "Mon, Aug 24".
+ */
+export function formatDhakaWeekdayDate(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return `${weekdays[dt.getUTCDay()]}, ${monthNames[m - 1]} ${d}`;
+}
+
+/**
+ * Parses user input like "Aug 24, 2026" or "2026-08-24" back into "YYYY-MM-DD".
+ */
+export function parseDhakaDateInput(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  // Try parsing "Aug 24, 2026" or "Aug 24 2026"
+  const match = trimmed.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (match) {
+    const monthNames = [
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ];
+    const monthIdx = monthNames.findIndex((m) =>
+      match[1].toLowerCase().startsWith(m)
+    );
+    if (monthIdx !== -1) {
+      const year = match[3];
+      const month = String(monthIdx + 1).padStart(2, '0');
+      const day = String(parseInt(match[2], 10)).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return null;
+}
+
+export type MetaPresetKey =
+  | 'maximum'
+  | 'today'
+  | 'yesterday'
+  | 'today_yesterday'
+  | 'last_7_days'
+  | 'last_14_days'
+  | 'last_28_days'
+  | 'last_30_days'
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'last_month'
+  | 'custom';
+
+export interface MetaDatePreset {
+  key: MetaPresetKey;
+  label: string;
+}
+
+export const META_DATE_PRESETS: MetaDatePreset[] = [
+  { key: 'maximum', label: 'Maximum' },
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'today_yesterday', label: 'Today and yesterday' },
+  { key: 'last_7_days', label: 'Last 7 days' },
+  { key: 'last_14_days', label: 'Last 14 days' },
+  { key: 'last_28_days', label: 'Last 28 days' },
+  { key: 'last_30_days', label: 'Last 30 days' },
+  { key: 'this_week', label: 'This week' },
+  { key: 'last_week', label: 'Last week' },
+  { key: 'this_month', label: 'This month' },
+  { key: 'last_month', label: 'Last month' },
+  { key: 'custom', label: 'Custom' },
+];
+
+export interface MetaDateRangeResult {
+  preset: MetaPresetKey;
+  label: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  compareStartDate?: string; // YYYY-MM-DD
+  compareEndDate?: string; // YYYY-MM-DD
+}
+
+/**
+ * Calculates start and end dates for any Meta Ads Manager preset in Dhaka local time.
+ */
+export function getMetaPresetDateRange(
+  presetKey: MetaPresetKey,
+  now: Date = new Date(),
+  compare: boolean = false
+): MetaDateRangeResult {
+  const today = getDhakaDateString(now);
+  const yesterday = addDhakaDays(today, -1);
+
+  let startDate = today;
+  let endDate = today;
+  let label = 'Today';
+
+  switch (presetKey) {
+    case 'maximum':
+      startDate = '2024-01-01';
+      endDate = today;
+      label = 'Maximum';
+      break;
+    case 'today':
+      startDate = today;
+      endDate = today;
+      label = 'Today';
+      break;
+    case 'yesterday':
+      startDate = yesterday;
+      endDate = yesterday;
+      label = 'Yesterday';
+      break;
+    case 'today_yesterday':
+      startDate = yesterday;
+      endDate = today;
+      label = 'Today and yesterday';
+      break;
+    case 'last_7_days':
+      // Meta Ads Manager convention: 7 full days ending yesterday
+      startDate = addDhakaDays(today, -7);
+      endDate = yesterday;
+      label = 'Last 7 days';
+      break;
+    case 'last_14_days':
+      startDate = addDhakaDays(today, -14);
+      endDate = yesterday;
+      label = 'Last 14 days';
+      break;
+    case 'last_28_days':
+      startDate = addDhakaDays(today, -28);
+      endDate = yesterday;
+      label = 'Last 28 days';
+      break;
+    case 'last_30_days':
+      startDate = addDhakaDays(today, -30);
+      endDate = yesterday;
+      label = 'Last 30 days';
+      break;
+    case 'this_week': {
+      // Sunday of current week in Dhaka to today
+      const [y, m, d] = today.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      const dayOfWeek = dt.getUTCDay(); // 0 is Sunday
+      startDate = addDhakaDays(today, -dayOfWeek);
+      endDate = today;
+      label = 'This week';
+      break;
+    }
+    case 'last_week': {
+      // Sunday to Saturday of previous week
+      const [y, m, d] = today.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      const dayOfWeek = dt.getUTCDay();
+      const thisSunday = addDhakaDays(today, -dayOfWeek);
+      startDate = addDhakaDays(thisSunday, -7);
+      endDate = addDhakaDays(thisSunday, -1);
+      label = 'Last week';
+      break;
+    }
+    case 'this_month':
+      startDate = `${today.slice(0, 7)}-01`;
+      endDate = today;
+      label = 'This month';
+      break;
+    case 'last_month': {
+      const firstOfThisMonth = `${today.slice(0, 7)}-01`;
+      const lastDayOfLastMonth = addDhakaDays(firstOfThisMonth, -1);
+      startDate = `${lastDayOfLastMonth.slice(0, 7)}-01`;
+      endDate = lastDayOfLastMonth;
+      label = 'Last month';
+      break;
+    }
+    case 'custom':
+    default:
+      startDate = addDhakaDays(today, -7);
+      endDate = yesterday;
+      label = 'Custom';
+      break;
+  }
+
+  const result: MetaDateRangeResult = {
+    preset: presetKey,
+    label,
+    startDate,
+    endDate,
+  };
+
+  if (compare) {
+    const daysCount = diffDhakaDays(startDate, endDate);
+    const compareEndDate = addDhakaDays(startDate, -1);
+    const compareStartDate = addDhakaDays(compareEndDate, -(daysCount - 1));
+    result.compareStartDate = compareStartDate;
+    result.compareEndDate = compareEndDate;
+  }
+
+  return result;
+}
+
+/**
+ * Returns an array of YYYY-MM-DD date strings for all days between startDate and endDate inclusive.
+ */
+export function getAllDhakaDatesInRange(startDateStr: string, endDateStr: string): string[] {
+  const dates: string[] = [];
+  const daysCount = diffDhakaDays(startDateStr, endDateStr);
+  if (daysCount <= 0 || daysCount > 1000) return [startDateStr];
+
+  for (let i = 0; i < daysCount; i++) {
+    dates.push(addDhakaDays(startDateStr, i));
+  }
+  return dates;
 }
 
 /**
@@ -137,3 +411,4 @@ export function getTimeUntilDhakaMidnight(now: Date = new Date()): DhakaCountdow
     ss,
   };
 }
+
