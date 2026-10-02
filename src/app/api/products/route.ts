@@ -341,8 +341,8 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Verify Admin Authorization
-    let isAdmin = false;
+    // Verify Admin or Packing Team Authorization
+    let isAuthorized = false;
     try {
       const serverSupabase = await createServerClient();
       const { data: { user } } = await serverSupabase.auth.getUser();
@@ -352,14 +352,14 @@ export async function DELETE(req: NextRequest) {
           .select('role')
           .eq('id', user.id)
           .single();
-        isAdmin = profile?.role === 'admin';
+        isAuthorized = profile?.role === 'admin' || profile?.role === 'packing';
       }
     } catch {
-      isAdmin = false;
+      isAuthorized = false;
     }
 
     // Check Authorization header fallback
-    if (!isAdmin) {
+    if (!isAuthorized) {
       const authHeader = req.headers.get('authorization');
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.split('Bearer ')[1].trim();
@@ -370,14 +370,14 @@ export async function DELETE(req: NextRequest) {
             .select('role')
             .eq('id', user.id)
             .single();
-          isAdmin = profile?.role === 'admin';
+          isAuthorized = profile?.role === 'admin' || profile?.role === 'packing';
         }
       }
     }
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
-        { error: 'Unauthorized: Only administrators can permanently delete products.' },
+        { error: 'Unauthorized: Only administrators and packing personnel can permanently delete products.' },
         { status: 403 }
       );
     }

@@ -290,19 +290,19 @@ CREATE POLICY "Sales team can update order status"
   ON public.orders FOR UPDATE TO authenticated
   USING (public.get_current_user_role() = 'sales');
 
--- 3. PACKING TEAM STRICT POLICY: ONLY SEE CONFIRMED, READY_TO_SHIP, ON_THE_WAY, SHIPPED
+-- 3. PACKING TEAM STRICT POLICY: ONLY SEE CONFIRMED, READY_TO_SHIP, ON_THE_WAY, SHIPPED, DELAYED_DELIVERY
 CREATE POLICY "Packing team can only see confirmed and in-progress orders"
   ON public.orders FOR SELECT TO authenticated
   USING (
     public.get_current_user_role() = 'packing'
-    AND status IN ('confirmed', 'ready_to_ship', 'on_the_way', 'shipped')
+    AND status IN ('delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped')
   );
 
 CREATE POLICY "Packing team can update order fulfillment status"
   ON public.orders FOR UPDATE TO authenticated
   USING (
     public.get_current_user_role() = 'packing'
-    AND status IN ('confirmed', 'ready_to_ship', 'on_the_way', 'shipped')
+    AND status IN ('delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped')
   );
 
 -- Order Items Policies
