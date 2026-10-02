@@ -22,7 +22,7 @@ import {
   DollarSign,
   Truck,
 } from 'lucide-react';
-import { Order, OrderItem, ProductVariant } from '@/types/database';
+import { Order, OrderItem, ProductVariant, Profile } from '@/types/database';
 import {
   formatCurrency,
   formatDate,
@@ -50,6 +50,7 @@ interface EditOrderItemsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdated: (updatedOrder: Order) => void;
+  currentProfile?: Profile | null;
 }
 
 export default function EditOrderItemsModal({
@@ -57,6 +58,7 @@ export default function EditOrderItemsModal({
   isOpen,
   onClose,
   onUpdated,
+  currentProfile,
 }: EditOrderItemsModalProps) {
   const supabase = createClient();
   const isWebsite = order.source === 'website';
@@ -73,9 +75,13 @@ export default function EditOrderItemsModal({
 
   // Mandatory Editing Reason
   const [editReason, setEditReason] = useState('');
-  const [currentUserLabel, setCurrentUserLabel] = useState('Staff Member');
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserLabel, setCurrentUserLabel] = useState(
+    currentProfile?.full_name || currentProfile?.email || 'Staff Member'
+  );
+  const [currentUserId, setCurrentUserId] = useState<string | null>(
+    currentProfile?.id || null
+  );
+  const [isAdmin, setIsAdmin] = useState(currentProfile?.role === 'admin');
 
   // History tab toggle
   const [showHistoryView, setShowHistoryView] = useState(false);
@@ -97,18 +103,17 @@ export default function EditOrderItemsModal({
     );
   }, [order]);
 
-  // Hard Lock: Once an order has been registered with Steadfast Courier (has consignment ID or is on_the_way / shipped),
+  // Hard Lock: Once an order has been handed to Steadfast Courier (status is on_the_way, shipped, or delivered),
   // NO ONE can edit any products in that parcel, not even administrators.
+  // Before being handed to courier (pending, not_reachable, delayed_delivery, confirmed, ready_to_ship),
+  // orders MUST remain fully editable by assigned staff and administrators.
   const isLockedByCourier = useMemo(() => {
-    const hasConsignment = Boolean(
-      order.consignment_id ||
-      (order.external_id && /^\d+$/.test(order.external_id)) ||
-      order.courier_name === 'steadfast' ||
-      order.note?.includes('CID: #')
+    return (
+      order.status === 'on_the_way' ||
+      order.status === 'shipped' ||
+      order.status === 'delivered'
     );
-    const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
-    return hasConsignment || isCourierStage;
-  }, [order]);
+  }, [order.status]);
 
   // Rule: "when any order has already been assigned to a staff member it will only editable for that specifc staff member and admins no one else"
   const canEdit = useMemo(() => {
@@ -118,8 +123,15 @@ export default function EditOrderItemsModal({
     return order.sales_rep_id === currentUserId;
   }, [isLockedByCourier, isAdmin, order.sales_rep_id, currentUserId]);
 
-  // Load user name & id & role
+  // Load user name & id & role if not provided via props
   useEffect(() => {
+    if (currentProfile) {
+      setCurrentUserId(currentProfile.id);
+      setCurrentUserLabel(currentProfile.full_name || currentProfile.email || 'Staff Member');
+      setIsAdmin(currentProfile.role === 'admin');
+      return;
+    }
+
     async function loadUser() {
       const {
         data: { user },
@@ -138,7 +150,7 @@ export default function EditOrderItemsModal({
       }
     }
     loadUser();
-  }, []);
+  }, [currentProfile]);
 
   // Initialize modal items when order changes
   useEffect(() => {
@@ -429,10 +441,10 @@ export default function EditOrderItemsModal({
                 <Lock className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 <div>
                   <p className="font-bold text-[11px]">
-                    Parcel Locked with Steadfast Courier (CID: #{order.consignment_id || (order as any).external_id || 'Assigned'})
+                    Parcel Locked with Steadfast Courier (CID: #{order.consignment_id || (order.source !== 'website' && (order as any).external_id) || 'Assigned'})
                   </p>
                   <p className="text-[10px] text-amber-800 leading-relaxed mt-0.5">
-                    This parcel has been registered for pickup with Steadfast Courier. Products and quantities are physically sealed and cannot be modified by any user or administrator.
+                    This parcel has been handed over to Steadfast Courier ({order.status}). Products and quantities are physically sealed and cannot be modified by any user or administrator.
                   </p>
                 </div>
               </div>

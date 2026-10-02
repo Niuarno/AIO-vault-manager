@@ -2715,6 +2715,7 @@ export default function SalesDashboard() {
         <EditOrderItemsModal
           order={editingOrderForItems}
           isOpen={true}
+          currentProfile={currentProfile}
           onClose={() => setEditingOrderForItems(null)}
           onUpdated={() => {
             setEditingOrderForItems(null);

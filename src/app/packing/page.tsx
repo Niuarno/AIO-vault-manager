@@ -90,7 +90,6 @@ export default function PackingDashboard() {
   // Robustly resolve consignment ID across schema variations, external_id, notes, and edit history
   const getOrderConsignmentId = (order: Order): string | null => {
     if (order.consignment_id) return String(order.consignment_id);
-    if (order.external_id && !order.external_id.startsWith('http')) return String(order.external_id);
     if (order.note) {
       const match = order.note.match(/CID:\s*#?([A-Za-z0-9_-]+)/i);
       if (match) return match[1];
@@ -99,6 +98,9 @@ export default function PackingDashboard() {
       for (const h of order.edit_history) {
         if (h?.consignment_id) return String(h.consignment_id);
       }
+    }
+    if (order.source !== 'website' && order.external_id && !order.external_id.startsWith('http')) {
+      return String(order.external_id);
     }
     return null;
   };

@@ -95,11 +95,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // status progression is 100% automated via Steadfast tracking webhook/sync.
     // NO ONE can manually change the status - not even administrators!
     const isManagedByCourier = Boolean(
-      (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id)) ||
       order.note?.includes('CID: #') ||
-      order.note?.toLowerCase().includes('steadfast')
+      order.note?.toLowerCase().includes('steadfast') ||
+      (order.source !== 'website' && order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id))
     );
-    const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+    const isCourierStage =
+      order.status === 'on_the_way' ||
+      order.status === 'shipped' ||
+      order.status === 'delivered';
 
     if (isManagedByCourier && isCourierStage && !body.is_system_automated) {
       return NextResponse.json(

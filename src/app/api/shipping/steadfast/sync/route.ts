@@ -35,8 +35,8 @@ async function syncSingleOrder(orderId: string, supabase: any) {
   // 1. Resolve CID, Tracking Code, or Invoice
   const resolvedCid =
     order.consignment_id ||
-    (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id) ? order.external_id : null) ||
     order.note?.match(/CID:\s*#?([A-Za-z0-9_-]+)/i)?.[1] ||
+    (order.source !== 'website' && order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id) ? order.external_id : null) ||
     null;
 
   const resolvedTracking =

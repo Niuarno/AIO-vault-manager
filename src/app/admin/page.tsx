@@ -1391,9 +1391,10 @@ export default function AdminDashboard() {
                               {(() => {
                                 const isManagedByCourier = Boolean(
                                   order.consignment_id ||
-                                  (order.external_id && /^\d+$/.test(order.external_id)) ||
                                   order.courier_name === 'steadfast' ||
-                                  order.note?.includes('CID: #')
+                                  order.note?.includes('CID: #') ||
+                                  order.note?.includes('[Dispatched via Steadfast') ||
+                                  (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
                                 );
                                 const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
 
@@ -1455,9 +1456,10 @@ export default function AdminDashboard() {
                               {(() => {
                                 const isManagedByCourier = Boolean(
                                   order.consignment_id ||
-                                  (order.external_id && /^\d+$/.test(order.external_id)) ||
                                   order.courier_name === 'steadfast' ||
-                                  order.note?.includes('CID: #')
+                                  order.note?.includes('CID: #') ||
+                                  order.note?.includes('[Dispatched via Steadfast') ||
+                                  (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
                                 );
                                 const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
 
@@ -1478,7 +1480,7 @@ export default function AdminDashboard() {
                                         <PackageOpen className="w-4 h-4" />
                                       )}
                                     </button>
-                                    {!isManagedByCourier && (
+                                    {!(isManagedByCourier && isCourierStage) && (
                                       <button
                                         onClick={() => setDeletingOrder(order)}
                                         className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
@@ -2896,6 +2898,7 @@ export default function AdminDashboard() {
         <EditOrderItemsModal
           order={editingOrderForItems}
           isOpen={true}
+          currentProfile={currentProfile}
           onClose={() => setEditingOrderForItems(null)}
           onUpdated={() => {
             setEditingOrderForItems(null);

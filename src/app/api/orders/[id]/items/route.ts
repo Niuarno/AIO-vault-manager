@@ -59,19 +59,19 @@ export async function PATCH(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Hard Lock: Once an order has been registered with Steadfast Courier (has consignment ID or is on_the_way / shipped),
+    // Hard Lock: Once an order has been handed to Steadfast Courier (status is on_the_way, shipped, or delivered),
     // NO ONE can edit any products in that parcel, not even administrators.
-    const hasConsignment = Boolean(
-      order.consignment_id ||
-      (order.external_id && /^\d+$/.test(order.external_id)) ||
-      order.courier_name === 'steadfast' ||
-      order.note?.includes('CID: #')
-    );
-    const isWithCourier = order.status === 'on_the_way' || order.status === 'shipped';
-    if (hasConsignment || isWithCourier) {
+    // Before being handed to courier (pending, not_reachable, delayed_delivery, confirmed, ready_to_ship),
+    // orders remain fully editable by assigned staff and administrators.
+    const isHandedToCourier =
+      order.status === 'on_the_way' ||
+      order.status === 'shipped' ||
+      order.status === 'delivered';
+
+    if (isHandedToCourier) {
       return NextResponse.json(
         {
-          error: `LOCKED: This parcel has already been registered with Steadfast Courier (Consignment ID: #${order.consignment_id || order.external_id || 'Assigned'}). Products cannot be modified after courier pickup registration (locked for all users and administrators).`,
+          error: `LOCKED: This parcel has already been handed to Steadfast Courier (Status: ${order.status}). Products cannot be modified after courier handover (locked for all users and administrators).`,
         },
         { status: 403 }
       );

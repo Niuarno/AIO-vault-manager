@@ -38,15 +38,15 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const hasConsignment = Boolean(
-      (order.external_id && !order.external_id.startsWith('http') && /^\d+$/.test(order.external_id)) ||
-      order.note?.includes('CID: #') ||
-      order.note?.toLowerCase().includes('steadfast')
-    );
-    if (hasConsignment || order.status === 'on_the_way' || order.status === 'shipped') {
+    const isCourierStage =
+      order.status === 'on_the_way' ||
+      order.status === 'shipped' ||
+      order.status === 'delivered';
+
+    if (isCourierStage) {
       return NextResponse.json(
         {
-          error: `Cannot delete order #${order.order_number}: This parcel has already been registered with Steadfast Courier (CID: #${order.external_id || 'Assigned'}).`,
+          error: `Cannot delete order #${order.order_number}: This parcel has already been handed to Steadfast Courier (Status: ${order.status}).`,
         },
         { status: 403 }
       );
