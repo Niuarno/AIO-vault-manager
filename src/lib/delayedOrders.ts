@@ -61,14 +61,24 @@ export async function autoReleaseDelayedOrders(
       const items = order.order_items || [];
       if (items.length === 0) continue;
 
-      // Check if all items in order have available stock > 0
+      // Check if all items in order have available stock >= required quantity
       const canFulfill = items.every((item: any) => {
         if (!item.variant_id) return true;
         const available = stockMap.get(item.variant_id) ?? 0;
-        return available > 0;
+        const required = Number(item.quantity || 1);
+        return available >= required;
       });
 
       if (canFulfill) {
+        // Allocate stock in memory so subsequent candidate orders don't double-claim the same restocked units
+        for (const item of items) {
+          if (item.variant_id) {
+            const available = stockMap.get(item.variant_id) ?? 0;
+            const required = Number(item.quantity || 1);
+            stockMap.set(item.variant_id, Math.max(0, available - required));
+          }
+        }
+
         const releaseNote = '[Auto-Released to Confirmed on Restock]';
         const newNote = order.note ? `${order.note} | ${releaseNote}` : releaseNote;
 

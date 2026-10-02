@@ -611,14 +611,6 @@ export default function PackingDashboard() {
     }
   };
 
-  // Helper to reliably check if an order is delayed (by status, flag, or note)
-  const isOrderDelayed = (order: Order): boolean => {
-    if (order.status === 'delayed_delivery') return true;
-    if (Boolean((order as any).is_delayed_delivery)) return true;
-    if (order.note && /delayed\s*delivery|customer\s*agreed\s*to\s*delay/i.test(order.note)) return true;
-    return false;
-  };
-
   // Permanently delete a product from live inventory
   const handleDeleteProduct = async (productId: string, productTitle: string) => {
     if (
@@ -656,16 +648,12 @@ export default function PackingDashboard() {
     }
   };
 
-  // Filter orders
+  // Filter orders: strict status stage matching. Only current delayed orders sit at delayed section; restocked/confirmed orders sit in To Pack (Confirmed)
   const filteredOrders = orders.filter((order) => {
-    let matchesFilter = false;
-    if (activeFilter === 'all') {
-      matchesFilter = true;
-    } else if (activeFilter === 'delayed_delivery') {
-      matchesFilter = order.status === 'delayed_delivery' || isOrderDelayed(order);
-    } else {
-      matchesFilter = order.status === activeFilter;
-    }
+    const matchesFilter =
+      activeFilter === 'all'
+        ? true
+        : order.status === activeFilter;
 
     const matchesSearch =
       searchQuery === '' ||
@@ -678,18 +666,18 @@ export default function PackingDashboard() {
     return matchesFilter && matchesSearch;
   });
 
-  // Status counts for pipeline tabs
-  const delayedDeliveryCount = orders.filter((o) => o.status === 'delayed_delivery' || isOrderDelayed(o)).length;
+  // Status counts for pipeline tabs: strictly based on current status
+  const delayedDeliveryCount = orders.filter((o) => o.status === 'delayed_delivery').length;
   const confirmedCount = orders.filter((o) => o.status === 'confirmed').length;
   const readyCount = orders.filter((o) => o.status === 'ready_to_ship').length;
   const onTheWayCount = orders.filter((o) => o.status === 'on_the_way').length;
   const shippedCount = orders.filter((o) => o.status === 'shipped').length;
 
-  // Track customer demand for out-of-stock items (delayed orders) per variant
+  // Track customer demand for current out-of-stock items (strictly orders waiting in delayed_delivery)
   const delayedDemandMap = useMemo(() => {
     const map = new Map<string, number>();
     orders
-      .filter((o) => o.status === 'delayed_delivery' || isOrderDelayed(o))
+      .filter((o) => o.status === 'delayed_delivery')
       .forEach((o) => {
         (o.order_items || []).forEach((item) => {
           if (item.variant_id) {
@@ -1132,12 +1120,6 @@ export default function PackingDashboard() {
                         >
                           {badge.label}
                         </span>
-                        {isOrderDelayed(order) && order.status !== 'delayed_delivery' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Delayed Pre-Order</span>
-                          </span>
-                        )}
                         <span className="text-xs text-slate-400">
                           {formatDate(order.created_at)}
                         </span>
@@ -1598,7 +1580,7 @@ export default function PackingDashboard() {
                     })()}
 
                     <div className="flex items-center space-x-2">
-                      {(order.status === 'delayed_delivery' || isOrderDelayed(order)) && order.status !== 'confirmed' && order.status !== 'ready_to_ship' && order.status !== 'on_the_way' && order.status !== 'shipped' && (
+                      {order.status === 'delayed_delivery' && (
                         <button
                           type="button"
                           onClick={() => handleStatusChange(order.id, 'confirmed')}

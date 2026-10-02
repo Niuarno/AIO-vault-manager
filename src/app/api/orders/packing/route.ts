@@ -48,6 +48,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Auto-release any delayed delivery orders whose products have been restocked
+    try {
+      const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
+      await autoReleaseDelayedOrders(supabase);
+    } catch (e) {
+      console.error('Auto-release restock check error in packing route:', e);
+    }
+
     // Fetch packing orders using admin client (bypasses restrictive RLS on delayed_delivery)
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
