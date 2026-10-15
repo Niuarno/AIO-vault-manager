@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
       .select('*, order_items(*)')
-      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
       .order('created_at', { ascending: false });
 
     if (ordersErr) {

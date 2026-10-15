@@ -740,7 +740,12 @@ export default function SalesDashboard() {
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+      const matchStatus =
+        orderStatusFilter === 'all'
+          ? true
+          : orderStatusFilter === 'delivered'
+          ? o.status === 'delivered' || o.status === 'shipped'
+          : o.status === orderStatusFilter;
       const q = orderSearch.toLowerCase();
       const matchQuery =
         !q ||

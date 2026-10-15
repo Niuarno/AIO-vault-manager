@@ -81,7 +81,7 @@ async function syncSingleOrder(orderId: string, supabase: any) {
   if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
     if (parsed.isDeliveredFinal) {
       // Final delivery or partial delivery confirmed by Steadfast
-      targetOrderStatus = 'shipped';
+      targetOrderStatus = 'delivered';
       paymentStatus = rawStatus === 'partial_delivered' ? 'partially_paid' : 'paid';
     } else if (parsed.isCancelledFinal) {
       // Final cancellation/return confirmed by Steadfast
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
         results.push(res);
         if (res.success && !res.skipped) {
           successCount++;
-          if (res.order?.status === 'shipped') deliveredCount++;
+          if (res.order?.status === 'delivered' || res.order?.status === 'shipped') deliveredCount++;
           if (res.order?.status === 'canceled') canceledCount++;
         }
       }
@@ -345,7 +345,7 @@ export async function GET(req: NextRequest) {
       results.push(res);
       if (res.success && !res.skipped) {
         successCount++;
-        if (res.order?.status === 'shipped') deliveredCount++;
+        if (res.order?.status === 'delivered' || res.order?.status === 'shipped') deliveredCount++;
         if (res.order?.status === 'canceled') canceledCount++;
       }
     }

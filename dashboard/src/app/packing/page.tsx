@@ -63,7 +63,7 @@ export default function PackingDashboard() {
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'delayed_delivery' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'shipped'>('confirmed');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'delayed_delivery' | 'confirmed' | 'ready_to_ship' | 'on_the_way' | 'delivered' | 'shipped'>('confirmed');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingAll, setSyncingAll] = useState(false);
 
@@ -178,7 +178,7 @@ export default function PackingDashboard() {
         const { data: clientOrders, error } = await supabase
           .from('orders')
           .select('*, order_items(*)')
-          .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+          .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
           .order('created_at', { ascending: false });
 
         if (!error && clientOrders) {
@@ -190,7 +190,7 @@ export default function PackingDashboard() {
       const { data: clientOrders } = await supabase
         .from('orders')
         .select('*, order_items(*)')
-        .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+        .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
         .order('created_at', { ascending: false });
 
       if (clientOrders) {
@@ -223,7 +223,7 @@ export default function PackingDashboard() {
     const { data: clientOrders, error } = await supabase
       .from('orders')
       .select('*, order_items(*)')
-      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'shipped'])
+      .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
       .order('created_at', { ascending: false });
 
     if (!error && clientOrders) {
@@ -654,6 +654,8 @@ export default function PackingDashboard() {
     const matchesFilter =
       activeFilter === 'all'
         ? true
+        : activeFilter === 'delivered' || (activeFilter as string) === 'shipped'
+        ? order.status === 'delivered' || order.status === 'shipped'
         : order.status === activeFilter;
 
     const matchesSearch =
@@ -672,7 +674,8 @@ export default function PackingDashboard() {
   const confirmedCount = orders.filter((o) => o.status === 'confirmed').length;
   const readyCount = orders.filter((o) => o.status === 'ready_to_ship').length;
   const onTheWayCount = orders.filter((o) => o.status === 'on_the_way').length;
-  const shippedCount = orders.filter((o) => o.status === 'shipped').length;
+  const deliveredCount = orders.filter((o) => o.status === 'delivered' || o.status === 'shipped').length;
+  const shippedCount = deliveredCount;
 
   // Track customer demand for current out-of-stock items (strictly orders waiting in delayed_delivery)
   const delayedDemandMap = useMemo(() => {
@@ -926,21 +929,21 @@ export default function PackingDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveFilter('shipped')}
+            onClick={() => setActiveFilter('delivered')}
             className={`p-4 rounded-2xl border text-left transition-all ${
-              activeFilter === 'shipped'
+              activeFilter === 'delivered' || (activeFilter as string) === 'shipped'
                 ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-                4. Shipped / Fulfilled
+                4. Delivered / Fulfilled
               </span>
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900 mt-2">{shippedCount}</div>
-            <p className="text-[11px] text-slate-500 mt-0.5">Dispatched successfully</p>
+            <div className="text-2xl font-black text-slate-900 mt-2">{deliveredCount}</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">Delivered to customer</p>
           </button>
         </div>
 
@@ -1157,7 +1160,7 @@ export default function PackingDashboard() {
 
                         if (cid) {
                           const isAwaitingPickup = !order.courier_status || order.courier_status === 'in_review' || order.courier_status === 'pending';
-                          const isDelivered = order.courier_status === 'delivered' || order.status === 'shipped';
+                          const isDelivered = order.courier_status === 'delivered' || order.status === 'delivered' || order.status === 'shipped';
 
                           return (
                             <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
@@ -1685,13 +1688,13 @@ export default function PackingDashboard() {
                               </button>
 
                               <button
-                                onClick={() => handleStatusChange(order.id, 'shipped')}
+                                onClick={() => handleStatusChange(order.id, 'delivered')}
                                 disabled={updatingId === order.id}
                                 className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                               >
                                 <CheckCircle2 className="w-4 h-4" />
                                 <span>
-                                  {updatingId === order.id ? 'Updating...' : 'Mark as Shipped'}
+                                  {updatingId === order.id ? 'Updating...' : 'Mark as Delivered'}
                                 </span>
                               </button>
                             </>
@@ -1699,7 +1702,7 @@ export default function PackingDashboard() {
                         </div>
                       )}
 
-                      {order.status === 'shipped' && (
+                      {(order.status === 'delivered' || order.status === 'shipped') && (
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
                           {(() => {
                             const cid = getOrderConsignmentId(order);

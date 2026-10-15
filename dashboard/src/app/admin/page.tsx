@@ -219,7 +219,11 @@ export default function AdminDashboard() {
       .order('created_at', { ascending: false });
 
     if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
+      if (statusFilter === 'delivered') {
+        query = query.in('status', ['delivered', 'shipped']);
+      } else {
+        query = query.eq('status', statusFilter);
+      }
     }
     if (sourceFilter !== 'all') {
       query = query.eq('source', sourceFilter);
@@ -1208,7 +1212,6 @@ export default function AdminDashboard() {
                     <option value="delayed_delivery">Delayed Delivery</option>
                     <option value="confirmed">Confirmed</option>
                     <option value="ready_to_ship">Ready to Ship</option>
-                    <option value="shipped">Shipped</option>
                     <option value="on_the_way">On the Way</option>
                     <option value="delivered">Delivered</option>
                     <option value="canceled">Canceled</option>
@@ -1421,7 +1424,7 @@ export default function AdminDashboard() {
                                   order.note?.includes('[Dispatched via Steadfast') ||
                                   (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
                                 );
-                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+                                 const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
 
                                 if (isManagedByCourier && isCourierStage) {
                                   const parsedCourier = order.courier_status
@@ -1465,10 +1468,10 @@ export default function AdminDashboard() {
                                       <option value="delayed_delivery">Delayed Delivery</option>
                                       <option value="confirmed">Confirmed</option>
                                       <option value="ready_to_ship">Ready to Ship</option>
-                                      <option value="shipped">Shipped</option>
                                       <option value="on_the_way">On the Way</option>
                                       <option value="delivered">Delivered</option>
                                       <option value="canceled">Canceled</option>
+                                      {order.status === 'shipped' && <option value="shipped">Shipped (Legacy)</option>}
                                     </select>
                                     <span
                                       className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
@@ -1487,7 +1490,7 @@ export default function AdminDashboard() {
                                   order.note?.includes('[Dispatched via Steadfast') ||
                                   (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
                                 );
-                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped';
+                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
 
                                 return (
                                   <div className="flex items-center justify-end gap-1.5">

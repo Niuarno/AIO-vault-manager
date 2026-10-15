@@ -134,9 +134,9 @@ export async function POST(req: NextRequest) {
         normalizedStatus === 'delivered' ||
         normalizedStatus === 'partial_delivered'
       ) {
-        // Stage 4: Shipped / Fulfilled (only for orders currently in fulfillment)
+        // Stage 4: Delivered / Fulfilled (only for orders currently in fulfillment)
         if (order.status === 'ready_to_ship' || order.status === 'on_the_way') {
-          targetOrderStatus = 'shipped';
+          targetOrderStatus = 'delivered';
           paymentStatus = normalizedStatus === 'partial_delivered' ? 'partially_paid' : 'paid';
         }
       } else if (normalizedStatus === 'cancelled') {

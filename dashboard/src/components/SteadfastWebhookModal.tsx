@@ -227,7 +227,7 @@ export default function SteadfastWebhookModal({
               <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200/80">
                 <div className="font-bold text-emerald-800">Stage 3 &rarr; Stage 4</div>
                 <div className="text-slate-600 mt-1 text-[11px]">
-                  When Steadfast sends <span className="font-semibold text-emerald-700">delivered</span>, order automatically shifts to <span className="font-semibold text-emerald-800">Shipped / Fulfilled</span> & marks paid.
+                  When Steadfast sends <span className="font-semibold text-emerald-700">delivered</span>, order automatically shifts to <span className="font-semibold text-emerald-800">Delivered / Fulfilled</span> & marks paid.
                 </div>
               </div>
 
