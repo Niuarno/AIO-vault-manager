@@ -816,6 +816,8 @@ export default function SalesDashboard() {
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
         return { dot: 'bg-indigo-500', label: 'Ready to Ship' };
+      case 'shipped':
+        return { dot: 'bg-sky-500', label: 'Shipped' };
       case 'on_the_way':
         return { dot: 'bg-purple-500', label: 'On the Way' };
       case 'delivered':

@@ -64,9 +64,14 @@ export function getStatusBadgeInfo(status: OrderStatus) {
         dot: 'bg-purple-500',
       };
     case 'shipped':
-    case 'delivered':
       return {
         label: 'Shipped',
+        bg: 'bg-sky-50 text-sky-700 border-sky-200',
+        dot: 'bg-sky-500',
+      };
+    case 'delivered':
+      return {
+        label: 'Delivered',
         bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
         dot: 'bg-emerald-500',
       };

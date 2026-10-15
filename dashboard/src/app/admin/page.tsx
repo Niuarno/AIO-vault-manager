@@ -861,8 +861,11 @@ export default function AdminDashboard() {
   const orderStatusChartData = useMemo(() => {
     const counts: Record<string, number> = {
       pending: 0,
+      not_reachable: 0,
+      delayed_delivery: 0,
       confirmed: 0,
       ready_to_ship: 0,
+      shipped: 0,
       on_the_way: 0,
       delivered: 0,
       canceled: 0,
@@ -876,18 +879,33 @@ export default function AdminDashboard() {
     });
 
     const colors: Record<string, string> = {
-      pending: '#f59e0b',
-      confirmed: '#3b82f6',
-      ready_to_ship: '#6366f1',
-      on_the_way: '#8b5cf6',
-      delivered: '#10b981',
-      canceled: '#ef4444',
+      pending: '#f59e0b',          // Amber
+      not_reachable: '#eab308',    // Yellow
+      delayed_delivery: '#ea580c', // Orange
+      confirmed: '#3b82f6',        // Blue
+      ready_to_ship: '#6366f1',    // Indigo
+      shipped: '#0ea5e9',          // Sky Blue
+      on_the_way: '#8b5cf6',       // Purple
+      delivered: '#10b981',        // Emerald
+      canceled: '#ef4444',         // Red
+    };
+
+    const statusLabels: Record<string, string> = {
+      pending: 'Pending',
+      not_reachable: 'Not Reachable',
+      delayed_delivery: 'Delayed Delivery',
+      confirmed: 'Confirmed',
+      ready_to_ship: 'Ready To Ship',
+      shipped: 'Shipped',
+      on_the_way: 'On The Way',
+      delivered: 'Delivered',
+      canceled: 'Canceled',
     };
 
     return Object.entries(counts)
       .filter(([_, count]) => count > 0)
       .map(([status, count]) => ({
-        label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        label: statusLabels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         value: count,
         color: colors[status] || '#64748b',
       }));
@@ -1115,6 +1133,8 @@ export default function AdminDashboard() {
         return { dot: 'bg-blue-500', label: 'Confirmed' };
       case 'ready_to_ship':
         return { dot: 'bg-indigo-500', label: 'Ready to Ship' };
+      case 'shipped':
+        return { dot: 'bg-sky-500', label: 'Shipped' };
       case 'on_the_way':
         return { dot: 'bg-purple-500', label: 'On the Way' };
       case 'delivered':
@@ -1188,6 +1208,7 @@ export default function AdminDashboard() {
                     <option value="delayed_delivery">Delayed Delivery</option>
                     <option value="confirmed">Confirmed</option>
                     <option value="ready_to_ship">Ready to Ship</option>
+                    <option value="shipped">Shipped</option>
                     <option value="on_the_way">On the Way</option>
                     <option value="delivered">Delivered</option>
                     <option value="canceled">Canceled</option>
@@ -1444,6 +1465,7 @@ export default function AdminDashboard() {
                                       <option value="delayed_delivery">Delayed Delivery</option>
                                       <option value="confirmed">Confirmed</option>
                                       <option value="ready_to_ship">Ready to Ship</option>
+                                      <option value="shipped">Shipped</option>
                                       <option value="on_the_way">On the Way</option>
                                       <option value="delivered">Delivered</option>
                                       <option value="canceled">Canceled</option>
