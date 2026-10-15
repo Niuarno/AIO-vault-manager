@@ -3,14 +3,21 @@ import { SupabaseClient } from '@supabase/supabase-js';
 /**
  * Automatically checks and releases orders in 'delayed_delivery' status to 'confirmed'
  * when stock becomes available.
- * Follows FIFO (First-In, First-Out): Oldest delayed orders are prioritized.
+ * Follows strict FIFO (First-In, First-Out): Oldest delayed orders are prioritized.
+ *
+ * @param supabase Supabase client (usually admin client)
+ * @param variantId Optional: If restock occurred for a specific variant
+ * @param restockedQuantity Optional: The exact physical quantity restocked.
+ *        If provided, only up to this many units of the variant will be released from delayed queue.
+ *        If omitted, checks against unallocated positive physical stock (stock_quantity > 0).
  */
 export async function autoReleaseDelayedOrders(
   supabase: SupabaseClient,
-  variantId?: string
+  variantId?: string,
+  restockedQuantity?: number
 ): Promise<{ releasedCount: number; orderIds: string[] }> {
   try {
-    // 1. Fetch delayed delivery orders
+    // 1. Fetch delayed delivery orders sorted strictly by created_at ascending (FIFO)
     const { data: delayedOrders, error: fetchErr } = await supabase
       .from('orders')
       .select('id, order_number, note, created_at, order_items(id, variant_id, quantity)')
@@ -21,18 +28,19 @@ export async function autoReleaseDelayedOrders(
       return { releasedCount: 0, orderIds: [] };
     }
 
-    // Filter to orders that contain this variant if variantId is provided
-    const candidateOrders = variantId
+    // Filter to orders that contain this variant if variantId is provided, strictly sorted by created_at ascending (oldest orders first)
+    const candidateOrders = (variantId
       ? delayedOrders.filter((o) =>
           (o.order_items || []).some((item: any) => item.variant_id === variantId)
         )
-      : delayedOrders;
+      : delayedOrders
+    ).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     if (candidateOrders.length === 0) {
       return { releasedCount: 0, orderIds: [] };
     }
 
-    // 2. Fetch current stock for all relevant variants
+    // 2. Fetch current stock for all relevant variants across candidate orders
     const allVariantIds = Array.from(
       new Set(
         candidateOrders.flatMap((o) =>
@@ -50,50 +58,69 @@ export async function autoReleaseDelayedOrders(
       return { releasedCount: 0, orderIds: [] };
     }
 
-    const stockMap = new Map<string, number>(
-      variantsData.map((v) => [v.id, v.stock_quantity ?? 0])
-    );
+    // 3. Construct available fulfillment budget map
+    const availableBudget = new Map<string, number>();
+
+    for (const v of variantsData) {
+      if (variantId && v.id === variantId && typeof restockedQuantity === 'number') {
+        // For the specific variant being restocked, the budget is exactly the restocked physical quantity
+        availableBudget.set(v.id, Math.max(0, restockedQuantity));
+      } else {
+        // For other variants or general check, only unallocated positive stock can fulfill delayed orders
+        availableBudget.set(v.id, Math.max(0, Number(v.stock_quantity || 0)));
+      }
+    }
 
     const releasedOrderIds: string[] = [];
 
-    // 3. Evaluate each candidate order in chronological FIFO order
+    // 4. Evaluate each candidate order in chronological FIFO order
     for (const order of candidateOrders) {
       const items = order.order_items || [];
       if (items.length === 0) continue;
 
-      // Check if all items in order have available stock >= required quantity
+      // If restocked for a specific variant and its restock budget is completely exhausted, stop early
+      if (variantId && typeof restockedQuantity === 'number') {
+        const remainingRestock = availableBudget.get(variantId) ?? 0;
+        if (remainingRestock <= 0) {
+          break;
+        }
+      }
+
+      // Check if all items in order have available budget >= required quantity
       const canFulfill = items.every((item: any) => {
         if (!item.variant_id) return true;
-        const available = stockMap.get(item.variant_id) ?? 0;
+        const available = availableBudget.get(item.variant_id) ?? 0;
         const required = Number(item.quantity || 1);
         return available >= required;
       });
 
-      if (canFulfill) {
-        // Allocate stock in memory so subsequent candidate orders don't double-claim the same restocked units
-        for (const item of items) {
-          if (item.variant_id) {
-            const available = stockMap.get(item.variant_id) ?? 0;
-            const required = Number(item.quantity || 1);
-            stockMap.set(item.variant_id, Math.max(0, available - required));
-          }
+      if (!canFulfill) {
+        continue;
+      }
+
+      // Allocate / deduct from the restock budget in memory so subsequent orders don't exceed the restocked quantity
+      for (const item of items) {
+        if (item.variant_id) {
+          const available = availableBudget.get(item.variant_id) ?? 0;
+          const required = Number(item.quantity || 1);
+          availableBudget.set(item.variant_id, Math.max(0, available - required));
         }
+      }
 
-        const releaseNote = '[Auto-Released to Confirmed on Restock]';
-        const newNote = order.note ? `${order.note} | ${releaseNote}` : releaseNote;
+      const releaseNote = '[Auto-Released to Confirmed on Restock]';
+      const newNote = order.note ? `${order.note} | ${releaseNote}` : releaseNote;
 
-        const { error: updateErr } = await supabase
-          .from('orders')
-          .update({
-            status: 'confirmed',
-            note: newNote,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', order.id);
+      const { error: updateErr } = await supabase
+        .from('orders')
+        .update({
+          status: 'confirmed',
+          note: newNote,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id);
 
-        if (!updateErr) {
-          releasedOrderIds.push(order.id);
-        }
+      if (!updateErr) {
+        releasedOrderIds.push(order.id);
       }
     }
 

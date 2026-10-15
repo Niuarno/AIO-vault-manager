@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
     if (stockQtyNum > 0) {
       try {
         const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
-        await autoReleaseDelayedOrders(supabase, variant.id);
+        await autoReleaseDelayedOrders(supabase, variant.id, stockQtyNum);
       } catch (relErr) {
         console.error('Failed to auto release delayed orders on manual product creation:', relErr);
       }

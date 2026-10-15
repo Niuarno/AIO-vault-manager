@@ -99,6 +99,7 @@ export default function AdminDashboard() {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [customRestockInputs, setCustomRestockInputs] = useState<Record<string, string>>({});
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
   const [editingCostVal, setEditingCostVal] = useState<string>('');
@@ -469,6 +470,9 @@ export default function AdminDashboard() {
       });
       const json = await res.json();
       if (json.success) {
+        if (json.released_delayed_orders > 0) {
+          alert(`Stock updated! ${json.released_delayed_orders} waiting delayed order(s) auto-released to packing! 🚀`);
+        }
         setVariants((prev) =>
           prev.map((v) => {
             if (v.id === variantId) {
@@ -1652,7 +1656,8 @@ export default function AdminDashboard() {
                       filteredVariants.map((variant) => {
                         const product = variant.product as any;
                         const isProductDisabled = product?.is_active === false;
-                        const isLowStock = variant.stock_quantity <= 5;
+                        const isNegativeStock = (variant.stock_quantity ?? 0) < 0;
+                        const isLowStock = (variant.stock_quantity ?? 0) > 0 && (variant.stock_quantity ?? 0) <= 5;
                         const isAdjusting = adjustingId === variant.id;
 
                         return (
@@ -1859,19 +1864,23 @@ export default function AdminDashboard() {
                             <td className="p-4">
                               <span
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                                  variant.stock_quantity === 0
-                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  isNegativeStock
+                                    ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                    : variant.stock_quantity === 0
+                                    ? 'bg-slate-100 text-slate-700 border-slate-300'
                                     : isLowStock
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 }`}
                               >
-                                {variant.stock_quantity} in stock
+                                {isNegativeStock
+                                  ? `${variant.stock_quantity} in stock (${Math.abs(variant.stock_quantity)} pre-orders)`
+                                  : `${variant.stock_quantity} in stock`}
                               </span>
                             </td>
 
                             <td className="p-4">
-                              <div className="flex items-center justify-center gap-1.5">
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
                                 <button
                                   disabled={isAdjusting || variant.stock_quantity <= 0}
                                   onClick={() => handleStockAdjust(variant.id, -1)}
@@ -1896,6 +1905,52 @@ export default function AdminDashboard() {
                                 >
                                   +10
                                 </button>
+
+                                {/* Inline Restock Input Box */}
+                                <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 rounded-lg p-0.5">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="Qty"
+                                    value={customRestockInputs[variant.id] || ''}
+                                    onChange={(e) =>
+                                      setCustomRestockInputs((prev) => ({
+                                        ...prev,
+                                        [variant.id]: e.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                        if (!isNaN(val) && val > 0) {
+                                          handleStockAdjust(variant.id, val);
+                                          setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                        }
+                                      }
+                                    }}
+                                    disabled={isAdjusting}
+                                    className="w-14 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      isAdjusting ||
+                                      !customRestockInputs[variant.id] ||
+                                      parseInt(customRestockInputs[variant.id], 10) <= 0
+                                    }
+                                    onClick={() => {
+                                      const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                      if (!isNaN(val) && val > 0) {
+                                        handleStockAdjust(variant.id, val);
+                                        setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
+                                    title="Restock entered quantity (older orders prioritized)"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
                               </div>
                             </td>
 

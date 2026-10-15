@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Variant not found' }, { status: 404 });
     }
 
-    const prevStock = variant.stock_quantity;
-    const newStock = Math.max(0, prevStock + change_amount);
+    const prevStock = Number(variant.stock_quantity ?? 0);
+    const newStock = prevStock + change_amount;
 
     // 2. Update stock quantity
     const { error: updateErr } = await supabase
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
           .eq('id', variant.product_id);
         isProductDisabled = true;
       } else {
-        // Re-enable if stock was added
+        // Re-enable if stock was added and net totalStock is positive
         await supabase
           .from('products')
           .update({ is_active: true, updated_at: new Date().toISOString() })
@@ -73,12 +73,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Fully Automatic: Release delayed delivery orders if stock is replenished
+    // 5. Fully Automatic: Release delayed delivery orders in FIFO order up to the restocked quantity
     let releasedCount = 0;
-    if (newStock > 0) {
+    if (change_amount > 0) {
       try {
         const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
-        const releaseResult = await autoReleaseDelayedOrders(supabase, variant_id);
+        const releaseResult = await autoReleaseDelayedOrders(supabase, variant_id, change_amount);
         releasedCount = releaseResult.releasedCount;
       } catch (releaseErr) {
         console.error('Auto release error after stock adjustment:', releaseErr);
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       product_reenabled: isProductReenabled,
       released_delayed_orders: releasedCount,
       message: `Stock for ${variant.title} updated from ${prevStock} to ${newStock}${
-        isProductDisabled ? ' (Product auto-disabled due to 0 stock)' : ''
+        isProductDisabled ? ' (Product disabled on storefront due to non-positive stock)' : ''
       }${isProductReenabled ? ' (Product re-enabled)' : ''}${
         releasedCount > 0 ? ` (${releasedCount} delayed order(s) auto-released to packing!)` : ''
       }`,

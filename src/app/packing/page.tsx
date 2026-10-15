@@ -84,6 +84,7 @@ export default function PackingDashboard() {
   const [adjustingVariantId, setAdjustingVariantId] = useState<string | null>(null);
   const [showManualModal, setShowManualModal] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [customRestockInputs, setCustomRestockInputs] = useState<Record<string, string>>({});
 
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
@@ -1826,14 +1827,18 @@ export default function PackingDashboard() {
                             </span>
                             <span
                               className={`font-mono text-sm font-black ${
-                                totalStock <= 0
+                                totalStock < 0
                                   ? 'text-rose-600'
+                                  : totalStock === 0
+                                  ? 'text-slate-600'
                                   : totalStock <= 5
                                   ? 'text-amber-600'
                                   : 'text-emerald-700'
                               }`}
                             >
-                              {totalStock} units
+                              {totalStock < 0
+                                ? `${totalStock} units (${Math.abs(totalStock)} pre-orders pending)`
+                                : `${totalStock} units`}
                             </span>
                           </div>
 
@@ -1852,8 +1857,9 @@ export default function PackingDashboard() {
 
                       <div className="divide-y divide-slate-100">
                         {variants.map((variant) => {
+                          const isNegative = variant.stock_quantity < 0;
+                          const isOut = variant.stock_quantity === 0;
                           const isLow = variant.stock_quantity > 0 && variant.stock_quantity <= 5;
-                          const isOut = variant.stock_quantity <= 0;
                           const isUpdating = adjustingVariantId === variant.id;
 
                           return (
@@ -1889,9 +1895,11 @@ export default function PackingDashboard() {
                                 {/* Stock Status Badge */}
                                 <div className="text-right">
                                   <span
-                                    className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
-                                      isOut
-                                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                                      isNegative
+                                        ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                        : isOut
+                                        ? 'bg-slate-100 text-slate-700 border-slate-300'
                                         : isLow
                                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -1899,19 +1907,25 @@ export default function PackingDashboard() {
                                   >
                                     <span
                                       className={`w-1.5 h-1.5 rounded-full ${
-                                        isOut
-                                          ? 'bg-rose-500'
+                                        isNegative
+                                          ? 'bg-rose-500 animate-pulse'
+                                          : isOut
+                                          ? 'bg-slate-400'
                                           : isLow
                                           ? 'bg-amber-500'
                                           : 'bg-emerald-500'
                                       }`}
                                     />
-                                    <span className="font-mono">{variant.stock_quantity} in stock</span>
+                                    <span className="font-mono">
+                                      {isNegative
+                                        ? `${variant.stock_quantity} in stock (${Math.abs(variant.stock_quantity)} pre-orders)`
+                                        : `${variant.stock_quantity} in stock`}
+                                    </span>
                                   </span>
                                 </div>
 
                                 {/* Stock Adjust Actions */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                   <button
                                     type="button"
                                     disabled={variant.stock_quantity <= 0 || isUpdating}
@@ -1939,25 +1953,52 @@ export default function PackingDashboard() {
                                   >
                                     +10
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={isUpdating}
-                                    onClick={() => {
-                                      const input = prompt(
-                                        `Enter stock adjustment amount for "${variant.title}" (e.g. +5 or -2):`
-                                      );
-                                      if (input) {
-                                        const num = parseInt(input, 10);
-                                        if (!isNaN(num) && num !== 0) {
-                                          handleAdjustStock(variant.id, num);
-                                        }
+
+                                  {/* Custom Restock Input Box */}
+                                  <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 rounded-xl p-0.5">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      placeholder="Qty"
+                                      value={customRestockInputs[variant.id] || ''}
+                                      onChange={(e) =>
+                                        setCustomRestockInputs((prev) => ({
+                                          ...prev,
+                                          [variant.id]: e.target.value,
+                                        }))
                                       }
-                                    }}
-                                    className="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition-colors cursor-pointer"
-                                    title="Custom Adjustment"
-                                  >
-                                    Custom
-                                  </button>
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                          if (!isNaN(val) && val > 0) {
+                                            handleAdjustStock(variant.id, val);
+                                            setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                          }
+                                        }
+                                      }}
+                                      disabled={isUpdating}
+                                      className="w-16 px-2 py-1 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        isUpdating ||
+                                        !customRestockInputs[variant.id] ||
+                                        parseInt(customRestockInputs[variant.id], 10) <= 0
+                                      }
+                                      onClick={() => {
+                                        const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                        if (!isNaN(val) && val > 0) {
+                                          handleAdjustStock(variant.id, val);
+                                          setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                        }
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
+                                      title="Restock entered quantity (older orders prioritized)"
+                                    >
+                                      + Restock
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
