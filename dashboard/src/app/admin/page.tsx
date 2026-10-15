@@ -99,6 +99,7 @@ export default function AdminDashboard() {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [customRestockInputs, setCustomRestockInputs] = useState<Record<string, string>>({});
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
   const [editingCostVal, setEditingCostVal] = useState<string>('');
@@ -1879,7 +1880,7 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4">
-                              <div className="flex items-center justify-center gap-1.5">
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
                                 <button
                                   disabled={isAdjusting || variant.stock_quantity <= 0}
                                   onClick={() => handleStockAdjust(variant.id, -1)}
@@ -1904,32 +1905,52 @@ export default function AdminDashboard() {
                                 >
                                   +10
                                 </button>
-                                <button
-                                  disabled={isAdjusting}
-                                  onClick={() => handleStockAdjust(variant.id, 50)}
-                                  className="px-2 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center border border-slate-200/80 disabled:opacity-40 transition-colors"
-                                  title="Add 50 (Bulk Restock)"
-                                >
-                                  +50
-                                </button>
-                                <button
-                                  disabled={isAdjusting}
-                                  onClick={() => {
-                                    const input = prompt(
-                                      `Enter stock adjustment amount for "${variant.title}" (e.g. +50 to restock 50 units):`
-                                    );
-                                    if (input) {
-                                      const num = parseInt(input, 10);
-                                      if (!isNaN(num) && num !== 0) {
-                                        handleStockAdjust(variant.id, num);
-                                      }
+
+                                {/* Inline Restock Input Box */}
+                                <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 rounded-lg p-0.5">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="Qty"
+                                    value={customRestockInputs[variant.id] || ''}
+                                    onChange={(e) =>
+                                      setCustomRestockInputs((prev) => ({
+                                        ...prev,
+                                        [variant.id]: e.target.value,
+                                      }))
                                     }
-                                  }}
-                                  className="px-2 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium flex items-center justify-center border border-slate-200/80 disabled:opacity-40 transition-colors cursor-pointer"
-                                  title="Custom Adjustment"
-                                >
-                                  Custom
-                                </button>
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                        if (!isNaN(val) && val > 0) {
+                                          handleStockAdjust(variant.id, val);
+                                          setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                        }
+                                      }
+                                    }}
+                                    disabled={isAdjusting}
+                                    className="w-14 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      isAdjusting ||
+                                      !customRestockInputs[variant.id] ||
+                                      parseInt(customRestockInputs[variant.id], 10) <= 0
+                                    }
+                                    onClick={() => {
+                                      const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                      if (!isNaN(val) && val > 0) {
+                                        handleStockAdjust(variant.id, val);
+                                        setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
+                                    title="Restock entered quantity (older orders prioritized)"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
                               </div>
                             </td>
 

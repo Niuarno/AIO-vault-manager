@@ -84,6 +84,7 @@ export default function PackingDashboard() {
   const [adjustingVariantId, setAdjustingVariantId] = useState<string | null>(null);
   const [showManualModal, setShowManualModal] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [customRestockInputs, setCustomRestockInputs] = useState<Record<string, string>>({});
 
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
@@ -1924,7 +1925,7 @@ export default function PackingDashboard() {
                                 </div>
 
                                 {/* Stock Adjust Actions */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                   <button
                                     type="button"
                                     disabled={variant.stock_quantity <= 0 || isUpdating}
@@ -1952,34 +1953,52 @@ export default function PackingDashboard() {
                                   >
                                     +10
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={isUpdating}
-                                    onClick={() => handleAdjustStock(variant.id, 50)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer"
-                                    title="Add 50 (Bulk Restock)"
-                                  >
-                                    +50
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={isUpdating}
-                                    onClick={() => {
-                                      const input = prompt(
-                                        `Enter stock adjustment amount for "${variant.title}" (e.g. +50 to restock 50 units):`
-                                      );
-                                      if (input) {
-                                        const num = parseInt(input, 10);
-                                        if (!isNaN(num) && num !== 0) {
-                                          handleAdjustStock(variant.id, num);
-                                        }
+
+                                  {/* Custom Restock Input Box */}
+                                  <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 rounded-xl p-0.5">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      placeholder="Qty"
+                                      value={customRestockInputs[variant.id] || ''}
+                                      onChange={(e) =>
+                                        setCustomRestockInputs((prev) => ({
+                                          ...prev,
+                                          [variant.id]: e.target.value,
+                                        }))
                                       }
-                                    }}
-                                    className="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition-colors cursor-pointer"
-                                    title="Custom Adjustment"
-                                  >
-                                    Custom
-                                  </button>
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                          if (!isNaN(val) && val > 0) {
+                                            handleAdjustStock(variant.id, val);
+                                            setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                          }
+                                        }
+                                      }}
+                                      disabled={isUpdating}
+                                      className="w-16 px-2 py-1 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        isUpdating ||
+                                        !customRestockInputs[variant.id] ||
+                                        parseInt(customRestockInputs[variant.id], 10) <= 0
+                                      }
+                                      onClick={() => {
+                                        const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                        if (!isNaN(val) && val > 0) {
+                                          handleAdjustStock(variant.id, val);
+                                          setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                        }
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
+                                      title="Restock entered quantity (older orders prioritized)"
+                                    >
+                                      + Restock
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>

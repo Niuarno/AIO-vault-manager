@@ -28,12 +28,13 @@ export async function autoReleaseDelayedOrders(
       return { releasedCount: 0, orderIds: [] };
     }
 
-    // Filter to orders that contain this variant if variantId is provided
-    const candidateOrders = variantId
+    // Filter to orders that contain this variant if variantId is provided, strictly sorted by created_at ascending (oldest orders first)
+    const candidateOrders = (variantId
       ? delayedOrders.filter((o) =>
           (o.order_items || []).some((item: any) => item.variant_id === variantId)
         )
-      : delayedOrders;
+      : delayedOrders
+    ).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     if (candidateOrders.length === 0) {
       return { releasedCount: 0, orderIds: [] };
