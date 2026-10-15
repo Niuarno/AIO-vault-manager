@@ -1,0 +1,487 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import {
+  syncStaffCommissionRewards,
+  syncReachoutCommissionReward,
+  transferOrderCommission,
+} from '@/lib/commission';
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const orderId = params.id;
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const newItems: Array<{
+      id?: string;
+      product_id: string | null;
+      variant_id: string | null;
+      title: string;
+      variant_title: string | null;
+      quantity: number;
+      price: number;
+      is_upsell?: boolean;
+    }> = body.items;
+
+    const reason: string = body.reason || '';
+    const editedBy: string = body.edited_by || 'Staff Member';
+
+    if (!reason.trim()) {
+      return NextResponse.json(
+        { error: 'Please enter a reasoning note explaining why this order was edited.' },
+        { status: 400 }
+      );
+    }
+
+    if (!Array.isArray(newItems) || newItems.length === 0) {
+      return NextResponse.json(
+        { error: 'An order must have at least one line item.' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createAdminClient();
+
+    // 1. Fetch existing order
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (orderErr || !order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    // Hard Lock: Once an order has been handed to Steadfast Courier (status is on_the_way, shipped, or delivered),
+    // NO ONE can edit any products in that parcel, not even administrators.
+    // Before being handed to courier (pending, not_reachable, delayed_delivery, confirmed, ready_to_ship),
+    // orders remain fully editable by assigned staff and administrators.
+    const isHandedToCourier =
+      order.status === 'on_the_way' ||
+      order.status === 'shipped' ||
+      order.status === 'delivered';
+
+    if (isHandedToCourier) {
+      return NextResponse.json(
+        {
+          error: `LOCKED: This parcel has already been handed to Steadfast Courier (Status: ${order.status}). Products cannot be modified after courier handover (locked for all users and administrators).`,
+        },
+        { status: 403 }
+      );
+    }
+
+    // 2. Fetch existing order items
+    const { data: oldItems, error: oldItemsErr } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
+
+    if (oldItemsErr) {
+      return NextResponse.json({ error: 'Failed to retrieve current order items' }, { status: 500 });
+    }
+
+    // 3. Calculate stock adjustments per variant
+    // Sum old quantities by variant_id
+    const oldVariantQty: Record<string, number> = {};
+    (oldItems || []).forEach((item) => {
+      if (item.variant_id) {
+        oldVariantQty[item.variant_id] = (oldVariantQty[item.variant_id] || 0) + Number(item.quantity);
+      }
+    });
+
+    // Sum new quantities by variant_id
+    const newVariantQty: Record<string, number> = {};
+    newItems.forEach((item) => {
+      if (item.variant_id) {
+        newVariantQty[item.variant_id] = (newVariantQty[item.variant_id] || 0) + Number(item.quantity);
+      }
+    });
+
+    const allVariantIds = Array.from(
+      new Set([...Object.keys(oldVariantQty), ...Object.keys(newVariantQty)])
+    );
+
+    // Check if order is or should be marked as delayed delivery
+    const isDelayedDelivery = Boolean(body.is_delayed_delivery) || order.status === 'delayed_delivery';
+
+    // Validate that newly added items are not disabled (unless order is delayed delivery pre-order)
+    if (!isDelayedDelivery) {
+      for (const item of newItems) {
+        if (!item.variant_id) continue;
+        const oldQ = oldVariantQty[item.variant_id] || 0;
+        const newQ = newVariantQty[item.variant_id] || 0;
+        if (newQ > oldQ) {
+          const { data: v } = await supabase
+            .from('product_variants')
+            .select('title, product:products(title, is_active)')
+            .eq('id', item.variant_id)
+            .single();
+          if ((v?.product as any)?.is_active === false) {
+            return NextResponse.json(
+              { error: `Cannot add "${(v?.product as any)?.title || item.title}": this product is currently disabled.` },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    }
+
+    // 4. Validate and apply inventory deltas
+    for (const variantId of allVariantIds) {
+      const oldQty = oldVariantQty[variantId] || 0;
+      const newQty = newVariantQty[variantId] || 0;
+      const delta = newQty - oldQty; // positive = added items, negative = deducted items
+
+      if (delta === 0) continue;
+
+      // Get current variant
+      const { data: variant, error: varErr } = await supabase
+        .from('product_variants')
+        .select('*')
+        .eq('id', variantId)
+        .single();
+
+      if (varErr || !variant) {
+        return NextResponse.json(
+          { error: `Product variant ${variantId} not found in inventory.` },
+          { status: 400 }
+        );
+      }
+
+      const prevStock = variant.stock_quantity;
+      let nextStock = prevStock - delta;
+
+      // Only block if deducting and stock goes below 0, unless order is delayed delivery
+      if (delta > 0 && nextStock < 0) {
+        if (!isDelayedDelivery) {
+          return NextResponse.json(
+            {
+              error: `Insufficient stock for "${variant.title}". Available: ${prevStock}, requested additional: ${delta}`,
+            },
+            { status: 400 }
+          );
+        }
+        // For delayed delivery, keep stock at minimum 0
+        nextStock = Math.max(0, nextStock);
+      }
+
+      // Update variant stock
+      await supabase
+        .from('product_variants')
+        .update({
+          stock_quantity: nextStock,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', variantId);
+
+      // Audit log
+      const actualChange = nextStock - prevStock;
+      if (actualChange !== 0) {
+        await supabase.from('inventory_logs').insert({
+          variant_id: variantId,
+          previous_stock: prevStock,
+          change_amount: actualChange,
+          new_stock: nextStock,
+          reason: delta > 0 ? 'order_created' : 'restock',
+          order_id: orderId,
+        });
+      }
+
+      // Auto-disable parent product if total stock depleted to 0 or below
+      if (variant.product_id) {
+        const { data: siblings } = await supabase
+          .from('product_variants')
+          .select('stock_quantity')
+          .eq('product_id', variant.product_id);
+        const totalStock = (siblings || []).reduce((acc, s) => acc + (s.stock_quantity || 0), 0);
+        if (totalStock <= 0) {
+          await supabase
+            .from('products')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('id', variant.product_id);
+        }
+      }
+    }
+
+    // 5. Replace line items in order_items table
+    // Delete old items
+    await supabase.from('order_items').delete().eq('order_id', orderId);
+
+    // Rule: "make the upsell functionality only valid for website orders, any other source are count as regular sells"
+    const isWebsite = order.source === 'website';
+    const itemsToInsert = newItems.map((item) => ({
+      order_id: orderId,
+      product_id: item.product_id || null,
+      variant_id: item.variant_id || null,
+      title: item.title,
+      variant_title: item.variant_title || null,
+      quantity: Number(item.quantity) || 1,
+      price: Number(item.price) || 0,
+      is_upsell: isWebsite ? Boolean(item.is_upsell) : false,
+    }));
+
+    const { error: insertErr } = await supabase.from('order_items').insert(itemsToInsert);
+    if (insertErr) {
+      return NextResponse.json({ error: 'Failed to update order items: ' + insertErr.message }, { status: 500 });
+    }
+
+    // 6. Recalculate grand total amount accounting for delivery charge and custom discount
+    const recalculatedItemsSubtotal = newItems.reduce(
+      (sum, item) => sum + (Number(item.quantity) || 1) * (Number(item.price) || 0),
+      0
+    );
+
+    // Resolve delivery charge
+    let finalDeliveryFee =
+      body.delivery_charge !== undefined
+        ? Number(body.delivery_charge)
+        : (typeof order.delivery_charge === 'number' ? order.delivery_charge : 80);
+
+    // Resolve custom discount
+    let finalDiscount =
+      body.discount_amount !== undefined
+        ? Math.max(0, Number(body.discount_amount) || 0)
+        : (typeof order.discount_amount === 'number' ? order.discount_amount : 0);
+
+    // Resolve advance payment
+    let finalAdvance =
+      body.advance_payment !== undefined
+        ? Math.max(0, Number(body.advance_payment) || 0)
+        : (typeof order.advance_payment === 'number' ? order.advance_payment : 0);
+
+    // Fallbacks from note if columns were 0 or missing
+    if (finalDiscount === 0 && order.note) {
+      const dm = order.note.match(/\[Discount:\s*৳?([0-9,]+(\.[0-9]+)?)\]/i);
+      if (dm) finalDiscount = parseFloat(dm[1].replace(/,/g, '')) || 0;
+    }
+    if (finalAdvance === 0 && order.note) {
+      const am = order.note.match(/\[Advance Paid:\s*৳?([0-9,]+(\.[0-9]+)?)/i);
+      if (am) finalAdvance = parseFloat(am[1].replace(/,/g, '')) || 0;
+    }
+
+    const recalculatedGrandTotal = Math.max(0, recalculatedItemsSubtotal + finalDeliveryFee - finalDiscount);
+    const recalculatedRemainingCod = Math.max(0, recalculatedGrandTotal - finalAdvance);
+
+    // 7. Determine requester role & staff assignment rules
+    let isAdmin = false;
+    let requesterUserId: string | null = null;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        requesterUserId = user.id;
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        isAdmin = prof?.role === 'admin';
+      }
+    } catch {
+      // ignore
+    }
+
+    // Fallback: Check Authorization Bearer Token
+    if (!requesterUserId) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          requesterUserId = user.id;
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          isAdmin = prof?.role === 'admin';
+        }
+      }
+    }
+
+    // Rule: "when any order has already been assigned to a staff member it will only editable for that specifc staff member and admins no one else"
+    if (!isAdmin && order.sales_rep_id && order.sales_rep_id !== requesterUserId) {
+      return NextResponse.json(
+        {
+          error: 'Permission denied: This order is assigned to another staff member and can only be edited by them or an administrator.',
+        },
+        { status: 403 }
+      );
+    }
+
+    let resolvedSalesRepId = order.sales_rep_id;
+    const hasUpsellItem = itemsToInsert.some((i) => i.is_upsell);
+
+    if (isAdmin) {
+      // Admin has full power to assign or reassign
+      if (body.sales_rep_id !== undefined) {
+        resolvedSalesRepId = body.sales_rep_id || null;
+      }
+    } else {
+      // Non-admin sales staff:
+      if (order.sales_rep_id) {
+        // PERMANENTLY LOCKED: Staff cannot change or steal already assigned orders
+        resolvedSalesRepId = order.sales_rep_id;
+      } else if (isWebsite && hasUpsellItem) {
+        // Staff who upsells on an unassigned website order is auto-assigned
+        resolvedSalesRepId = requesterUserId || body.sales_rep_id || null;
+      }
+    }
+
+    // 8. Prepare Edit History Entry and preserve Original Order snapshot
+    const nowIso = new Date().toISOString();
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const editLogEntry = {
+      id: crypto.randomUUID(),
+      timestamp: nowIso,
+      edited_by: editedBy,
+      reason: reason.trim(),
+      previous_total: order.total_amount,
+      new_total: recalculatedGrandTotal,
+      subtotal: recalculatedItemsSubtotal,
+      delivery_charge: finalDeliveryFee,
+      discount_amount: finalDiscount,
+      advance_payment: finalAdvance,
+      remaining_cod: recalculatedRemainingCod,
+      previous_items: (oldItems || []).map((i) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: i.is_upsell,
+      })),
+      new_items: itemsToInsert.map((i: any) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: i.is_upsell,
+        is_reachout: Boolean(i.is_reachout || body.is_reachout),
+      })),
+    };
+
+    const originalItems =
+      order.original_items ||
+      (oldItems || []).map((i) => ({
+        title: i.title,
+        variant_title: i.variant_title,
+        quantity: i.quantity,
+        price: i.price,
+        is_upsell: i.is_upsell,
+      }));
+
+    const existingHistory = Array.isArray(order.edit_history) ? order.edit_history : [];
+    const updatedHistory = [...existingHistory, editLogEntry];
+
+    // Note log fallback string
+    const reachoutNoteTag = body.is_reachout && !order.note?.toLowerCase().includes('reachout')
+      ? ` [Reachout Sale by ${editedBy}]`
+      : '';
+    const noteLog = `\n[EDIT ${formattedDate} by ${editedBy}]: Reason: "${reason.trim()}". Items adjusted. Total: ${order.total_amount} -> ${recalculatedGrandTotal} BDT.${reachoutNoteTag}`;
+    let updatedNote = (order.note || '').trim() + noteLog;
+
+    // Refresh discount and advance notes
+    if (finalDiscount > 0 && !updatedNote.includes('[Discount:')) {
+      updatedNote += `\n[Discount: ৳${finalDiscount.toLocaleString()}]`;
+    }
+    if (finalAdvance > 0 && !updatedNote.includes('[Advance Paid:')) {
+      updatedNote += `\n[Advance Paid: ৳${finalAdvance.toLocaleString()} | Remaining COD: ৳${recalculatedRemainingCod.toLocaleString()}]`;
+    }
+
+    if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+      updatedNote += '\n[Order moved to Delayed Delivery due to out-of-stock items]';
+    }
+
+    let updatedOrder: any = null;
+
+    // Try updating with all columns
+    const updatePayload: Record<string, any> = {
+      total_amount: recalculatedGrandTotal,
+      delivery_charge: finalDeliveryFee,
+      discount_amount: finalDiscount,
+      advance_payment: finalAdvance,
+      updated_at: nowIso,
+      note: updatedNote,
+      edit_history: updatedHistory,
+      original_items: originalItems,
+      sales_rep_id: resolvedSalesRepId,
+    };
+
+    if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+      updatePayload.status = 'delayed_delivery';
+    }
+
+    const { data: fullUpdateData, error: fullUpdateErr } = await supabase
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', orderId)
+      .select('*, order_items(*)')
+      .single();
+
+    if (fullUpdateErr) {
+      // Graceful fallback without newer columns if not yet created in Supabase schema
+      const fallbackPayload: Record<string, any> = {
+        total_amount: recalculatedGrandTotal,
+        updated_at: nowIso,
+        note: updatedNote,
+        sales_rep_id: resolvedSalesRepId,
+      };
+
+      if (isDelayedDelivery && order.status !== 'delayed_delivery') {
+        fallbackPayload.status = 'delayed_delivery';
+      }
+
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from('orders')
+        .update(fallbackPayload)
+        .eq('id', orderId)
+        .select('*, order_items(*)')
+        .single();
+
+      if (fallbackErr) {
+        return NextResponse.json({ error: 'Failed to update order: ' + fallbackErr.message }, { status: 500 });
+      }
+      updatedOrder = fallbackData;
+    } else {
+      updatedOrder = fullUpdateData;
+    }
+
+    // 9. If assigned staff changed, transfer commission; otherwise sync quota & reachout commission
+    if (resolvedSalesRepId !== order.sales_rep_id) {
+      await transferOrderCommission(supabase, orderId, order.sales_rep_id, resolvedSalesRepId);
+    } else if (resolvedSalesRepId) {
+      await syncStaffCommissionRewards(
+        supabase,
+        resolvedSalesRepId,
+        orderId,
+        updatedOrder?.source || (isWebsite ? 'website' : 'other')
+      );
+
+      const reachoutSubtotal = itemsToInsert
+        .filter((i: any) => i.is_reachout)
+        .reduce((sum: number, it: any) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1), 0);
+
+      if (reachoutSubtotal > 0) {
+        await syncReachoutCommissionReward(supabase, resolvedSalesRepId, orderId, reachoutSubtotal);
+      }
+    }
+
+    return NextResponse.json({ success: true, order: updatedOrder });
+  } catch (err: any) {
+    console.error('❌ [Order Items Update Error]:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
