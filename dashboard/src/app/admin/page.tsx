@@ -109,6 +109,11 @@ export default function AdminDashboard() {
   const [savingSellingId, setSavingSellingId] = useState<string | null>(null);
   const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [editingStockVal, setEditingStockVal] = useState<string>('');
+  const [savingStockId, setSavingStockId] = useState<string | null>(null);
+  const [editingProductModal, setEditingProductModal] = useState<{ id: string; title: string } | null>(null);
+  const [savingProductTitle, setSavingProductTitle] = useState(false);
 
   // Sales Team & Performance State
   const [salesTeam, setSalesTeam] = useState<Profile[]>([]);
@@ -458,24 +463,29 @@ export default function AdminDashboard() {
     }
   };
 
-  // Stock Adjustment Handler
-  const handleStockAdjust = async (variantId: string, amount: number) => {
+  // Stock Adjustment Handler (supports relative change or setting custom exact stock)
+  const handleStockAdjust = async (variantId: string, amount: number, isDirectSet: boolean = false) => {
     setAdjustingId(variantId);
     try {
+      const payload: Record<string, any> = {
+        variant_id: variantId,
+        adjusted_by: currentProfile?.id,
+      };
+      if (isDirectSet) {
+        payload.target_stock = amount;
+      } else {
+        payload.change_amount = amount;
+      }
+
       const res = await fetch('/api/inventory/adjust', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          variant_id: variantId,
-          change_amount: amount,
-          reason: 'manual_adjustment',
-          adjusted_by: currentProfile?.id,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.success) {
         if (json.released_delayed_orders > 0) {
-          alert(`Stock updated! ${json.released_delayed_orders} waiting delayed order(s) auto-released to packing! 🚀`);
+          alert(`Stock updated to ${json.new_stock}! ${json.released_delayed_orders} waiting delayed order(s) auto-released to packing! 🚀`);
         }
         setVariants((prev) =>
           prev.map((v) => {
@@ -487,6 +497,15 @@ export default function AdminDashboard() {
                   product: {
                     ...(v.product as any),
                     is_active: false,
+                  },
+                };
+              }
+              if (json.product_reenabled) {
+                return {
+                  ...updatedV,
+                  product: {
+                    ...(v.product as any),
+                    is_active: true,
                   },
                 };
               }
@@ -502,6 +521,71 @@ export default function AdminDashboard() {
       alert(err.message);
     } finally {
       setAdjustingId(null);
+    }
+  };
+
+  // Direct Set Custom Stock Quantity
+  const handleSaveCustomStock = async (variantId: string) => {
+    const val = parseInt(editingStockVal, 10);
+    if (isNaN(val)) {
+      alert('Please enter a valid stock number.');
+      return;
+    }
+    setSavingStockId(variantId);
+    try {
+      await handleStockAdjust(variantId, val, true);
+      setEditingStockId(null);
+      setEditingStockVal('');
+    } finally {
+      setSavingStockId(null);
+    }
+  };
+
+  // Save / Update Existing Product Name (Title)
+  const handleSaveProductTitle = async () => {
+    if (!editingProductModal || !editingProductModal.id) return;
+    const newTitle = editingProductModal.title.trim();
+    if (!newTitle) {
+      alert('Product name cannot be empty.');
+      return;
+    }
+    setSavingProductTitle(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: editingProductModal.id,
+          title: newTitle,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.product) {
+        setVariants((prev) =>
+          prev.map((v) => {
+            const pId = v.product_id || (v.product as any)?.id;
+            if (pId === editingProductModal.id) {
+              return {
+                ...v,
+                product: {
+                  ...(v.product as any),
+                  title: json.product.title,
+                  name: json.product.title,
+                },
+              };
+            }
+            return v;
+          })
+        );
+        setEditingProductModal(null);
+        alert(`Product name updated to "${newTitle}" successfully!`);
+      } else {
+        alert(json.error || 'Failed to update product name');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating product name');
+    } finally {
+      setSavingProductTitle(false);
     }
   };
 
@@ -1693,8 +1777,23 @@ export default function AdminDashboard() {
                             }`}
                           >
                             <td className="p-4">
-                              <div className="font-semibold text-slate-900 flex items-center gap-2">
+                              <div className="font-semibold text-slate-900 flex items-center gap-1.5 flex-wrap">
                                 <span>{product?.name || product?.title || 'Product'}</span>
+                                {product?.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingProductModal({
+                                        id: product.id,
+                                        title: product.title || product.name || '',
+                                      })
+                                    }
+                                    className="p-1 rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    title="Edit product name"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 {isProductDisabled && (
                                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">
                                     Disabled
@@ -1887,21 +1986,77 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="p-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                                  isNegativeStock
-                                    ? 'bg-rose-50 text-rose-700 border-rose-300'
-                                    : variant.stock_quantity === 0
-                                    ? 'bg-slate-100 text-slate-700 border-slate-300'
-                                    : isLowStock
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                }`}
-                              >
-                                {isNegativeStock
-                                  ? `${variant.stock_quantity} in stock (${Math.abs(variant.stock_quantity)} pre-orders)`
-                                  : `${variant.stock_quantity} in stock`}
-                              </span>
+                              {editingStockId === variant.id ? (
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="number"
+                                    autoFocus
+                                    disabled={savingStockId === variant.id}
+                                    value={editingStockVal}
+                                    onChange={(e) => setEditingStockVal(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleSaveCustomStock(variant.id);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingStockId(null);
+                                        setEditingStockVal('');
+                                      }
+                                    }}
+                                    className="w-20 px-2 py-1 text-xs font-mono font-bold text-slate-900 bg-white border-2 border-emerald-500 rounded-lg shadow-xs focus:outline-none"
+                                    placeholder="Stock"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={savingStockId === variant.id}
+                                    onClick={() => handleSaveCustomStock(variant.id)}
+                                    className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+                                    title="Set exact stock"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingStockId === variant.id}
+                                    onClick={() => {
+                                      setEditingStockId(null);
+                                      setEditingStockVal('');
+                                    }}
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="group flex items-center gap-1.5">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                      isNegativeStock
+                                        ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                        : variant.stock_quantity === 0
+                                        ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                        : isLowStock
+                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    }`}
+                                  >
+                                    {isNegativeStock
+                                      ? `${variant.stock_quantity} in stock (${Math.abs(variant.stock_quantity)} pre-orders)`
+                                      : `${variant.stock_quantity} in stock`}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStockId(variant.id);
+                                      setEditingStockVal(String(variant.stock_quantity ?? 0));
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    title="Click to set custom stock quantity directly"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </td>
 
                             <td className="p-4">
@@ -1931,11 +2086,10 @@ export default function AdminDashboard() {
                                   +10
                                 </button>
 
-                                {/* Inline Restock Input Box */}
+                                {/* Inline Restock / Set Custom Stock Input Box */}
                                 <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 rounded-lg p-0.5">
                                   <input
                                     type="number"
-                                    min="1"
                                     placeholder="Qty"
                                     value={customRestockInputs[variant.id] || ''}
                                     onChange={(e) =>
@@ -1948,7 +2102,7 @@ export default function AdminDashboard() {
                                       if (e.key === 'Enter') {
                                         const val = parseInt(customRestockInputs[variant.id] || '', 10);
                                         if (!isNaN(val) && val > 0) {
-                                          handleStockAdjust(variant.id, val);
+                                          handleStockAdjust(variant.id, val, false);
                                           setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
                                         }
                                       }
@@ -1966,14 +2120,34 @@ export default function AdminDashboard() {
                                     onClick={() => {
                                       const val = parseInt(customRestockInputs[variant.id] || '', 10);
                                       if (!isNaN(val) && val > 0) {
-                                        handleStockAdjust(variant.id, val);
+                                        handleStockAdjust(variant.id, val, false);
                                         setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
                                       }
                                     }}
                                     className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
-                                    title="Restock entered quantity (older orders prioritized)"
+                                    title="Restock: Add entered quantity to stock (older orders prioritized)"
                                   >
                                     + Add
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      isAdjusting ||
+                                      customRestockInputs[variant.id] === undefined ||
+                                      customRestockInputs[variant.id] === '' ||
+                                      isNaN(parseInt(customRestockInputs[variant.id], 10))
+                                    }
+                                    onClick={() => {
+                                      const val = parseInt(customRestockInputs[variant.id] || '', 10);
+                                      if (!isNaN(val)) {
+                                        handleStockAdjust(variant.id, val, true);
+                                        setCustomRestockInputs((prev) => ({ ...prev, [variant.id]: '' }));
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs disabled:opacity-30 transition-colors cursor-pointer shadow-2xs"
+                                    title="Set: Directly set custom stock quantity to this exact number"
+                                  >
+                                    Set =
                                   </button>
                                 </div>
                               </div>
@@ -3017,6 +3191,69 @@ export default function AdminDashboard() {
             fetchInventory();
           }}
         />
+      )}
+
+      {/* Edit Product Name Modal */}
+      {editingProductModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-emerald-600" />
+                <span>Edit Product Name</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingProductModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Product Title / Name
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={editingProductModal.title}
+                onChange={(e) =>
+                  setEditingProductModal((prev) => (prev ? { ...prev, title: e.target.value } : null))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveProductTitle();
+                  if (e.key === 'Escape') setEditingProductModal(null);
+                }}
+                placeholder="Enter product title..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+              />
+              <p className="text-[11px] text-slate-500">
+                This updates the primary display name of the product across storefront, catalog, and inventory.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={savingProductTitle}
+                onClick={() => setEditingProductModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingProductTitle || !editingProductModal.title.trim()}
+                onClick={handleSaveProductTitle}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                {savingProductTitle ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {processingPayout && (

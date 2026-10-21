@@ -4,10 +4,16 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { variant_id, change_amount, reason, adjusted_by } = body;
+    const { variant_id, change_amount, target_stock, reason, adjusted_by } = body;
 
-    if (!variant_id || typeof change_amount !== 'number') {
-      return NextResponse.json({ error: 'variant_id and change_amount are required' }, { status: 400 });
+    const hasTargetStock = typeof target_stock === 'number' || typeof body.new_stock === 'number';
+    const targetStockVal = typeof target_stock === 'number' ? target_stock : body.new_stock;
+
+    if (!variant_id || (typeof change_amount !== 'number' && !hasTargetStock)) {
+      return NextResponse.json(
+        { error: 'variant_id and either change_amount or target_stock are required' },
+        { status: 400 }
+      );
     }
 
     const supabase = createAdminClient();
@@ -24,7 +30,8 @@ export async function POST(req: NextRequest) {
     }
 
     const prevStock = Number(variant.stock_quantity ?? 0);
-    const newStock = prevStock + change_amount;
+    const finalChangeAmount = hasTargetStock ? targetStockVal - prevStock : change_amount;
+    const newStock = hasTargetStock ? targetStockVal : prevStock + change_amount;
 
     // 2. Update stock quantity
     const { error: updateErr } = await supabase
@@ -41,9 +48,9 @@ export async function POST(req: NextRequest) {
     await supabase.from('inventory_logs').insert({
       variant_id,
       previous_stock: prevStock,
-      change_amount,
+      change_amount: finalChangeAmount,
       new_stock: newStock,
-      reason: reason || 'manual_adjustment',
+      reason: reason || (finalChangeAmount > 0 ? 'restock' : 'manual_adjustment'),
       adjusted_by: adjusted_by || null,
     });
 
@@ -75,10 +82,10 @@ export async function POST(req: NextRequest) {
 
     // 5. Fully Automatic: Release delayed delivery orders in FIFO order up to the restocked quantity
     let releasedCount = 0;
-    if (change_amount > 0) {
+    if (finalChangeAmount > 0) {
       try {
         const { autoReleaseDelayedOrders } = await import('@/lib/delayedOrders');
-        const releaseResult = await autoReleaseDelayedOrders(supabase, variant_id, change_amount);
+        const releaseResult = await autoReleaseDelayedOrders(supabase, variant_id, finalChangeAmount);
         releasedCount = releaseResult.releasedCount;
       } catch (releaseErr) {
         console.error('Auto release error after stock adjustment:', releaseErr);

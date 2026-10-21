@@ -290,12 +290,42 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
+    // Mode 3: Edit Existing Product Name (Title)
+    if (body.product_id && (body.title !== undefined || body.name !== undefined)) {
+      const newTitle = String(body.title ?? body.name ?? '').trim();
+      if (!newTitle) {
+        return NextResponse.json({ error: 'Product name cannot be empty.' }, { status: 400 });
+      }
+
+      const updates: Record<string, any> = {
+        title: newTitle,
+        updated_at: new Date().toISOString(),
+      };
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.image_url !== undefined) updates.image_url = body.image_url;
+
+      const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', body.product_id)
+        .select('*, variants:product_variants(*)')
+        .single();
+
+      if (error) throw error;
+
+      return NextResponse.json({
+        success: true,
+        product: data,
+        message: `Product name updated to "${newTitle}" successfully.`,
+      });
+    }
+
     // Mode 2: Toggle Product Status (Enable / Disable)
     const { product_id, is_active } = body;
 
     if (!product_id || typeof is_active !== 'boolean') {
       return NextResponse.json(
-        { error: 'Invalid payload: variant_id or (product_id and is_active) required' },
+        { error: 'Invalid payload: variant_id, (product_id and title), or (product_id and is_active) required' },
         { status: 400 }
       );
     }
