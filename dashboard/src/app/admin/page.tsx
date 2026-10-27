@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
 import {
@@ -35,6 +36,7 @@ import {
   Download,
   Percent,
   Loader2,
+  Calendar,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
@@ -1323,6 +1325,15 @@ export default function AdminDashboard() {
                   <Radio className="w-3.5 h-3.5 text-amber-600" />
                   <span>Steadfast Webhook</span>
                 </button>
+
+                <Link
+                  href="/admin/daily-products"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300/80 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  title="View which products were ordered on each date"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Products by Date</span>
+                </Link>
               </div>
             </div>
 

@@ -20,6 +20,7 @@ import {
   DollarSign,
   Layers,
   BarChart3,
+  Calendar,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile, UserRole } from '@/types/database';
@@ -107,10 +108,17 @@ export default function Navbar({
   const adminNavItems = [
     { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
     { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/admin' },
+    { key: 'daily-products', label: 'Products by Date', icon: Calendar, href: '/admin/daily-products' },
     { key: 'inventory', label: 'Inventory & Stock', icon: Boxes, href: '/admin?tab=inventory' },
     { key: 'team', label: 'Staff & Performance', icon: Users, href: '/admin?tab=team' },
     { key: 'payouts', label: 'Payout Requests', icon: DollarSign, href: '/admin?tab=payouts' },
     { key: 'rewards', label: 'Commission Rules', icon: Award, href: '/admin?tab=rewards' },
+  ];
+
+  // Packing / Warehouse Navigation Items
+  const packingNavItems = [
+    { key: 'queue', label: 'Fulfillment Queue', icon: Package, href: '/packing' },
+    { key: 'daily-products', label: 'Products by Date', icon: Calendar, href: '/packing/daily-products' },
   ];
 
   // Sales Navigation Items
@@ -121,7 +129,7 @@ export default function Navbar({
     { key: 'payouts', label: 'Payout History', icon: DollarSign, href: '/sales?tab=payouts' },
   ];
 
-  const navItems = role === 'admin' ? adminNavItems : salesNavItems;
+  const navItems = role === 'admin' ? adminNavItems : role === 'packing' ? packingNavItems : salesNavItems;
 
   return (
     <>
@@ -170,7 +178,11 @@ export default function Navbar({
                       : pathname === item.href || pathname.startsWith(`${item.href}?`);
                   const badgeCount = tabBadges[item.key];
 
-                  return onTabChange && (pathname === '/admin' || pathname === '/sales') && item.href !== '/admin/analytics' ? (
+                  return onTabChange &&
+                    (pathname === '/admin' || pathname === '/sales') &&
+                    item.href !== '/admin/analytics' &&
+                    item.href !== '/admin/daily-products' &&
+                    item.href !== '/packing/daily-products' ? (
                     <button
                       key={item.key}
                       type="button"
@@ -354,7 +366,12 @@ export default function Navbar({
                       key={item.key}
                       type="button"
                       onClick={() => {
-                        if (onTabChange && item.href !== '/admin/analytics') {
+                        if (
+                          onTabChange &&
+                          item.href !== '/admin/analytics' &&
+                          item.href !== '/admin/daily-products' &&
+                          item.href !== '/packing/daily-products'
+                        ) {
                           onTabChange(item.key);
                         } else {
                           router.push(item.href);

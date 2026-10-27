@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
@@ -35,6 +36,7 @@ import {
   Pencil,
   Check,
   X,
+  Calendar,
 } from 'lucide-react';
 import { Order, OrderStatus, Profile, Product, ProductVariant } from '@/types/database';
 import {
@@ -894,6 +896,18 @@ export default function PackingDashboard() {
               Stock Control
             </span>
           </button>
+
+          <Link
+            href="/packing/daily-products"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 cursor-pointer shadow-2xs hover:border-slate-300 ml-auto sm:ml-0"
+            title="View which products were ordered on each date"
+          >
+            <Calendar className="w-4 h-4 text-emerald-600" />
+            <span>Daily Product Orders</span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              By Date
+            </span>
+          </Link>
         </div>
 
         {/* FULFILLMENT QUEUE TAB */}
