@@ -79,6 +79,7 @@ export default function SalesDashboard() {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [orderSourceFilter, setOrderSourceFilter] = useState('all');
   const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
   const [editingCustomerOrder, setEditingCustomerOrder] = useState<Order | null>(null);
 
@@ -750,6 +751,8 @@ export default function SalesDashboard() {
           : orderStatusFilter === 'delivered'
           ? o.status === 'delivered' || o.status === 'shipped'
           : o.status === orderStatusFilter;
+      const matchSource =
+        orderSourceFilter === 'all' ? true : o.source === orderSourceFilter;
       const q = orderSearch.toLowerCase();
       const matchQuery =
         !q ||
@@ -757,9 +760,9 @@ export default function SalesDashboard() {
         o.customer_name.toLowerCase().includes(q) ||
         o.customer_phone.includes(q) ||
         (o.note && o.note.toLowerCase().includes(q));
-      return matchStatus && matchQuery;
+      return matchStatus && matchSource && matchQuery;
     });
-  }, [orders, orderStatusFilter, orderSearch]);
+  }, [orders, orderStatusFilter, orderSourceFilter, orderSearch]);
 
   // Monthly Performance Graph Data (all days of selected month/year)
   const performanceGraphData = useMemo(() => {
@@ -1290,22 +1293,37 @@ export default function SalesDashboard() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={orderStatusFilter}
+                    onChange={(e) => setOrderStatusFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="not_reachable">Not Reachable</option>
+                    <option value="delayed_delivery">Delayed Delivery</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="ready_to_ship">Ready to Ship</option>
+                    <option value="on_the_way">On the Way</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="canceled">Canceled</option>
+                  </select>
+                </div>
+
                 <select
-                  value={orderStatusFilter}
-                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  value={orderSourceFilter}
+                  onChange={(e) => setOrderSourceFilter(e.target.value)}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="not_reachable">Not Reachable</option>
-                  <option value="delayed_delivery">Delayed Delivery</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="ready_to_ship">Ready to Ship</option>
-                  <option value="on_the_way">On the Way</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="canceled">Canceled</option>
+                  <option value="all">All Sources</option>
+                  <option value="website">Website</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="messenger">Messenger</option>
+                  <option value="phone">Phone Call</option>
+                  <option value="manual">Manual Entry</option>
                 </select>
               </div>
             </div>
