@@ -32,8 +32,10 @@ import {
   Lock,
   Receipt,
   Truck,
+  Pencil,
 } from 'lucide-react';
 import EditOrderItemsModal from '@/components/EditOrderItemsModal';
+import EditCustomerDetailsModal from '@/components/EditCustomerDetailsModal';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ScreenshotLightboxModal from '@/components/ScreenshotLightboxModal';
 import ModernProductSelect from '@/components/ModernProductSelect';
@@ -63,6 +65,7 @@ import {
   getDhakaDateString,
   getDhakaParts,
   isSameDhakaDay,
+  isHandedOverToSteadfast,
 } from '@/lib/utils';
 
 export default function SalesDashboard() {
@@ -77,6 +80,7 @@ export default function SalesDashboard() {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
+  const [editingCustomerOrder, setEditingCustomerOrder] = useState<Order | null>(null);
 
   // Live Inventory State
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -1337,6 +1341,8 @@ export default function SalesDashboard() {
                       filteredOrders.map((order) => {
                         const isMyOrder = order.sales_rep_id === currentProfile?.id;
                         const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
+                        const isHandedOver = isHandedOverToSteadfast(order);
+                        const canEditCustomer = (isMyOrder || currentProfile?.role === 'admin') && !isHandedOver;
                         const hasUpsell = order.order_items?.some((i) => i.is_upsell);
                         const hasReachout = Boolean(
                           (order as any).is_reachout ||
@@ -1378,8 +1384,13 @@ export default function SalesDashboard() {
                               </div>
                               <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                                 <Phone className="w-3 h-3 text-slate-400" />
-                                {order.customer_phone}
+                                <span>{order.customer_phone}</span>
                               </div>
+                              {order.shipping_address && (
+                                <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5" title={order.shipping_address}>
+                                  {order.shipping_address}
+                                </div>
+                              )}
                               {isOrderOutOfStock(order) && (
                                 <div className="mt-1">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
@@ -1388,6 +1399,43 @@ export default function SalesDashboard() {
                                   </span>
                                 </div>
                               )}
+                              {Boolean(order.consignment_id || order.tracking_code) && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
+                                  <Truck className="w-3 h-3 text-indigo-500" />
+                                  <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                                </div>
+                              )}
+
+                              {/* Customer Details Edit Action or Locked Indicator */}
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                {isHandedOver ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-2xs cursor-not-allowed"
+                                    title={`Customer details locked: Order #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                  >
+                                    <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                    <span>Locked with Courier</span>
+                                  </span>
+                                ) : canEditCustomer ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCustomerOrder(order)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 px-2 py-0.5 rounded-md transition-colors cursor-pointer shadow-2xs"
+                                    title="Edit customer name, phone, delivery address, or note"
+                                  >
+                                    <Pencil className="w-3 h-3 text-emerald-600" />
+                                    <span>Edit Details</span>
+                                  </button>
+                                ) : isOtherStaffOrder ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400"
+                                    title="Assigned to another staff member (Read-only)"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 text-slate-300" />
+                                    <span>Other Staff</span>
+                                  </span>
+                                ) : null}
+                              </div>
                             </td>
 
                             <td className="p-4">
@@ -1582,15 +1630,39 @@ export default function SalesDashboard() {
                             </td>
 
                             <td className="p-4 text-right">
-                              <button
-                                onClick={() => setEditingOrderForItems(order)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-                                title={isOtherStaffOrder ? 'Assigned to another staff member (Read-only)' : 'Edit items & view history'}
-                              >
-                                <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
-                                <span>{isOtherStaffOrder ? 'View & History' : 'Edit & History'}</span>
-                                {isOtherStaffOrder && <Lock className="w-3 h-3 text-slate-400" />}
-                              </button>
+                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                {isHandedOver ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200/80 cursor-not-allowed"
+                                    title={`Customer details locked: Parcel #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                  >
+                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                    <span className="hidden sm:inline">Locked</span>
+                                  </button>
+                                ) : canEditCustomer ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCustomerOrder(order)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200/80 transition-colors cursor-pointer shadow-2xs"
+                                    title="Edit customer details (name, phone, address, notes)"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span className="hidden sm:inline">Customer</span>
+                                  </button>
+                                ) : null}
+
+                                <button
+                                  onClick={() => setEditingOrderForItems(order)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                                  title={isOtherStaffOrder ? 'Assigned to another staff member (Read-only)' : 'Edit items & view history'}
+                                >
+                                  <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>{isOtherStaffOrder ? 'View' : 'Items'}</span>
+                                  {isOtherStaffOrder && <Lock className="w-3 h-3 text-slate-400" />}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2728,6 +2800,23 @@ export default function SalesDashboard() {
             setEditingOrderForItems(null);
             fetchOrders();
             fetchRewards();
+          }}
+        />
+      )}
+
+      {/* EDIT CUSTOMER DETAILS MODAL */}
+      {editingCustomerOrder && (
+        <EditCustomerDetailsModal
+          order={editingCustomerOrder}
+          isOpen={true}
+          currentProfile={currentProfile}
+          onClose={() => setEditingCustomerOrder(null)}
+          onUpdated={(updatedOrder) => {
+            setEditingCustomerOrder(null);
+            setOrders((prev) =>
+              prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
+            );
+            fetchOrders();
           }}
         />
       )}

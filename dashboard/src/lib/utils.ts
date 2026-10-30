@@ -175,3 +175,27 @@ export function shrinkProductTitle(title: string | null | undefined, maxChars = 
   return t;
 }
 
+/**
+ * Determines whether an order has already been handed over to Steadfast Courier.
+ * Once handed over (or when Steadfast CID / tracking is issued, or status is on_the_way / shipped / delivered),
+ * customer details and products are locked and cannot be edited.
+ */
+export function isHandedOverToSteadfast(order: {
+  status?: string | null;
+  consignment_id?: string | null;
+  tracking_code?: string | null;
+} | null | undefined): boolean {
+  if (!order) return false;
+  if (Boolean(order.consignment_id && String(order.consignment_id).trim())) return true;
+  if (Boolean(order.tracking_code && String(order.tracking_code).trim())) return true;
+  if (
+    order.status === 'on_the_way' ||
+    order.status === 'shipped' ||
+    order.status === 'delivered'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+
