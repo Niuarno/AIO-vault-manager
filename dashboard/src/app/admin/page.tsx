@@ -96,6 +96,9 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [isSteadfastModalOpen, setIsSteadfastModalOpen] = useState(false);
+  const [statusChartMetric, setStatusChartMetric] = useState<'count' | 'value'>('count');
+  const [sourceChartMetric, setSourceChartMetric] = useState<'count' | 'value'>('count');
+  const [stateBreakdownMetric, setStateBreakdownMetric] = useState<'both' | 'value' | 'count'>('both');
 
   // Inventory State
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -950,7 +953,13 @@ export default function AdminDashboard() {
     });
   }, [orders, searchQuery]);
 
-  // Order Status Pie Chart Data
+  // Order Totals (Count & Monetary Amount)
+  const totalOrdersCount = orders.length;
+  const totalOrdersAmount = useMemo(() => {
+    return orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  }, [orders]);
+
+  // Order Status Pie Chart Data (Supports Count and Value metrics)
   const orderStatusChartData = useMemo(() => {
     const counts: Record<string, number> = {
       pending: 0,
@@ -963,12 +972,23 @@ export default function AdminDashboard() {
       delivered: 0,
       canceled: 0,
     };
+    const amounts: Record<string, number> = {
+      pending: 0,
+      not_reachable: 0,
+      delayed_delivery: 0,
+      confirmed: 0,
+      ready_to_ship: 0,
+      shipped: 0,
+      on_the_way: 0,
+      delivered: 0,
+      canceled: 0,
+    };
+
     orders.forEach((o) => {
-      if (counts[o.status] !== undefined) {
-        counts[o.status]++;
-      } else {
-        counts.pending++;
-      }
+      const orderAmount = Number(o.total_amount || 0);
+      const st = o.status in counts ? o.status : 'pending';
+      counts[st]++;
+      amounts[st] += orderAmount;
     });
 
     const colors: Record<string, string> = {
@@ -996,15 +1016,20 @@ export default function AdminDashboard() {
     };
 
     return Object.entries(counts)
-      .filter(([_, count]) => count > 0)
-      .map(([status, count]) => ({
-        label: statusLabels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        value: count,
-        color: colors[status] || '#64748b',
-      }));
-  }, [orders]);
+      .filter(([status, count]) => count > 0 || amounts[status] > 0)
+      .map(([status, count]) => {
+        const amt = amounts[status] || 0;
+        return {
+          label: statusLabels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          value: statusChartMetric === 'value' ? amt : count,
+          count: count,
+          amount: amt,
+          color: colors[status] || '#64748b',
+        };
+      });
+  }, [orders, statusChartMetric]);
 
-  // Order Source Pie Chart Data
+  // Order Source Pie Chart Data (Supports Count and Value metrics)
   const orderSourceChartData = useMemo(() => {
     const counts: Record<string, number> = {
       website: 0,
@@ -1013,12 +1038,19 @@ export default function AdminDashboard() {
       phone: 0,
       manual: 0,
     };
+    const amounts: Record<string, number> = {
+      website: 0,
+      whatsapp: 0,
+      messenger: 0,
+      phone: 0,
+      manual: 0,
+    };
+
     orders.forEach((o) => {
-      if (counts[o.source] !== undefined) {
-        counts[o.source]++;
-      } else {
-        counts.manual++;
-      }
+      const orderAmount = Number(o.total_amount || 0);
+      const src = o.source in counts ? o.source : 'manual';
+      counts[src]++;
+      amounts[src] += orderAmount;
     });
 
     const colors: Record<string, string> = {
@@ -1030,12 +1062,48 @@ export default function AdminDashboard() {
     };
 
     return Object.entries(counts)
-      .filter(([_, count]) => count > 0)
-      .map(([src, count]) => ({
-        label: src.charAt(0).toUpperCase() + src.slice(1),
-        value: count,
-        color: colors[src] || '#64748b',
-      }));
+      .filter(([src, count]) => count > 0 || amounts[src] > 0)
+      .map(([src, count]) => {
+        const amt = amounts[src] || 0;
+        return {
+          label: src.charAt(0).toUpperCase() + src.slice(1),
+          value: sourceChartMetric === 'value' ? amt : count,
+          count: count,
+          amount: amt,
+          color: colors[src] || '#64748b',
+        };
+      });
+  }, [orders, sourceChartMetric]);
+
+  // All Order States Summary Breakdown (Count & Monetary Value for every state)
+  const orderStatesSummary = useMemo(() => {
+    const summary: Record<
+      string,
+      { count: number; amount: number; label: string; dot: string }
+    > = {
+      pending: { count: 0, amount: 0, label: 'Pending', dot: 'bg-amber-400' },
+      not_reachable: { count: 0, amount: 0, label: 'Not Reachable', dot: 'bg-orange-500' },
+      delayed_delivery: { count: 0, amount: 0, label: 'Delayed Delivery', dot: 'bg-amber-600' },
+      confirmed: { count: 0, amount: 0, label: 'Confirmed', dot: 'bg-blue-500' },
+      ready_to_ship: { count: 0, amount: 0, label: 'Ready to Ship', dot: 'bg-indigo-500' },
+      on_the_way: { count: 0, amount: 0, label: 'On The Way', dot: 'bg-purple-500' },
+      delivered: { count: 0, amount: 0, label: 'Delivered', dot: 'bg-emerald-500' },
+      canceled: { count: 0, amount: 0, label: 'Canceled', dot: 'bg-rose-500' },
+    };
+
+    orders.forEach((o) => {
+      const amt = Number(o.total_amount || 0);
+      const st = o.status === 'shipped' ? 'delivered' : o.status;
+      if (summary[st]) {
+        summary[st].count++;
+        summary[st].amount += amt;
+      } else if (summary.pending) {
+        summary.pending.count++;
+        summary.pending.amount += amt;
+      }
+    });
+
+    return summary;
   }, [orders]);
 
   // Team Commission & Piggybank Statistics (resets at 12:00 AM midnight Dhaka time GMT+6)
@@ -1256,22 +1324,157 @@ export default function AdminDashboard() {
         {/* TAB 1: ORDERS */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
-            {/* Interactive Donut Charts */}
+            {/* Interactive Donut Charts with Metric Toggle (Orders # vs Value ৳) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <InteractivePieChart
                 title="Order Status Distribution"
                 subtitle="Live status proportion across all customer orders"
                 data={orderStatusChartData}
-                centerLabel="Total Orders"
-                centerValue={orders.length}
+                metric={statusChartMetric}
+                onMetricChange={setStatusChartMetric}
+                showMetricToggle={true}
+                centerLabel={statusChartMetric === 'value' ? 'Total Value' : 'Total Orders'}
+                centerValue={
+                  statusChartMetric === 'value'
+                    ? `৳${totalOrdersAmount >= 100000 ? (totalOrdersAmount >= 1000000 ? (totalOrdersAmount / 1000000).toFixed(2) + 'M' : (totalOrdersAmount / 1000).toFixed(1) + 'k') : Math.round(totalOrdersAmount).toLocaleString()}`
+                    : totalOrdersCount
+                }
               />
               <InteractivePieChart
                 title="Orders by Acquisition Channel"
                 subtitle="Distribution of website, WhatsApp, Messenger & phone sales"
                 data={orderSourceChartData}
-                centerLabel="Channels"
-                centerValue={orderSourceChartData.length}
+                metric={sourceChartMetric}
+                onMetricChange={setSourceChartMetric}
+                showMetricToggle={true}
+                centerLabel={sourceChartMetric === 'value' ? 'Total Value' : 'Channels'}
+                centerValue={
+                  sourceChartMetric === 'value'
+                    ? `৳${totalOrdersAmount >= 100000 ? (totalOrdersAmount >= 1000000 ? (totalOrdersAmount / 1000000).toFixed(2) + 'M' : (totalOrdersAmount / 1000).toFixed(1) + 'k') : Math.round(totalOrdersAmount).toLocaleString()}`
+                    : orderSourceChartData.length
+                }
               />
+            </div>
+
+            {/* Order States Value Breakdown & Quick Filter */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Order States Value & Volume Breakdown
+                  </h4>
+                  <span className="text-[11px] font-mono text-slate-400 font-medium hidden sm:inline-block">
+                    ({totalOrdersCount} orders • ৳{Math.round(totalOrdersAmount).toLocaleString()})
+                  </span>
+                </div>
+
+                {/* Option to toggle display mode: Both / Values Only / Counts Only */}
+                <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                  <span className="text-[11px] font-medium text-slate-500">Show:</span>
+                  <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setStateBreakdownMetric('both')}
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                        stateBreakdownMetric === 'both'
+                          ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Count & Value
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStateBreakdownMetric('value')}
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                        stateBreakdownMetric === 'value'
+                          ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Values (৳)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStateBreakdownMetric('count')}
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                        stateBreakdownMetric === 'count'
+                          ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Count (#)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Pills Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
+                {/* All Orders Pill */}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className={`flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-slate-900/10'
+                      : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/80 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`w-2 h-2 rounded-full ${statusFilter === 'all' ? 'bg-white' : 'bg-slate-500'}`} />
+                    <span className={`text-[11px] font-bold truncate ${statusFilter === 'all' ? 'text-white' : 'text-slate-800'}`}>
+                      All States
+                    </span>
+                  </div>
+                  {(stateBreakdownMetric === 'both' || stateBreakdownMetric === 'value') && (
+                    <span className={`font-mono text-[11px] font-bold ${statusFilter === 'all' ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                      ৳{Math.round(totalOrdersAmount).toLocaleString()}
+                    </span>
+                  )}
+                  {(stateBreakdownMetric === 'both' || stateBreakdownMetric === 'count') && (
+                    <span className={`font-mono text-[10px] ${statusFilter === 'all' ? 'text-slate-300' : 'text-slate-400'}`}>
+                      {totalOrdersCount} orders
+                    </span>
+                  )}
+                </button>
+
+                {/* Individual Status Pills */}
+                {Object.entries(orderStatesSummary).map(([stKey, stData]) => {
+                  const isSelected = statusFilter === stKey;
+                  return (
+                    <button
+                      key={stKey}
+                      type="button"
+                      onClick={() => setStatusFilter(isSelected ? 'all' : stKey)}
+                      className={`flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-slate-900/10'
+                          : 'bg-white border-slate-200/80 hover:bg-slate-50 text-slate-700'
+                      }`}
+                      title={`Filter by ${stData.label}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${stData.dot}`} />
+                        <span className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-slate-800'}`}>
+                          {stData.label}
+                        </span>
+                      </div>
+                      {(stateBreakdownMetric === 'both' || stateBreakdownMetric === 'value') && (
+                        <span className={`font-mono text-[11px] font-bold ${isSelected ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                          ৳{Math.round(stData.amount).toLocaleString()}
+                        </span>
+                      )}
+                      {(stateBreakdownMetric === 'both' || stateBreakdownMetric === 'count') && (
+                        <span className={`font-mono text-[10px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                          {stData.count} {stData.count === 1 ? 'order' : 'orders'}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Filter Bar & Search */}
