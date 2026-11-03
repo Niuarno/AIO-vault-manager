@@ -336,55 +336,71 @@ export default function AdminDashboard() {
     if (activeTab === 'rewards') fetchRules();
   }, [activeTab, statusFilter, sourceFilter]);
 
-  // Single Stable Realtime Subscription on Mount (NO reconnect loops)
+  // Single Stable Realtime Subscription on Mount with Debouncing
   useEffect(() => {
-    fetchOrders();
-    fetchTeamAndRewards();
+    let orderDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchOrders = () => {
+      if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
+      orderDebounceTimer = setTimeout(() => {
+        fetchOrders();
+        fetchTeamAndRewards();
+      }, 400);
+    };
+
+    let inventoryDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchInventory = () => {
+      if (inventoryDebounceTimer) clearTimeout(inventoryDebounceTimer);
+      inventoryDebounceTimer = setTimeout(() => {
+        fetchInventory();
+      }, 400);
+    };
+
+    let teamDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchTeam = () => {
+      if (teamDebounceTimer) clearTimeout(teamDebounceTimer);
+      teamDebounceTimer = setTimeout(() => {
+        fetchTeamAndRewards();
+      }, 400);
+    };
 
     const channel = supabase
       .channel('admin-realtime-singleton')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          fetchOrders();
-          fetchTeamAndRewards();
-        }
+        debouncedFetchOrders
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'product_variants' },
-        () => {
-          fetchInventory();
-        }
+        debouncedFetchInventory
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payout_requests' },
         () => {
           fetchPayouts();
-          fetchTeamAndRewards();
+          debouncedFetchTeam();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'upsell_rewards' },
-        () => {
-          fetchTeamAndRewards();
-        }
+        debouncedFetchTeam
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
-        () => {
-          fetchTeamAndRewards();
-        }
+        debouncedFetchTeam
       )
       .subscribe();
 
-    // Automatic Zero-Click Background Sync with Steadfast for in-transit parcels:
-    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s without any button clicks
+    // Automatic Background Sync with Steadfast for in-transit parcels:
+    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s
+    let isSyncing = false;
     const runAutoSync = async () => {
+      if (isSyncing) return;
+      isSyncing = true;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -398,6 +414,8 @@ export default function AdminDashboard() {
         });
       } catch {
         // silent
+      } finally {
+        isSyncing = false;
       }
     };
 
@@ -405,6 +423,9 @@ export default function AdminDashboard() {
     const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
 
     return () => {
+      if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
+      if (inventoryDebounceTimer) clearTimeout(inventoryDebounceTimer);
+      if (teamDebounceTimer) clearTimeout(teamDebounceTimer);
       clearTimeout(initialSyncTimeout);
       clearInterval(backgroundSteadfastSync);
       supabase.removeChannel(channel);

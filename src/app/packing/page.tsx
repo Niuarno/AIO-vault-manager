@@ -377,21 +377,27 @@ export default function PackingDashboard() {
     fetchInventory();
 
     // Supabase Realtime channel subscription for instant, silent updates with zero page flicker
+    let debounceTimer: NodeJS.Timeout | null = null;
     const channel = supabase
       .channel('packing-realtime-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         () => {
-          // Silent background update - updates state without wiping out UI
-          silentRefreshOrders();
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            silentRefreshOrders();
+          }, 400);
         }
       )
       .subscribe();
 
-    // Automatic Zero-Click Background Sync with Steadfast for in-transit parcels:
-    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s without any button clicks
+    // Automatic Background Sync with Steadfast for in-transit parcels:
+    // Runs an initial auto-sync after 5s warmup, then repeats quietly every 60s
+    let isSyncing = false;
     const runAutoSync = async () => {
+      if (isSyncing) return;
+      isSyncing = true;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -405,6 +411,8 @@ export default function PackingDashboard() {
         });
       } catch {
         // silent
+      } finally {
+        isSyncing = false;
       }
     };
 
@@ -412,6 +420,7 @@ export default function PackingDashboard() {
     const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       clearTimeout(initialSyncTimeout);
       clearInterval(backgroundSteadfastSync);
       supabase.removeChannel(channel);

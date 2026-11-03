@@ -331,7 +331,7 @@ export default function SalesDashboard() {
     }
   };
 
-  // Single Stable Realtime Subscription on mount (NO reconnect loops)
+  // Single Stable Realtime Subscription on mount with Debouncing
   useEffect(() => {
     fetchOrders();
     fetchInventory();
@@ -339,30 +339,48 @@ export default function SalesDashboard() {
     fetchPayouts();
     fetchQuotaTiers();
 
+    let orderDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchOrders = () => {
+      if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
+      orderDebounceTimer = setTimeout(() => {
+        fetchOrders();
+        fetchInventory();
+      }, 400);
+    };
+
+    let rewardDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchRewards = () => {
+      if (rewardDebounceTimer) clearTimeout(rewardDebounceTimer);
+      rewardDebounceTimer = setTimeout(() => {
+        fetchRewards();
+      }, 400);
+    };
+
+    let payoutDebounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetchPayouts = () => {
+      if (payoutDebounceTimer) clearTimeout(payoutDebounceTimer);
+      payoutDebounceTimer = setTimeout(() => {
+        fetchPayouts();
+        fetchRewards();
+      }, 400);
+    };
+
     const channel = supabase
       .channel('sales-realtime-singleton')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          fetchOrders();
-          fetchInventory();
-        }
+        debouncedFetchOrders
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'upsell_rewards' },
-        () => {
-          fetchRewards();
-        }
+        debouncedFetchRewards
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payout_requests' },
-        () => {
-          fetchPayouts();
-          fetchRewards();
-        }
+        debouncedFetchPayouts
       )
       .on(
         'postgres_changes',
@@ -374,6 +392,9 @@ export default function SalesDashboard() {
       .subscribe();
 
     return () => {
+      if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
+      if (rewardDebounceTimer) clearTimeout(rewardDebounceTimer);
+      if (payoutDebounceTimer) clearTimeout(payoutDebounceTimer);
       supabase.removeChannel(channel);
     };
   }, []);
