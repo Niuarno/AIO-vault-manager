@@ -51,8 +51,7 @@ export default function LoginPage() {
 
         if (signInErr) throw signInErr;
 
-        router.push('/onboarding');
-        router.refresh();
+        window.location.href = '/onboarding';
       } else {
         // Sign in existing user
         const { error } = await supabase.auth.signInWithPassword({
@@ -62,8 +61,7 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        router.push('/');
-        router.refresh();
+        window.location.href = '/';
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed');

@@ -224,8 +224,8 @@ export default function AdminDashboard() {
   }, []);
 
   // Fetch Orders
-  const fetchOrders = async () => {
-    setLoadingOrders(true);
+  const fetchOrders = async (silent = false) => {
+    if (!silent && orders.length === 0) setLoadingOrders(true);
     let query = supabase
       .from('orders')
       .select('*, order_items(*), sales_rep:profiles(*)')
@@ -250,8 +250,8 @@ export default function AdminDashboard() {
   };
 
   // Fetch Live Inventory
-  const fetchInventory = async () => {
-    setLoadingInventory(true);
+  const fetchInventory = async (silent = false) => {
+    if (!silent && variants.length === 0) setLoadingInventory(true);
     const { data, error } = await supabase
       .from('product_variants')
       .select('*, product:products(*)')
@@ -264,8 +264,8 @@ export default function AdminDashboard() {
   };
 
   // Fetch Sales Team & Rewards for calculation
-  const fetchTeamAndRewards = async () => {
-    setLoadingTeam(true);
+  const fetchTeamAndRewards = async (silent = false) => {
+    if (!silent && salesTeam.length === 0) setLoadingTeam(true);
     const { data: teamData } = await supabase
       .from('profiles')
       .select('*')
@@ -342,8 +342,8 @@ export default function AdminDashboard() {
     const debouncedFetchOrders = () => {
       if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
       orderDebounceTimer = setTimeout(() => {
-        fetchOrders();
-        fetchTeamAndRewards();
+        fetchOrders(true);
+        fetchTeamAndRewards(true);
       }, 400);
     };
 
@@ -351,7 +351,7 @@ export default function AdminDashboard() {
     const debouncedFetchInventory = () => {
       if (inventoryDebounceTimer) clearTimeout(inventoryDebounceTimer);
       inventoryDebounceTimer = setTimeout(() => {
-        fetchInventory();
+        fetchInventory(true);
       }, 400);
     };
 
@@ -359,7 +359,7 @@ export default function AdminDashboard() {
     const debouncedFetchTeam = () => {
       if (teamDebounceTimer) clearTimeout(teamDebounceTimer);
       teamDebounceTimer = setTimeout(() => {
-        fetchTeamAndRewards();
+        fetchTeamAndRewards(true);
       }, 400);
     };
 

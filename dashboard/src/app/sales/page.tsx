@@ -255,8 +255,8 @@ export default function SalesDashboard() {
   };
 
   // Fetch Orders
-  const fetchOrders = async () => {
-    setLoadingOrders(true);
+  const fetchOrders = async (silent = false) => {
+    if (!silent && orders.length === 0) setLoadingOrders(true);
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*)')
@@ -269,8 +269,8 @@ export default function SalesDashboard() {
   };
 
   // Fetch Live Inventory (Excluding confidential cost_price)
-  const fetchInventory = async () => {
-    setLoadingInventory(true);
+  const fetchInventory = async (silent = false) => {
+    if (!silent && variants.length === 0) setLoadingInventory(true);
     const { data, error } = await supabase
       .from('product_variants')
       .select('id, product_id, title, sku, price, stock_quantity, created_at, updated_at, product:products(*)')
@@ -283,8 +283,8 @@ export default function SalesDashboard() {
   };
 
   // Fetch My Upsell Rewards
-  const fetchRewards = async () => {
-    setLoadingRewards(true);
+  const fetchRewards = async (silent = false) => {
+    if (!silent && rewards.length === 0) setLoadingRewards(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data, error } = await supabase
@@ -301,8 +301,8 @@ export default function SalesDashboard() {
   };
 
   // Fetch My Payout Requests
-  const fetchPayouts = async () => {
-    setLoadingPayouts(true);
+  const fetchPayouts = async (silent = false) => {
+    if (!silent && myPayouts.length === 0) setLoadingPayouts(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       try {
@@ -343,8 +343,8 @@ export default function SalesDashboard() {
     const debouncedFetchOrders = () => {
       if (orderDebounceTimer) clearTimeout(orderDebounceTimer);
       orderDebounceTimer = setTimeout(() => {
-        fetchOrders();
-        fetchInventory();
+        fetchOrders(true);
+        fetchInventory(true);
       }, 400);
     };
 
@@ -352,7 +352,7 @@ export default function SalesDashboard() {
     const debouncedFetchRewards = () => {
       if (rewardDebounceTimer) clearTimeout(rewardDebounceTimer);
       rewardDebounceTimer = setTimeout(() => {
-        fetchRewards();
+        fetchRewards(true);
       }, 400);
     };
 
@@ -360,8 +360,8 @@ export default function SalesDashboard() {
     const debouncedFetchPayouts = () => {
       if (payoutDebounceTimer) clearTimeout(payoutDebounceTimer);
       payoutDebounceTimer = setTimeout(() => {
-        fetchPayouts();
-        fetchRewards();
+        fetchPayouts(true);
+        fetchRewards(true);
       }, 400);
     };
 
