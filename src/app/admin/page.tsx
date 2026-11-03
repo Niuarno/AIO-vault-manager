@@ -419,8 +419,8 @@ export default function AdminDashboard() {
       }
     };
 
-    const initialSyncTimeout = setTimeout(runAutoSync, 5000);
-    const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
+    const initialSyncTimeout = setTimeout(runAutoSync, 10000);
+    const backgroundSteadfastSync = setInterval(runAutoSync, 300000);
 
     return () => {
       if (orderDebounceTimer) clearTimeout(orderDebounceTimer);

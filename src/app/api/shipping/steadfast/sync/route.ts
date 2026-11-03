@@ -122,6 +122,27 @@ async function syncSingleOrder(orderId: string, supabase: any) {
     newNote = newNote ? `${newNote}\n${holdTag}` : holdTag;
   }
 
+  // Only update DB if status, payment_status, note, or external_id actually changed!
+  const hasChanges =
+    targetOrderStatus !== order.status ||
+    paymentStatus !== order.payment_status ||
+    newNote !== (order.note || '') ||
+    (cid && String(cid) !== String(order.external_id || ''));
+
+  if (!hasChanges) {
+    return {
+      success: true,
+      skipped: true,
+      consignment_id: cid,
+      tracking_code: trackingCode,
+      delivery_status: rawStatus,
+      courier_status: rawStatus,
+      status_label: parsed.label,
+      order,
+      orderId,
+    };
+  }
+
   const historyEntry = {
     timestamp: new Date().toISOString(),
     action: 'steadfast_sync',

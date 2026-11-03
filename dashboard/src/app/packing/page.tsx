@@ -416,8 +416,8 @@ export default function PackingDashboard() {
       }
     };
 
-    const initialSyncTimeout = setTimeout(runAutoSync, 5000);
-    const backgroundSteadfastSync = setInterval(runAutoSync, 60000);
+    const initialSyncTimeout = setTimeout(runAutoSync, 10000);
+    const backgroundSteadfastSync = setInterval(runAutoSync, 300000);
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
