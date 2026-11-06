@@ -172,6 +172,7 @@ export async function POST(req: NextRequest) {
       coupon_used: finalCouponUsed,
       note: finalOrderNote,
       external_id: String(orderData.id),
+      original_items: lineItems,
     };
 
     let { data: newOrder, error: orderError } = await supabase
@@ -199,11 +200,13 @@ export async function POST(req: NextRequest) {
       let matchedVariantId: string | null = null;
       let matchedProductId: string | null = null;
 
-      if (item.sku) {
+      // 1. Match by SKU
+      if (item.sku && String(item.sku).trim()) {
         const { data: v } = await supabase
           .from('product_variants')
           .select('id, product_id')
-          .eq('sku', item.sku)
+          .eq('sku', String(item.sku).trim())
+          .limit(1)
           .maybeSingle();
         if (v) {
           matchedVariantId = v.id;
@@ -211,11 +214,43 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (!matchedVariantId) {
+      // 2. Match by Product Title -> Product Variants
+      const itemTitle = (item.title || item.name || '').trim();
+      if (!matchedVariantId && itemTitle) {
+        const { data: pList } = await supabase
+          .from('products')
+          .select('id, title, product_variants(id, title, sku, stock_quantity)')
+          .ilike('title', `%${itemTitle}%`)
+          .limit(1);
+
+        if (pList && pList.length > 0 && pList[0].product_variants?.length > 0) {
+          const product = pList[0];
+          matchedProductId = product.id;
+
+          // If variant title is provided, try to match specific variant
+          if (item.variant_title && item.variant_title !== 'Default Title') {
+            const vMatch = (product.product_variants as any[]).find(
+              (v: any) => v.title && v.title.toLowerCase() === item.variant_title.toLowerCase()
+            );
+            if (vMatch) {
+              matchedVariantId = vMatch.id;
+            }
+          }
+
+          // Fallback to first variant
+          if (!matchedVariantId) {
+            matchedVariantId = product.product_variants[0].id;
+          }
+        }
+      }
+
+      // 3. Fallback: match by variant title directly
+      if (!matchedVariantId && item.variant_title && item.variant_title !== 'Default Title') {
         const { data: v } = await supabase
           .from('product_variants')
           .select('id, product_id')
-          .ilike('title', `%${item.variant_title || item.title}%`)
+          .ilike('title', `%${item.variant_title.trim()}%`)
+          .limit(1)
           .maybeSingle();
         if (v) {
           matchedVariantId = v.id;
@@ -236,7 +271,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (itemsToInsert.length > 0) {
-      await supabase.from('order_items').insert(itemsToInsert);
+      const { error: itemsError } = await supabase.from('order_items').insert(itemsToInsert);
+      if (itemsError) {
+        console.error('❌ [Order Items Ingest Error]:', itemsError.message);
+      }
     }
 
     // 4. Calculate Salesperson Upsell Reward if attributed
