@@ -497,8 +497,7 @@ export default function PackingDashboard() {
         setOrders((prev) =>
           prev.map((ord) =>
             ord.id === order.id
-              ? {
-                  ...(data.order || ord),
+              ? {...(data.order || ord),
                   status: 'on_the_way',
                   courier_name: 'steadfast',
                   consignment_id: newCid ? String(newCid) : (ord.consignment_id || null),
@@ -862,7 +861,7 @@ export default function PackingDashboard() {
           <button
             type="button"
             onClick={() => setActiveMainTab('queue')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               activeMainTab === 'queue'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
@@ -887,7 +886,7 @@ export default function PackingDashboard() {
                 fetchInventory();
               }
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               activeMainTab === 'inventory'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
@@ -908,7 +907,7 @@ export default function PackingDashboard() {
 
           <Link
             href="/packing/daily-products"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 cursor-pointer shadow-2xs hover:border-slate-300 ml-auto sm:ml-0"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 cursor-pointer shadow-2xs hover:border-slate-300 ml-auto sm:ml-0"
             title="View which products were ordered on each date"
           >
             <Calendar className="w-4 h-4 text-emerald-600" />
@@ -953,7 +952,7 @@ export default function PackingDashboard() {
             )}
             <button
               onClick={() => setIsWebhookModalOpen(true)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-900 text-amber-50 hover:bg-amber-950 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-900 text-amber-50 hover:bg-amber-950 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               title="View Callback URL & Bearer Token for Steadfast Webhook Integration"
             >
               <Radio className="w-3.5 h-3.5 text-amber-400" />
@@ -962,11 +961,11 @@ export default function PackingDashboard() {
             <button
               onClick={handleManualRefresh}
               disabled={refreshingQueue || loading}
-              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               title="Quietly refresh orders and Steadfast balance"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshingQueue ? 'animate-spin text-amber-600' : ''}`} />
-              <span>{refreshingQueue ? 'Updating...' : 'Refresh Queue'}</span>
+              <span>{refreshingQueue ? 'Updating…' : 'Refresh Queue'}</span>
             </button>
           </div>
         </div>
@@ -976,7 +975,7 @@ export default function PackingDashboard() {
           <div className="no-print mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center font-bold shrink-0">
-                <Clock className="w-5 h-5 text-amber-700 animate-pulse" />
+                <Clock className="w-5 h-5 text-amber-700 animate-pulse motion-reduce:animate-none" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
@@ -993,9 +992,9 @@ export default function PackingDashboard() {
             <button
               type="button"
               onClick={() => setActiveFilter('delayed_delivery')}
-              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer text-center"
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors shadow-xs shrink-0 cursor-pointer text-center"
             >
-              View {delayedDeliveryCount} Delayed Orders &rarr;
+              View {delayedDeliveryCount} Delayed Orders
             </button>
           </div>
         )}
@@ -1004,14 +1003,14 @@ export default function PackingDashboard() {
         <div className="no-print grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           <button
             onClick={() => setActiveFilter('delayed_delivery')}
-            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
               activeFilter === 'delayed_delivery'
                 ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400/40'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              <span className="text-xs font-semibold text-amber-800">
                 0. Delayed (Restock)
               </span>
               <Clock className="w-4 h-4 text-amber-600" />
@@ -1022,17 +1021,17 @@ export default function PackingDashboard() {
 
           <button
             onClick={() => setActiveFilter('confirmed')}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`p-4 rounded-2xl border text-left transition-colors ${
               activeFilter === 'confirmed'
                 ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-400/30'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              <span className="text-xs font-semibold text-amber-700">
                 1. To Pack (Confirmed)
               </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse motion-reduce:animate-none"></span>
             </div>
             <div className="text-2xl font-black text-slate-900 mt-2">{confirmedCount}</div>
             <p className="text-[11px] text-slate-500 mt-0.5">Orders awaiting boxing</p>
@@ -1040,14 +1039,14 @@ export default function PackingDashboard() {
 
           <button
             onClick={() => setActiveFilter('ready_to_ship')}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`p-4 rounded-2xl border text-left transition-colors ${
               activeFilter === 'ready_to_ship'
                 ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-400/30'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-700">
+              <span className="text-xs font-semibold text-blue-700">
                 2. Packed (Ready to Ship)
               </span>
               <Package className="w-4 h-4 text-blue-600" />
@@ -1058,14 +1057,14 @@ export default function PackingDashboard() {
 
           <button
             onClick={() => setActiveFilter('on_the_way')}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`p-4 rounded-2xl border text-left transition-colors ${
               activeFilter === 'on_the_way'
                 ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-400/30'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700">
+              <span className="text-xs font-semibold text-indigo-700">
                 3. With Courier
               </span>
               <Truck className="w-4 h-4 text-indigo-600" />
@@ -1076,14 +1075,14 @@ export default function PackingDashboard() {
 
           <button
             onClick={() => setActiveFilter('delivered')}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`p-4 rounded-2xl border text-left transition-colors ${
               activeFilter === 'delivered' || (activeFilter as string) === 'shipped'
                 ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30'
                 : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+              <span className="text-xs font-semibold text-emerald-700">
                 4. Delivered / Fulfilled
               </span>
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -1099,7 +1098,7 @@ export default function PackingDashboard() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
             <input
               type="text"
-              placeholder="Search by order #, phone, customer, or address..."
+              placeholder="Search by order #, phone, customer, or address…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
@@ -1119,7 +1118,7 @@ export default function PackingDashboard() {
                       setSelectedOrderIds(readyOrders.map((o) => o.id));
                     }
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center space-x-1.5 transition-all cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center space-x-1.5 transition-colors cursor-pointer"
                 >
                   <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
                   <span>
@@ -1134,10 +1133,10 @@ export default function PackingDashboard() {
                     type="button"
                     onClick={handleBulkDispatch}
                     disabled={bulkDispatching}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-1.5 transition-colors shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     <Send className={`w-3.5 h-3.5 ${bulkDispatching ? 'animate-spin' : ''}`} />
-                    <span>{bulkDispatching ? 'Requesting Pickup...' : `Request Pickup for (${selectedOrderIds.length}) Orders 🚀`}</span>
+                    <span>{bulkDispatching ? 'Requesting Pickup…' : `Request Pickup for (${selectedOrderIds.length}) Orders 🚀`}</span>
                   </button>
                 )}
               </>
@@ -1149,22 +1148,22 @@ export default function PackingDashboard() {
                   type="button"
                   onClick={handleBulkSyncAll}
                   disabled={bulkSyncing}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center space-x-1.5 transition-colors active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
                   title="Sync live delivery status for all orders currently in With Courier"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${bulkSyncing ? 'animate-spin' : ''}`} />
-                  <span>{bulkSyncing ? 'Syncing with Steadfast...' : 'Sync All Dispatched'}</span>
+                  <span>{bulkSyncing ? 'Syncing with Steadfast…' : 'Sync All Dispatched'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleSyncAllMissingCid}
                   disabled={syncingAll}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 transition-colors active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
                   title="Fetch consignment IDs from Steadfast for all orders currently in With Courier"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${syncingAll ? 'animate-spin' : ''}`} />
-                  <span>{syncingAll ? 'Fetching CIDs...' : 'Fetch Missing CIDs'}</span>
+                  <span>{syncingAll ? 'Fetching CIDs…' : 'Fetch Missing CIDs'}</span>
                 </button>
               </>
             )}
@@ -1187,17 +1186,17 @@ export default function PackingDashboard() {
                   }
                 }}
                 disabled={releasingDelayed}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center space-x-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
                 title="Automatically check live inventory and release all fulfilled delayed orders to packing"
               >
                 <Zap className="w-3.5 h-3.5 text-amber-200" />
-                <span>{releasingDelayed ? 'Releasing...' : 'Auto-Release In-Stock Orders ⚡'}</span>
+                <span>{releasingDelayed ? 'Releasing…' : 'Auto-Release In-Stock Orders ⚡'}</span>
               </button>
             )}
 
             <button
               onClick={() => setActiveFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                 activeFilter === 'all'
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -1252,7 +1251,7 @@ export default function PackingDashboard() {
                 return (
                   <div
                     key={item.variant_id}
-                    className="bg-white border border-amber-200 rounded-xl p-3.5 shadow-2xs hover:border-amber-300 transition-all flex flex-col justify-between gap-3"
+                    className="bg-white border border-amber-200 rounded-xl p-3.5 shadow-2xs hover:border-amber-300 transition-colors flex flex-col justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
@@ -1366,7 +1365,7 @@ export default function PackingDashboard() {
         {loading ? (
           <div className="no-print bg-white rounded-2xl p-12 text-center border border-slate-200">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-3"></div>
-            <p className="text-slate-600 font-medium">Fetching verified packing orders...</p>
+            <p className="text-slate-600 font-medium">Fetching verified packing orders…</p>
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="no-print bg-white rounded-2xl p-12 text-center border border-slate-200">
@@ -1391,7 +1390,7 @@ export default function PackingDashboard() {
                     selectedOrderIds.includes(order.id)
                       ? 'border-blue-500 ring-2 ring-blue-100'
                       : 'border-slate-200'
-                  } p-5 sm:p-6 shadow-xs hover:shadow-md transition-all`}
+                  } p-5 sm:p-6 shadow-xs hover:shadow-md transition-colors`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
@@ -1483,67 +1482,67 @@ export default function PackingDashboard() {
 
                               {/* Physical Parcel Label Reminder */}
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold shadow-2xs">
-                                <span>🏷️ Attach CID to Physical Parcel</span>
+                                <span>Attach CID to Physical Parcel</span>
                               </span>
 
                               {/* Granular Rider Pickup & Delivery Progress Indicator */}
                               {isAwaitingPickup && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-300 text-sky-900 text-[11px] font-bold shadow-2xs">
-                                  <span>🛵 Awaiting Steadfast Rider Pickup</span>
+                                  <span>Awaiting Steadfast Rider Pickup</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'hold' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-300 text-orange-900 text-[11px] font-bold shadow-2xs">
-                                  <span>⚠️ On Hold (Customer Rescheduled)</span>
+                                  <span>On Hold (Customer Rescheduled)</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'delivered_approval_pending' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-300 text-teal-900 text-[11px] font-bold shadow-2xs">
-                                  <span>⏳ Delivered (Awaiting Hub Verification)</span>
+                                  <span>Delivered (Awaiting Hub Verification)</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'partial_delivered_approval_pending' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-50 border border-cyan-300 text-cyan-900 text-[11px] font-bold shadow-2xs">
-                                  <span>⏳ Partial Delivery (Awaiting Hub Verification)</span>
+                                  <span>Partial Delivery (Awaiting Hub Verification)</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'partial_delivered' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-300 text-blue-900 text-[11px] font-bold shadow-2xs">
-                                  <span>📦 Partially Delivered (Partial Return)</span>
+                                  <span>Partially Delivered (Partial Return)</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'cancelled_approval_pending' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold shadow-2xs">
-                                  <span>⚠️ Return Initiated (Awaiting Hub Verification)</span>
+                                  <span>Return Initiated (Awaiting Hub Verification)</span>
                                 </span>
                               )}
 
                               {(order.courier_status === 'cancelled' || order.status === 'canceled') && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-900 text-[11px] font-bold shadow-2xs">
-                                  <span>❌ Returned / Cancelled by Steadfast</span>
+                                  <span>Returned / Cancelled by Steadfast</span>
                                 </span>
                               )}
 
                               {(order.courier_status === 'in_transit' || (!isAwaitingPickup && !isDelivered && order.courier_status !== 'hold' && !order.courier_status?.includes('pending') && order.courier_status !== 'partial_delivered')) && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-bold shadow-2xs">
-                                  <span>🚚 In Transit with Steadfast</span>
+                                  <span>In Transit with Steadfast</span>
                                 </span>
                               )}
 
                               {isDelivered && order.courier_status !== 'partial_delivered' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold shadow-2xs">
-                                  <span>✅ Delivered</span>
+                                  <span>Delivered</span>
                                 </span>
                               )}
 
                               {order.courier_status === 'unknown' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-medium shadow-2xs">
-                                  <span>ℹ️ Pending Tracking Update</span>
+                                  <span>Pending Tracking Update</span>
                                 </span>
                               )}
 
@@ -1551,7 +1550,7 @@ export default function PackingDashboard() {
                               <button
                                 type="button"
                                 onClick={() => triggerPrint(order)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-colors active:scale-95 shadow-2xs cursor-pointer"
                                 title="Print Packing Slip with Consignment ID"
                               >
                                 <Printer className="w-3.5 h-3.5" />
@@ -1578,7 +1577,7 @@ export default function PackingDashboard() {
                               {order.courier_status && (() => {
                                 const parsedStatus = parseSteadfastStatus(order.courier_status);
                                 return (
-                                  <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${parsedStatus.badgeClass}`}>
+                                  <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${parsedStatus.badgeClass}`}>
                                     {parsedStatus.label}
                                   </span>
                                 );
@@ -1598,7 +1597,7 @@ export default function PackingDashboard() {
                                 title="Refresh live status from Steadfast"
                               >
                                 <RefreshCw className={`w-3 h-3 ${syncingId === order.id ? 'animate-spin' : ''}`} />
-                                <span>{syncingId === order.id ? 'Refreshing...' : 'Refresh Status'}</span>
+                                <span>{syncingId === order.id ? 'Refreshing…' : 'Refresh Status'}</span>
                               </button>
                             </div>
                           );
@@ -1617,22 +1616,22 @@ export default function PackingDashboard() {
                                 type="button"
                                 onClick={() => handleSyncSteadfast(order)}
                                 disabled={syncingId === order.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors active:scale-95 disabled:opacity-50"
                                 title="Look up consignment ID from Steadfast using order number"
                               >
                                 <RefreshCw className={`w-3 h-3 ${syncingId === order.id ? 'animate-spin' : ''}`} />
-                                <span>{syncingId === order.id ? 'Looking up...' : 'Get Consignment ID'}</span>
+                                <span>{syncingId === order.id ? 'Looking up…' : 'Get Consignment ID'}</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => handleSendToSteadfast(order)}
                                 disabled={dispatchingId === order.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors active:scale-95 disabled:opacity-50"
                                 title="Send order to Steadfast Courier to create consignment"
                               >
                                 <Send className={`w-3 h-3 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
-                                <span>{dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast'}</span>
+                                <span>{dispatchingId === order.id ? 'Sending…' : 'Send to Steadfast'}</span>
                               </button>
 
                               <button
@@ -1655,7 +1654,7 @@ export default function PackingDashboard() {
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => triggerPrint(order)}
-                        className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-all active:scale-95"
+                        className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors active:scale-95"
                       >
                         <Printer className="w-4 h-4 text-slate-500" />
                         <span>Print Packing Slip</span>
@@ -1672,7 +1671,7 @@ export default function PackingDashboard() {
                       <div className="py-4 space-y-3">
                         {/* Main Products */}
                         <div>
-                          <div className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2 flex items-center justify-between">
+                          <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between">
                             <span>Main Order Items ({mainItems.length})</span>
                           </div>
                           {mainItems.length === 0 ? (
@@ -1706,7 +1705,7 @@ export default function PackingDashboard() {
                         {/* Upsell Items Highlighted */}
                         {upsellItems.length > 0 && (
                           <div className="pt-2 border-t border-purple-100 bg-purple-50/40 p-3 rounded-xl">
-                            <div className="text-xs font-black uppercase text-purple-700 tracking-wider mb-2 flex items-center space-x-1.5">
+                            <div className="text-xs font-semibold text-purple-700 mb-2 flex items-center space-x-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                               <span>Upsell Items & Add-Ons ({upsellItems.length}) - Verify Separately</span>
                             </div>
@@ -1764,7 +1763,7 @@ export default function PackingDashboard() {
                           const isEditing = editingDescOrderId === order.id;
                           const displayDesc =
                             currentDesc.length > 255
-                              ? currentDesc.slice(0, 252).trim() + '...'
+                              ? currentDesc.slice(0, 252).trim() + '…'
                               : currentDesc;
 
                           return (
@@ -1819,7 +1818,7 @@ export default function PackingDashboard() {
                                     }
                                     className="w-full text-xs font-mono p-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
                                     rows={2}
-                                    placeholder="Enter item description for Steadfast parcel sticker (max 255 chars)..."
+                                    placeholder="Enter item description for Steadfast parcel sticker (max 255 chars)…"
                                   />
                                   <div className="flex justify-between items-center text-[10px] text-slate-400">
                                     <span>This text will appear on the Steadfast parcel sticker.</span>
@@ -1851,7 +1850,7 @@ export default function PackingDashboard() {
                           <span>
                             <span className="font-semibold">Payment:</span> {order.payment_method}
                           </span>
-                          <span className="text-slate-300">&middot;</span>
+                          <span className="text-slate-300 px-1">/</span>
                           <span>
                             Total: <b className="text-slate-900 font-mono">{formatCurrency(order.total_amount)}</b>
                           </span>
@@ -1889,12 +1888,12 @@ export default function PackingDashboard() {
                           type="button"
                           onClick={() => handleStatusChange(order.id, 'confirmed')}
                           disabled={updatingId === order.id}
-                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                           title="Release this order to packing queue (mark as Confirmed)"
                         >
                           <ChevronRight className="w-4 h-4" />
                           <span>
-                            {updatingId === order.id ? 'Releasing...' : 'Release to Packing (Confirmed)'}
+                            {updatingId === order.id ? 'Releasing…' : 'Release to Packing (Confirmed)'}
                           </span>
                         </button>
                       )}
@@ -1904,11 +1903,11 @@ export default function PackingDashboard() {
                           <button
                             onClick={() => handleStatusChange(order.id, 'ready_to_ship')}
                             disabled={updatingId === order.id}
-                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                           >
                             <Package className="w-4 h-4" />
                             <span>
-                              {updatingId === order.id ? 'Updating...' : 'Mark Packed (Ready to Ship)'}
+                              {updatingId === order.id ? 'Updating…' : 'Mark Packed (Ready to Ship)'}
                             </span>
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
@@ -1916,12 +1915,12 @@ export default function PackingDashboard() {
                           <button
                             onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                             disabled={dispatchingId === order.id}
-                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Pack and instantly request Steadfast Courier pickup to get Consignment ID"
                           >
                             <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
                             <span>
-                              {dispatchingId === order.id ? 'Requesting Pickup...' : 'Pack & Request Pickup (Get CID) 🚀'}
+                              {dispatchingId === order.id ? 'Requesting Pickup…' : 'Pack & Request Pickup (Get CID) 🚀'}
                             </span>
                           </button>
                         </div>
@@ -1932,19 +1931,19 @@ export default function PackingDashboard() {
                           <button
                             onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                             disabled={dispatchingId === order.id}
-                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Request Steadfast Courier rider to pickup from warehouse and generate Consignment ID"
                           >
                             <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
                             <span>
-                              {dispatchingId === order.id ? 'Requesting Pickup...' : 'Request Steadfast Pickup (Get CID) 🚀'}
+                              {dispatchingId === order.id ? 'Requesting Pickup…' : 'Request Steadfast Pickup (Get CID) 🚀'}
                             </span>
                           </button>
 
                           <button
                             onClick={() => handleStatusChange(order.id, 'on_the_way')}
                             disabled={updatingId === order.id}
-                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Manual handover without Steadfast API"
                           >
                             <Truck className="w-3.5 h-3.5 text-slate-500" />
@@ -1960,17 +1959,17 @@ export default function PackingDashboard() {
                             <>
                               <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-2xs">
                                 <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>🔒 Automated by Steadfast (Locked)</span>
+                                <span>Automated by Steadfast (Locked)</span>
                               </span>
 
                               <button
                                 onClick={() => handleSyncSteadfast(order)}
                                 disabled={syncingId === order.id}
-                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs shadow-2xs transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                                 title="Query Steadfast to update live tracking and consignment status"
                               >
                                 <RefreshCw className={`w-3.5 h-3.5 ${syncingId === order.id ? 'animate-spin' : ''}`} />
-                                <span>{syncingId === order.id ? 'Syncing...' : 'Sync Status'}</span>
+                                <span>{syncingId === order.id ? 'Syncing…' : 'Sync Status'}</span>
                               </button>
                             </>
                           ) : (
@@ -1978,23 +1977,23 @@ export default function PackingDashboard() {
                               <button
                                 onClick={() => handleSendToSteadfast(order, customItemDescs[order.id])}
                                 disabled={dispatchingId === order.id}
-                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                                 title="Create consignment in Steadfast Courier"
                               >
                                 <Send className={`w-3.5 h-3.5 ${dispatchingId === order.id ? 'animate-spin' : ''}`} />
                                 <span>
-                                  {dispatchingId === order.id ? 'Sending...' : 'Send to Steadfast (Get CID)'}
+                                  {dispatchingId === order.id ? 'Sending…' : 'Send to Steadfast (Get CID)'}
                                 </span>
                               </button>
 
                               <button
                                 onClick={() => handleStatusChange(order.id, 'delivered')}
                                 disabled={updatingId === order.id}
-                                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
                               >
                                 <CheckCircle2 className="w-4 h-4" />
                                 <span>
-                                  {updatingId === order.id ? 'Updating...' : 'Mark as Delivered'}
+                                  {updatingId === order.id ? 'Updating…' : 'Mark as Delivered'}
                                 </span>
                               </button>
                             </>
@@ -2049,7 +2048,7 @@ export default function PackingDashboard() {
                   <button
                     type="button"
                     onClick={() => setShowManualModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs shrink-0 cursor-pointer"
                     title="Add a new product to inventory"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -2060,7 +2059,7 @@ export default function PackingDashboard() {
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search product or SKU..."
+                      placeholder="Search product or SKU…"
                       value={inventorySearch}
                       onChange={(e) => setInventorySearch(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2083,7 +2082,7 @@ export default function PackingDashboard() {
                 <button
                   type="button"
                   onClick={() => setInventoryPendingOnly(false)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                     !inventoryPendingOnly
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -2094,14 +2093,14 @@ export default function PackingDashboard() {
                 <button
                   type="button"
                   onClick={() => setInventoryPendingOnly(true)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                     inventoryPendingOnly
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
                   }`}
                 >
                   <Clock className="w-3.5 h-3.5" />
-                  <span>⚠️ Pending Restock ({pendingItemsSummary.length})</span>
+                  <span>Pending Restock ({pendingItemsSummary.length})</span>
                 </button>
               </div>
             </div>
@@ -2110,7 +2109,7 @@ export default function PackingDashboard() {
             {loadingInventory ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto text-slate-400 mb-2" />
-                <p className="text-xs text-slate-500 font-medium">Loading inventory products...</p>
+                <p className="text-xs text-slate-500 font-medium">Loading inventory products…</p>
               </div>
             ) : filteredProducts.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
@@ -2127,7 +2126,7 @@ export default function PackingDashboard() {
                   return (
                     <div
                       key={product.id}
-                      className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                      className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 transition-colors"
                     >
                       <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -2200,7 +2199,7 @@ export default function PackingDashboard() {
                             title="Permanently delete this product from inventory"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                            <span>{deletingProductId === product.id ? 'Deleting...' : 'Delete'}</span>
+                            <span>{deletingProductId === product.id ? 'Deleting…' : 'Delete'}</span>
                           </button>
                         </div>
                       </div>
@@ -2292,7 +2291,7 @@ export default function PackingDashboard() {
                                         <span
                                           className={`w-1.5 h-1.5 rounded-full ${
                                             isNegative
-                                              ? 'bg-rose-500 animate-pulse'
+                                              ? 'bg-rose-500 animate-pulse motion-reduce:animate-none'
                                               : isOut
                                               ? 'bg-slate-400'
                                               : isLow
@@ -2437,7 +2436,7 @@ export default function PackingDashboard() {
               {/* Slip Header */}
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                 <div>
-                  <h1 className="text-2xl font-black uppercase tracking-wider">BOYON</h1>
+                  <h1 className="text-2xl font-black ">BOYON</h1>
                   <p className="text-xs text-slate-500">Official Packing & Delivery Slip</p>
                 </div>
                 <div className="text-right">
@@ -2460,7 +2459,7 @@ export default function PackingDashboard() {
               {/* Delivery Address */}
               <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
                 <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                  <div className="font-bold uppercase text-slate-500 mb-1">Customer Details</div>
+                  <div className="font-semibold text-slate-500 mb-1">Customer Details</div>
                   <div className="font-bold text-sm text-slate-900">{selectedOrderForSlip.customer_name}</div>
                   <div className="font-mono mt-0.5">{selectedOrderForSlip.customer_phone}</div>
                   {selectedOrderForSlip.customer_email && (
@@ -2469,7 +2468,7 @@ export default function PackingDashboard() {
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                  <div className="font-bold uppercase text-slate-500 mb-1">Shipping Destination</div>
+                  <div className="font-semibold text-slate-500 mb-1">Shipping Destination</div>
                   <div className="text-slate-800 leading-relaxed font-medium">
                     {selectedOrderForSlip.shipping_address}
                   </div>
@@ -2502,7 +2501,7 @@ export default function PackingDashboard() {
                       {mainItems.length > 0 && (
                         <>
                           <tr className="bg-slate-50 border-b border-slate-200">
-                            <td colSpan={5} className="py-1 px-3 font-bold text-[10px] uppercase text-slate-500 tracking-wider">
+                            <td colSpan={5} className="py-1 px-3 font-medium text-xs text-slate-500 ">
                               Main Order Products ({mainItems.length})
                             </td>
                           </tr>
@@ -2522,7 +2521,7 @@ export default function PackingDashboard() {
                       {upsellItems.length > 0 && (
                         <>
                           <tr className="bg-purple-50 border-b border-purple-200">
-                            <td colSpan={5} className="py-1 px-3 font-black text-[10px] uppercase text-purple-700 tracking-wider">
+                            <td colSpan={5} className="py-1 px-3 font-semibold text-xs text-purple-700 ">
                               ★ Upsell Items & Add-Ons ({upsellItems.length})
                             </td>
                           </tr>
@@ -2586,7 +2585,7 @@ export default function PackingDashboard() {
                         </div>
                       )}
                       <div className="border-t border-slate-300 pt-1.5 flex justify-between items-baseline gap-4">
-                        <span className="text-slate-900 uppercase font-bold text-xs">
+                        <span className="text-slate-900 font-bold text-xs">
                           {isFullyPrepaid ? 'Status:' : 'Total COD To Collect:'}
                         </span>
                         <span className={`text-xl font-black font-mono ${isFullyPrepaid ? 'text-emerald-700' : 'text-slate-900'}`}>
@@ -2626,7 +2625,7 @@ export default function PackingDashboard() {
 
         {/* Edit Product Name Modal */}
         {editingProductModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -2643,7 +2642,7 @@ export default function PackingDashboard() {
               </div>
 
               <div className="py-4 space-y-3">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="block text-xs font-bold text-slate-700 ">
                   Product Title / Name
                 </label>
                 <input
@@ -2657,7 +2656,7 @@ export default function PackingDashboard() {
                     if (e.key === 'Enter') handleSaveProductTitle();
                     if (e.key === 'Escape') setEditingProductModal(null);
                   }}
-                  placeholder="Enter product title..."
+                  placeholder="Enter product title…"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                 />
                 <p className="text-[11px] text-slate-500">
@@ -2680,7 +2679,7 @@ export default function PackingDashboard() {
                   onClick={handleSaveProductTitle}
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
                 >
-                  {savingProductTitle ? 'Saving...' : 'Save Changes'}
+                  {savingProductTitle ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </div>

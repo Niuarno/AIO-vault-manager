@@ -272,7 +272,7 @@ export default function CsvUploadModal({
           {successCount !== null && (
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              <span>Successfully imported {successCount} products! Refreshing inventory...</span>
+              <span>Successfully imported {successCount} products! Refreshing inventory…</span>
             </div>
           )}
 
@@ -285,7 +285,7 @@ export default function CsvUploadModal({
               </div>
               <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500">
                     <tr>
                       <th className="p-2.5">Title</th>
                       <th className="p-2.5">SKU</th>
@@ -328,9 +328,9 @@ export default function CsvUploadModal({
             type="button"
             onClick={handleConfirmImport}
             disabled={importing || parsedRows.length === 0}
-            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-200 transition-all disabled:opacity-50"
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-200 transition-colors disabled:opacity-50"
           >
-            {importing ? 'Importing Products...' : `Import ${parsedRows.length} Products`}
+            {importing ? 'Importing Products…' : `Import ${parsedRows.length} Products`}
           </button>
         </div>
       </div>

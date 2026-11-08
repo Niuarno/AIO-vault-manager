@@ -52,7 +52,7 @@ export default function AdminDailyProductsPage() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        <div className="inline-block animate-spin motion-reduce:animate-none rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
       </div>
     );
   }

@@ -158,9 +158,9 @@ export default function DeleteStaffModal({
               type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-200 transition-all disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-200 transition-colors disabled:opacity-50"
             >
-              {deleting ? 'Deleting...' : 'Delete Permanently'}
+              {deleting ? 'Deleting…' : 'Delete Permanently'}
             </button>
           </div>
         </div>

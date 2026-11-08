@@ -222,7 +222,7 @@ export default function MetaDateRangePicker({
     const presetObj = META_DATE_PRESETS.find((p) => p.key === draftPreset);
     let label = presetObj ? presetObj.label : 'Custom';
     if (draftPreset === 'custom') {
-      label = `${formatDhakaDisplayDate(finalStart)} – ${formatDhakaDisplayDate(finalEnd)}`;
+      label = `${formatDhakaDisplayDate(finalStart)} to ${formatDhakaDisplayDate(finalEnd)}`;
     }
 
     let compareStartDate: string | undefined;
@@ -249,7 +249,7 @@ export default function MetaDateRangePicker({
   // Format trigger label
   const triggerLabel = useMemo(() => {
     const presetObj = META_DATE_PRESETS.find((p) => p.key === value.preset);
-    const rangeText = `${formatDhakaDisplayDate(value.startDate)} – ${formatDhakaDisplayDate(value.endDate)}`;
+    const rangeText = `${formatDhakaDisplayDate(value.startDate)} to ${formatDhakaDisplayDate(value.endDate)}`;
     if (value.preset === 'custom' || !presetObj) {
       return rangeText;
     }
@@ -414,7 +414,7 @@ export default function MetaDateRangePicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold shadow-2xs transition-all hover:border-slate-400"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold shadow-2xs transition-colors hover:border-slate-400"
       >
         <CalendarIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
         <span className="truncate max-w-[220px] sm:max-w-[320px]">
@@ -484,7 +484,7 @@ export default function MetaDateRangePicker({
                   </label>
                   {draftCompare && compareRange && (
                     <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                      Previous: {formatDhakaDisplayDate(compareRange.startDate)} –{' '}
+                      Previous: {formatDhakaDisplayDate(compareRange.startDate)} to{' '}
                       {formatDhakaDisplayDate(compareRange.endDate)}
                     </span>
                   )}
@@ -506,7 +506,7 @@ export default function MetaDateRangePicker({
                     placeholder="Aug 24, 2026"
                     className="w-28 sm:w-32 px-2.5 py-1 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-md shadow-2xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  <span className="text-slate-400 font-bold text-xs">–</span>
+                  <span className="text-slate-400 font-bold text-xs">to</span>
                   <input
                     type="text"
                     value={inputEndText}
@@ -552,7 +552,7 @@ export default function MetaDateRangePicker({
               <button
                 type="button"
                 onClick={handleApply}
-                className="px-5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-all"
+                className="px-5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-colors"
               >
                 Update
               </button>

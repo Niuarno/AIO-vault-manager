@@ -92,7 +92,7 @@ export default function ManualProductModal({
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-medium text-slate-700 mb-1">
               Product Title *
             </label>
             <input
@@ -107,7 +107,7 @@ export default function ManualProductModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-medium text-slate-700 mb-1">
                 Selling Price (BDT) *
               </label>
               <input
@@ -123,7 +123,7 @@ export default function ManualProductModal({
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">
+                <label className="block text-xs font-medium text-slate-700">
                   Buying Price (BDT)
                 </label>
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -144,7 +144,7 @@ export default function ManualProductModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-medium text-slate-700 mb-1">
                 Initial Stock Qty *
               </label>
               <input
@@ -158,7 +158,7 @@ export default function ManualProductModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-medium text-slate-700 mb-1">
                 SKU / Barcode
               </label>
               <input
@@ -172,27 +172,27 @@ export default function ManualProductModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-medium text-slate-700 mb-1">
               Image URL
             </label>
             <input
               type="url"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
+              placeholder="https://…"
               className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-medium text-slate-700 mb-1">
               Description (Optional)
             </label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Product notes, dimensions, or material details..."
+              placeholder="Product notes, dimensions, or material details…"
               className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
             />
           </div>
@@ -208,9 +208,9 @@ export default function ManualProductModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-md shadow-brand-200 transition-all disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-md shadow-brand-200 transition-colors disabled:opacity-50"
             >
-              {saving ? 'Adding Product...' : 'Add Product'}
+              {saving ? 'Adding Product…' : 'Add Product'}
             </button>
           </div>
         </form>

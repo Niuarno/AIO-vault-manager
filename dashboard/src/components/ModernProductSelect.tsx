@@ -61,7 +61,7 @@ export default function ModernProductSelect({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left text-sm transition-all shadow-2xs ${
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left text-sm transition-colors shadow-2xs ${
           isOpen
             ? 'border-emerald-500 ring-2 ring-emerald-500/10 bg-white'
             : 'border-slate-200 bg-slate-50/70 hover:bg-white hover:border-slate-300'
@@ -113,7 +113,7 @@ export default function ModernProductSelect({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by product name, variant or SKU..."
+                placeholder="Search by product name, variant or SKU…"
                 className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               />
             </div>
@@ -143,7 +143,7 @@ export default function ModernProductSelect({
                       setIsOpen(false);
                       setSearch('');
                     }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-50 text-emerald-950 font-medium'
                         : isDelayedPreOrderItem
@@ -165,7 +165,7 @@ export default function ModernProductSelect({
                         <div className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
                           <span>{prodName}</span>
                           {isDelayedPreOrderItem && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
                               Pre-Order (0 Stock)
                             </span>
                           )}

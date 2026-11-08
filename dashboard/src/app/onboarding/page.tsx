@@ -154,8 +154,8 @@ export default function OnboardingPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         <div className="text-center text-white">
-          <div className="inline-block animate-spin rounded-full h-9 w-9 border-b-2 border-brand-500 mb-3"></div>
-          <p className="text-slate-400 text-sm font-medium">Verifying account credentials...</p>
+          <div className="inline-block animate-spin motion-reduce:animate-none rounded-full h-9 w-9 border-b-2 border-brand-500 mb-3"></div>
+          <p className="text-slate-400 text-sm font-medium">Verifying account credentials…</p>
         </div>
       </div>
     );
@@ -200,7 +200,7 @@ export default function OnboardingPage() {
           <form onSubmit={handleCompleteOnboarding} className="space-y-6">
             {/* Step 1: Avatar Selection */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold text-slate-400 mb-2">
                 1. Choose Profile Avatar
               </label>
               <div className="flex items-center space-x-4">
@@ -221,7 +221,7 @@ export default function OnboardingPage() {
                         key={idx}
                         type="button"
                         onClick={() => setAvatarUrl(preset)}
-                        className={`w-8 h-8 rounded-xl overflow-hidden border-2 transition-all ${
+                        className={`w-8 h-8 rounded-xl overflow-hidden border-2 transition-colors ${
                           avatarUrl === preset
                             ? 'border-brand-400 scale-110 shadow-md shadow-brand-500/20'
                             : 'border-slate-700 opacity-60 hover:opacity-100'
@@ -235,7 +235,7 @@ export default function OnboardingPage() {
                     type="url"
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="Or paste custom image URL..."
+                    placeholder="Or paste custom image URL…"
                     className="mt-2 w-full px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-brand-500 outline-none"
                   />
                 </div>
@@ -244,7 +244,7 @@ export default function OnboardingPage() {
 
             {/* Step 2: Identity & Contact */}
             <div className="space-y-4 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+              <label className="block text-xs font-semibold text-slate-400">
                 2. Contact & Identification
               </label>
 
@@ -260,7 +260,7 @@ export default function OnboardingPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="e.g. Tanvir Hasan"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -277,7 +277,7 @@ export default function OnboardingPage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="01XXXXXXXXX"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -293,8 +293,8 @@ export default function OnboardingPage() {
                   rows={2}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Sales executive focusing on Messenger conversions & high-ticket upsells..."
-                  className="w-full px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                  placeholder="Sales executive focusing on Messenger conversions & high-ticket upsells…"
+                  className="w-full px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                 />
               </div>
 
@@ -315,7 +315,7 @@ export default function OnboardingPage() {
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
                     placeholder="BOYON10"
-                    className="w-full px-3.5 py-2 rounded-lg bg-slate-900 border border-emerald-500/30 text-emerald-300 font-mono font-bold text-sm tracking-wider uppercase focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3.5 py-2 rounded-lg bg-slate-900 border border-emerald-500/30 text-emerald-300 font-mono font-bold text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
                   />
                 </div>
               )}
@@ -324,9 +324,9 @@ export default function OnboardingPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-white font-bold text-sm shadow-lg shadow-brand-500/20 transition-all disabled:opacity-50 active:scale-[0.99]"
+              className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-white font-bold text-sm shadow-lg shadow-brand-500/20 transition-colors disabled:opacity-50 active:scale-[0.99]"
             >
-              <span>{submitting ? 'Setting up workspace...' : 'Complete Profile & Launch Workspace'}</span>
+              <span>{submitting ? 'Setting up workspace…' : 'Complete Profile & Launch Workspace'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

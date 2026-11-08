@@ -136,14 +136,14 @@ export default function ExportStaffReportModal({
 
             {/* Period Type Selection: Monthly vs Yearly */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-[11px] font-bold text-slate-500  mb-1.5">
                 Report Period Type
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setPeriodType('monthly')}
-                  className={`py-2.5 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2.5 px-3 rounded-xl border text-center font-semibold transition-colors ${
                     periodType === 'monthly'
                       ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10 text-emerald-950 font-bold'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
@@ -154,7 +154,7 @@ export default function ExportStaffReportModal({
                 <button
                   type="button"
                   onClick={() => setPeriodType('yearly')}
-                  className={`py-2.5 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2.5 px-3 rounded-xl border text-center font-semibold transition-colors ${
                     periodType === 'yearly'
                       ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10 text-emerald-950 font-bold'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
@@ -211,7 +211,7 @@ export default function ExportStaffReportModal({
 
             {/* Quick Live Preview of data to be exported */}
             <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+              <span className="text-xs font-medium text-slate-500 block">
                 Period Preview Summary:
               </span>
               <div className="grid grid-cols-3 gap-2 pt-1 text-center">
@@ -257,7 +257,7 @@ export default function ExportStaffReportModal({
               type="button"
               onClick={handleExport}
               disabled={downloaded}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-colors disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span>Download CSV Report</span>

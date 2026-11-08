@@ -923,7 +923,7 @@ export default function SalesDashboard() {
                 >
                   <span className="relative flex h-2 w-2">
                     {isOnline && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     )}
                     <span
                       className={`relative inline-flex rounded-full h-2 w-2 ${
@@ -972,7 +972,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Today's Earnings
                 </span>
                 <DailyResetCountdown variant="kpi" />
@@ -990,7 +990,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Piggybank Balance
                 </span>
                 {totalPendingPayouts > 0 ? (
@@ -1016,7 +1016,7 @@ export default function SalesDashboard() {
                   setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>Request Payout</span>
@@ -1028,7 +1028,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Total Settled & Paid
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
@@ -1084,7 +1084,7 @@ export default function SalesDashboard() {
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-3">
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
                     Today's Non-Website Sales
                   </span>
                   <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1093,8 +1093,8 @@ export default function SalesDashboard() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-                    Unlocked Extra Commission
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
+                    Extra Commission
                   </span>
                   <div className="text-base sm:text-xl font-extrabold text-amber-600 font-mono mt-0.5 flex items-baseline sm:items-center gap-1 flex-wrap">
                     {unlockedOtherTier ? (
@@ -1129,7 +1129,7 @@ export default function SalesDashboard() {
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 sm:h-2.5 overflow-hidden border border-slate-200/60">
                   <div
-                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                    className="bg-amber-500 h-full rounded-full transition-colors duration-500"
                     style={{ width: `${otherQuotaProgress}%` }}
                   />
                 </div>
@@ -1194,7 +1194,7 @@ export default function SalesDashboard() {
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-3">
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
                     Today's Website Sales
                   </span>
                   <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1203,8 +1203,8 @@ export default function SalesDashboard() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-                    Unlocked Extra Commission
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
+                    Extra Commission
                   </span>
                   <div className="text-base sm:text-xl font-extrabold text-emerald-600 font-mono mt-0.5 flex items-baseline sm:items-center gap-1 flex-wrap">
                     {unlockedWebsiteTier ? (
@@ -1239,7 +1239,7 @@ export default function SalesDashboard() {
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 sm:h-2.5 overflow-hidden border border-slate-200/60">
                   <div
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                    className="bg-emerald-500 h-full rounded-full transition-colors duration-500"
                     style={{ width: `${websiteQuotaProgress}%` }}
                   />
                 </div>
@@ -1291,7 +1291,7 @@ export default function SalesDashboard() {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-sm transition-colors"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Create New Order</span>
@@ -1307,7 +1307,7 @@ export default function SalesDashboard() {
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search customer, phone, order #..."
+                  placeholder="Search customer, phone, order #…"
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -1353,7 +1353,7 @@ export default function SalesDashboard() {
             <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                     <tr>
                       <th className="p-4">Order ID & Source</th>
                       <th className="p-4">Customer Details</th>
@@ -1367,7 +1367,7 @@ export default function SalesDashboard() {
                     {loadingOrders ? (
                       <tr>
                         <td colSpan={6} className="p-8 text-center text-slate-400">
-                          Loading orders...
+                          Loading orders…
                         </td>
                       </tr>
                     ) : filteredOrders.length === 0 ? (
@@ -1588,8 +1588,8 @@ export default function SalesDashboard() {
                                       <option value="pending">Pending</option>
                                       <option value="not_reachable">Not Reachable</option>
                                       <option value="confirmed">Confirm Order (In Stock)</option>
-                                      <option value="delayed_delivery">🕒 Confirm Delayed Delivery</option>
-                                      <option value="canceled">❌ Refused Delay (Decline)</option>
+                                      <option value="delayed_delivery">Confirm Delayed Delivery</option>
+                                      <option value="canceled">Refused Delay (Decline)</option>
                                     </select>
                                     <span
                                       className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
@@ -1721,7 +1721,7 @@ export default function SalesDashboard() {
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search products in stock..."
+                placeholder="Search products in stock…"
                 value={inventorySearch}
                 onChange={(e) => setInventorySearch(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
@@ -1731,7 +1731,7 @@ export default function SalesDashboard() {
             <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                     <tr>
                       <th className="p-4">Product & Variant</th>
                       <th className="p-4">SKU</th>
@@ -1743,7 +1743,7 @@ export default function SalesDashboard() {
                     {loadingInventory ? (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-slate-400">
-                          Loading inventory...
+                          Loading inventory…
                         </td>
                       </tr>
                     ) : filteredVariants.length === 0 ? (
@@ -1759,7 +1759,7 @@ export default function SalesDashboard() {
                             <div className="font-semibold text-slate-900 flex items-center gap-2">
                               <span>{(v.product as any)?.name || (v.product as any)?.title || 'Product'}</span>
                               {(v.product as any)?.is_active === false && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
+                                <span className="text-[10px] font-bold  px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
                                   Disabled
                                 </span>
                               )}
@@ -1821,7 +1821,7 @@ export default function SalesDashboard() {
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-slate-400 ">
                       Today's Sales
                     </span>
                     <div className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1829,8 +1829,8 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Extra Commission Unlocked
+                    <span className="text-[11px] font-semibold text-slate-400 ">
+                      Extra Commission Tiered
                     </span>
                     <div className="text-xl font-extrabold text-amber-600 font-mono mt-0.5">
                       {unlockedOtherTier ? `+${formatCurrency(unlockedOtherTier.bonus)}` : '৳0'}
@@ -1853,7 +1853,7 @@ export default function SalesDashboard() {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
                     <div
-                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      className="bg-amber-500 h-full rounded-full transition-colors duration-500"
                       style={{ width: `${otherQuotaProgress}%` }}
                     />
                   </div>
@@ -1901,7 +1901,7 @@ export default function SalesDashboard() {
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-slate-400 ">
                       Extra Sales Today
                     </span>
                     <div className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1909,8 +1909,8 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Extra Commission Unlocked
+                    <span className="text-[11px] font-semibold text-slate-400 ">
+                      Extra Commission Tiered
                     </span>
                     <div className="text-xl font-extrabold text-emerald-600 font-mono mt-0.5">
                       {unlockedWebsiteTier ? `+${formatCurrency(unlockedWebsiteTier.bonus)}` : '৳0'}
@@ -1923,7 +1923,7 @@ export default function SalesDashboard() {
                     <span>
                       {nextWebsiteTier
                         ? `Next Milestone: ${nextWebsiteTier.name} (+${formatCurrency(nextWebsiteTier.bonus)} extra commission)`
-                        : 'Highest Milestone Unlocked'}
+                        : 'Highest Milestone Tiered'}
                     </span>
                     <span className="font-mono font-bold text-slate-700">
                       {nextWebsiteTier
@@ -1933,7 +1933,7 @@ export default function SalesDashboard() {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
                     <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      className="bg-emerald-500 h-full rounded-full transition-colors duration-500"
                       style={{ width: `${websiteQuotaProgress}%` }}
                     />
                   </div>
@@ -1986,7 +1986,7 @@ export default function SalesDashboard() {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                     <tr>
                       <th className="p-4">Type & Order / Milestone</th>
                       <th className="p-4">Extra Commission</th>
@@ -1998,7 +1998,7 @@ export default function SalesDashboard() {
                     {loadingRewards ? (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-slate-400">
-                          Loading rewards...
+                          Loading rewards…
                         </td>
                       </tr>
                     ) : rewards.length === 0 ? (
@@ -2086,7 +2086,7 @@ export default function SalesDashboard() {
                   setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>New Payout Request</span>
@@ -2095,7 +2095,7 @@ export default function SalesDashboard() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                   <tr>
                     <th className="p-4">Amount</th>
                     <th className="p-4">Method & Account</th>
@@ -2108,7 +2108,7 @@ export default function SalesDashboard() {
                   {loadingPayouts ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Loading payout requests...
+                        Loading payout requests…
                       </td>
                     </tr>
                   ) : myPayouts.length === 0 ? (
@@ -2179,7 +2179,7 @@ export default function SalesDashboard() {
 
       {/* REQUEST PAYOUT MODAL */}
       {isPayoutModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs animate-in fade-in p-2.5 sm:p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50  animate-in fade-in p-2.5 sm:p-4">
           <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
             <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative my-auto">
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
@@ -2274,9 +2274,9 @@ export default function SalesDashboard() {
                   <button
                     type="submit"
                     disabled={submittingPayout}
-                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-all disabled:opacity-50 text-center"
+                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-colors disabled:opacity-50 text-center"
                   >
-                    {submittingPayout ? 'Submitting...' : 'Submit Request'}
+                    {submittingPayout ? 'Submitting…' : 'Submit Request'}
                   </button>
                 </div>
               </form>
@@ -2287,7 +2287,7 @@ export default function SalesDashboard() {
 
       {/* CREATE ORDER MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs animate-in fade-in p-2.5 sm:p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50  animate-in fade-in p-2.5 sm:p-4">
           <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
             <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl relative my-auto">
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
@@ -2314,14 +2314,14 @@ export default function SalesDashboard() {
                   <div className="lg:col-span-2 space-y-4">
                     {/* ORDER SOURCE */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-medium text-slate-500 mb-2">
                         Order Source
                       </label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
                         <button
                           type="button"
                           onClick={() => setSource('whatsapp')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'whatsapp'
                               ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2338,7 +2338,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('messenger')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'messenger'
                               ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2355,7 +2355,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('phone')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'phone'
                               ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2372,7 +2372,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('manual')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'manual'
                               ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2436,10 +2436,10 @@ export default function SalesDashboard() {
                     {/* ADD PRODUCTS TO ORDER */}
                     <div className="p-3.5 sm:p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <span className="text-xs font-medium text-slate-700">
                           Add Products to Order
                         </span>
-                        <span className="text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
+                        <span className="text-xs font-medium text-emerald-700">
                           Live Stock Protected
                         </span>
                       </div>
@@ -2504,7 +2504,7 @@ export default function SalesDashboard() {
                                 <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
                                 {item.is_delayed_preorder && (
                                   <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] flex items-center gap-1">
-                                    🕒 Pre-Order
+                                    Pre-Order
                                   </span>
                                 )}
                                 {item.is_reachout && (
@@ -2545,7 +2545,7 @@ export default function SalesDashboard() {
                         placeholder="e.g. NUR10"
                         value={couponUsed}
                         onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                       />
                     </div>
 
@@ -2590,7 +2590,7 @@ export default function SalesDashboard() {
                             <Receipt className="w-3.5 h-3.5" />
                           </div>
                           <div>
-                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Order Summary</h4>
+                            <h4 className="text-xs font-semibold text-slate-900">Order Summary</h4>
                             <p className="text-[10px] text-slate-400">Total & Payment Breakdown</p>
                           </div>
                         </div>
@@ -2609,7 +2609,7 @@ export default function SalesDashboard() {
 
                       {/* Delivery Option Selection */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                        <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                           <Truck className="w-3.5 h-3.5 text-slate-400" />
                           <span>Delivery Fee:</span>
                         </label>
@@ -2617,7 +2617,7 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('inside_dhaka')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'inside_dhaka'
                                 ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -2629,7 +2629,7 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('outside_dhaka')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'outside_dhaka'
                                 ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -2641,7 +2641,7 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('free')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'free'
                                 ? 'border-emerald-600 bg-emerald-600 text-white font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -2656,7 +2656,7 @@ export default function SalesDashboard() {
                       {/* Custom Discount Input Box */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                             <Tag className="w-3.5 h-3.5 text-rose-500" />
                             <span>Custom Discount:</span>
                           </label>
@@ -2685,7 +2685,7 @@ export default function SalesDashboard() {
                       {/* Customer Advance / Pre-payment Box */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-2">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                             <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Advance Paid</span>
                           </label>
@@ -2702,7 +2702,7 @@ export default function SalesDashboard() {
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                            <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-colors peer-checked:bg-emerald-600"></div>
                           </label>
                         </div>
 
@@ -2740,7 +2740,7 @@ export default function SalesDashboard() {
                                 placeholder="TrxID (Opt)"
                                 value={advanceTrxId}
                                 onChange={(e) => setAdvanceTrxId(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] uppercase font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                               />
                             </div>
                           </div>
@@ -2750,7 +2750,7 @@ export default function SalesDashboard() {
                       {/* Grand Total */}
                       <div className="pt-3 border-t-2 border-slate-200">
                         <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Grand Total:</span>
+                          <span className="text-xs font-semibold text-slate-900">Grand Total:</span>
                           <span className="font-mono text-base font-black text-slate-900">
                             {formatCurrency(grandTotal)}
                           </span>
@@ -2759,14 +2759,14 @@ export default function SalesDashboard() {
 
                       {/* Remaining COD Box */}
                       <div
-                        className={`p-3 rounded-xl border flex flex-col gap-1 transition-all ${
+                        className={`p-3 rounded-xl border flex flex-col gap-1 transition-colors ${
                           advanceAmount > 0
                             ? 'bg-amber-50/80 border-amber-200 text-amber-950'
                             : 'bg-slate-100 border-slate-200 text-slate-800'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider">Remaining COD:</span>
+                          <span className="text-xs font-medium">Remaining COD:</span>
                           <span className="font-mono text-sm font-black">
                             {formatCurrency(remainingCod)}
                           </span>
@@ -2781,7 +2781,7 @@ export default function SalesDashboard() {
                       {/* Delayed Delivery Pre-Order Notice */}
                       {hasDelayedPreOrderItems && (
                         <div className="p-3 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2.5">
-                          <span className="text-base leading-none">🕒</span>
+                          <span className="text-base leading-none">•</span>
                           <div className="space-y-0.5">
                             <p className="font-bold text-[11px]">Delayed Delivery Pre-Order</p>
                             <p className="text-[10px] text-amber-800 leading-normal">
@@ -2796,7 +2796,7 @@ export default function SalesDashboard() {
                         <button
                           type="submit"
                           disabled={submittingOrder || orderItems.length === 0}
-                          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 text-center flex items-center justify-center gap-1.5 ${
+                          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs transition-colors disabled:opacity-50 text-center flex items-center justify-center gap-1.5 ${
                             hasDelayedPreOrderItems
                               ? 'bg-amber-600 hover:bg-amber-500 text-white'
                               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
@@ -2805,7 +2805,7 @@ export default function SalesDashboard() {
                           <CheckCircle2 className="w-4 h-4" />
                           <span>
                             {submittingOrder
-                              ? 'Placing Order...'
+                              ? 'Placing Order…'
                               : hasDelayedPreOrderItems
                               ? 'Confirm & Create Delayed Pre-Order 🕒'
                               : 'Confirm & Create Order'}
@@ -2872,7 +2872,7 @@ export default function SalesDashboard() {
 
       {/* QUOTA & BONUS MILESTONES MODAL */}
       {showTiersModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40  animate-in fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2909,7 +2909,7 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setTiersModalTab('other')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                   tiersModalTab === 'other'
                     ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -2920,7 +2920,7 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setTiersModalTab('website')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                   tiersModalTab === 'website'
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -2936,13 +2936,13 @@ export default function SalesDashboard() {
                   <div className="mb-4 bg-amber-50/60 border border-amber-200/60 rounded-xl p-3.5 flex items-start gap-2.5">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-amber-950">
-                      <span className="font-bold">How it works:</span> Cumulative sales on non-website orders (WhatsApp, Phone, Manual) qualify for daily milestones. Crossing each milestone unlocks that tier's cash extra commission into your earnings.
+                      <span className="font-bold">How it works:</span> Cumulative sales on non-website orders (WhatsApp, Phone, Manual) qualify for daily milestones. Crossing each milestone activates that tier's cash extra commission into your earnings.
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200/80">
                     <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                         <tr>
                           <th className="p-3">Milestone Tier</th>
                           <th className="p-3">Daily Sales Required</th>
@@ -2960,7 +2960,7 @@ export default function SalesDashboard() {
                           </tr>
                         ) : (
                           otherActiveTiers.map((tier) => {
-                            const isUnlocked = todayOtherSales >= tier.min_quota;
+                            const isTiered = todayOtherSales >= tier.min_quota;
                             const isCurrentHighest = unlockedOtherTier?.id === tier.id;
                             const effectiveRate = tier.min_quota > 0 ? ((tier.bonus / tier.min_quota) * 100).toFixed(1) : '0';
                             const deficit = tier.min_quota - todayOtherSales;
@@ -2971,7 +2971,7 @@ export default function SalesDashboard() {
                                 className={`transition-colors ${
                                   isCurrentHighest
                                     ? 'bg-amber-50/60 font-semibold'
-                                    : isUnlocked
+                                    : isTiered
                                     ? 'bg-slate-50/40 text-slate-600'
                                     : 'hover:bg-slate-50/60'
                                 }`}
@@ -2989,9 +2989,9 @@ export default function SalesDashboard() {
                                   {effectiveRate}%
                                 </td>
                                 <td className="p-3 text-right">
-                                  {isUnlocked ? (
+                                  {isTiered ? (
                                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Unlocked
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tiered
                                     </span>
                                   ) : (
                                     <span className="text-xs text-slate-400 font-mono">
@@ -3012,13 +3012,13 @@ export default function SalesDashboard() {
                   <div className="mb-4 bg-emerald-50/60 border border-emerald-200/60 rounded-xl p-3.5 flex items-start gap-2.5">
                     <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-emerald-900">
-                      <span className="font-bold">How it works:</span> When you upsell on website orders, your extra sales value accumulates across all website orders today. Crossing each quota milestone unlocks that tier's cash bonus in your earnings.
+                      <span className="font-bold">How it works:</span> When you upsell on website orders, your extra sales value accumulates across all website orders today. Crossing each quota milestone activates that tier's cash bonus in your earnings.
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200/80">
                     <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                         <tr>
                           <th className="p-3">Milestone Tier</th>
                           <th className="p-3">Extra Sales Required</th>
@@ -3036,7 +3036,7 @@ export default function SalesDashboard() {
                           </tr>
                         ) : (
                           websiteActiveTiers.map((tier) => {
-                            const isUnlocked = todayWebsiteUpsells >= tier.min_quota;
+                            const isTiered = todayWebsiteUpsells >= tier.min_quota;
                             const isCurrentHighest = unlockedWebsiteTier?.id === tier.id;
                             const effectiveRate = tier.min_quota > 0 ? ((tier.bonus / tier.min_quota) * 100).toFixed(1) : '0';
                             const deficit = tier.min_quota - todayWebsiteUpsells;
@@ -3047,7 +3047,7 @@ export default function SalesDashboard() {
                                 className={`transition-colors ${
                                   isCurrentHighest
                                     ? 'bg-emerald-50/50 font-semibold'
-                                    : isUnlocked
+                                    : isTiered
                                     ? 'bg-slate-50/40 text-slate-600'
                                     : 'hover:bg-slate-50/60'
                                 }`}
@@ -3065,9 +3065,9 @@ export default function SalesDashboard() {
                                   {effectiveRate}%
                                 </td>
                                 <td className="p-3 text-right">
-                                  {isUnlocked ? (
+                                  {isTiered ? (
                                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Unlocked
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tiered
                                     </span>
                                   ) : (
                                     <span className="text-xs text-slate-400 font-mono">
@@ -3097,7 +3097,7 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setShowTiersModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
               >
                 Close
               </button>

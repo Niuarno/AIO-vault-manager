@@ -295,8 +295,8 @@ export default function UniversalProfilePage() {
       <div className="min-h-screen bg-slate-50">
         <Navbar currentProfile={null} />
         <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mb-3"></div>
-          <p className="text-slate-600 font-medium">Loading profile preferences...</p>
+          <div className="inline-block animate-spin motion-reduce:animate-none rounded-full h-8 w-8 border-b-2 border-brand-600 mb-3"></div>
+          <p className="text-slate-600 font-medium">Loading profile preferences…</p>
         </div>
       </div>
     );
@@ -391,7 +391,7 @@ export default function UniversalProfilePage() {
               {profile?.role === 'sales' && (
                 <div className="mt-5 pt-5 border-t border-slate-100 grid grid-cols-2 gap-2 text-left">
                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <div className="text-[10px] font-semibold uppercase text-slate-400">
+                    <div className="text-xs font-medium text-slate-400">
                       Total Rewards
                     </div>
                     <div className="text-sm font-bold text-brand-600">
@@ -399,7 +399,7 @@ export default function UniversalProfilePage() {
                     </div>
                   </div>
                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <div className="text-[10px] font-semibold uppercase text-slate-400">
+                    <div className="text-xs font-medium text-slate-400">
                       Approved/Paid
                     </div>
                     <div className="text-sm font-bold text-emerald-600">
@@ -424,7 +424,7 @@ export default function UniversalProfilePage() {
 
                 <div className="bg-white rounded-xl p-3.5 border-2 border-dashed border-emerald-300 flex items-center justify-between shadow-sm">
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                    <span className="text-xs font-medium text-slate-400 block">
                       Active Coupon
                     </span>
                     <span className="font-mono text-base font-extrabold text-slate-900">
@@ -435,7 +435,7 @@ export default function UniversalProfilePage() {
                   {profile?.coupon_code && (
                     <button
                       onClick={copyCouponToClipboard}
-                      className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all active:scale-95"
+                      className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors active:scale-95"
                     >
                       {copiedCoupon ? (
                         <>
@@ -488,7 +488,7 @@ export default function UniversalProfilePage() {
               <form onSubmit={handleSaveProfile} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       Full Name *
                     </label>
                     <input
@@ -497,12 +497,12 @@ export default function UniversalProfilePage() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Shakil Ahmed"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       Contact Phone *
                     </label>
                     <div className="relative">
@@ -513,7 +513,7 @@ export default function UniversalProfilePage() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="017XXXXXXXX"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                       />
                     </div>
                   </div>
@@ -521,7 +521,7 @@ export default function UniversalProfilePage() {
 
                 {profile?.role === 'sales' && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       My Customer Coupon Code
                     </label>
                     <div className="relative">
@@ -531,7 +531,7 @@ export default function UniversalProfilePage() {
                         value={couponCode}
                         onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
                         placeholder="SHAKIL10"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-sm uppercase focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-sm uppercase focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                       />
                     </div>
                   </div>
@@ -540,7 +540,7 @@ export default function UniversalProfilePage() {
                 {/* Avatar Selection: Cat Avatars & Custom Upload */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                    <label className="block text-xs font-medium text-slate-700">
                       Profile Avatar
                     </label>
                     <button
@@ -550,7 +550,7 @@ export default function UniversalProfilePage() {
                       className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200"
                     >
                       <Upload className="w-3.5 h-3.5 text-slate-500" />
-                      <span>{uploadingImage ? 'Processing...' : 'Upload Custom Picture'}</span>
+                      <span>{uploadingImage ? 'Processing…' : 'Upload Custom Picture'}</span>
                     </button>
                     <input
                       ref={fileInputRef}
@@ -574,7 +574,7 @@ export default function UniversalProfilePage() {
                             key={idx}
                             type="button"
                             onClick={() => setAvatarUrl(cat.url)}
-                            className={`flex flex-col items-center p-1.5 rounded-xl border-2 transition-all ${
+                            className={`flex flex-col items-center p-1.5 rounded-xl border-2 transition-colors ${
                               isSelected
                                 ? 'border-brand-600 bg-brand-50/50 shadow-xs ring-2 ring-brand-100 scale-105'
                                 : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -606,22 +606,22 @@ export default function UniversalProfilePage() {
                       type="url"
                       value={avatarUrl}
                       onChange={(e) => setAvatarUrl(e.target.value)}
-                      placeholder="https://..."
+                      placeholder="https://…"
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     Short Bio
                   </label>
                   <textarea
                     rows={3}
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    placeholder="Role description, WhatsApp availability, or team notes..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                    placeholder="Role description, WhatsApp availability, or team notes…"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                   />
                 </div>
 
@@ -629,10 +629,10 @@ export default function UniversalProfilePage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm shadow-md shadow-brand-200 transition-all disabled:opacity-50"
+                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm shadow-md shadow-brand-200 transition-colors disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{saving ? 'Saving changes...' : 'Save Profile'}</span>
+                    <span>{saving ? 'Saving changes…' : 'Save Profile'}</span>
                   </button>
                 </div>
               </form>
@@ -655,7 +655,7 @@ export default function UniversalProfilePage() {
               <form onSubmit={handleSaveProfile} className="space-y-5">
                 {/* Method selector */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-2">
                     Preferred Payout Method *
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -672,7 +672,7 @@ export default function UniversalProfilePage() {
                           key={m.id}
                           type="button"
                           onClick={() => setPaymentMethod(m.id as any)}
-                          className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center space-y-1.5 ${
+                          className={`p-3 rounded-xl border text-center transition-colors flex flex-col items-center space-y-1.5 ${
                             isSel
                               ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-100 font-bold text-emerald-900'
                               : 'border-slate-200 hover:border-slate-300 text-slate-700'
@@ -688,7 +688,7 @@ export default function UniversalProfilePage() {
 
                 {/* Account / Mobile number */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     {paymentMethod === 'bank' ? 'Bank Account Number *' : `${paymentMethod.toUpperCase()} Personal Number *`}
                   </label>
                   <input
@@ -696,7 +696,7 @@ export default function UniversalProfilePage() {
                     value={accountNumber}
                     onChange={(e) => setAccountNumber(e.target.value)}
                     placeholder={paymentMethod === 'bank' ? '1234567890123' : '017XXXXXXXX'}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-colors"
                   />
                 </div>
 
@@ -704,7 +704,7 @@ export default function UniversalProfilePage() {
                 {paymentMethod === 'bank' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
                         Account Holder Name *
                       </label>
                       <input
@@ -716,7 +716,7 @@ export default function UniversalProfilePage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
                         Bank Name *
                       </label>
                       <input
@@ -728,7 +728,7 @@ export default function UniversalProfilePage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
                         Branch Name
                       </label>
                       <input
@@ -740,7 +740,7 @@ export default function UniversalProfilePage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
                         Routing Number
                       </label>
                       <input
@@ -758,10 +758,10 @@ export default function UniversalProfilePage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-200 transition-all disabled:opacity-50"
+                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-200 transition-colors disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{saving ? 'Saving...' : 'Save Payment Information'}</span>
+                    <span>{saving ? 'Saving…' : 'Save Payment Information'}</span>
                   </button>
                 </div>
               </form>
@@ -798,7 +798,7 @@ export default function UniversalProfilePage() {
               <form onSubmit={handleUpdatePassword} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       New Password
                     </label>
                     <div className="relative">
@@ -810,13 +810,13 @@ export default function UniversalProfilePage() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       Confirm New Password
                     </label>
                     <div className="relative">
@@ -828,7 +828,7 @@ export default function UniversalProfilePage() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
                       />
                     </div>
                   </div>
@@ -838,10 +838,10 @@ export default function UniversalProfilePage() {
                   <button
                     type="submit"
                     disabled={updatingPassword || !newPassword}
-                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md transition-all disabled:opacity-50"
+                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md transition-colors disabled:opacity-50"
                   >
                     <ShieldCheck className="w-4 h-4" />
-                    <span>{updatingPassword ? 'Updating...' : 'Update Password'}</span>
+                    <span>{updatingPassword ? 'Updating…' : 'Update Password'}</span>
                   </button>
                 </div>
               </form>
