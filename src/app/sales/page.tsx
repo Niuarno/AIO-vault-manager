@@ -114,9 +114,27 @@ export default function SalesDashboard() {
   const [submittingPayout, setSubmittingPayout] = useState(false);
   const [lightboxScreenshot, setLightboxScreenshot] = useState<{ url: string; title: string } | null>(null);
 
-  // New Order Modal State
+  // New Order Modal State with Apple Minimization Animation
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+
+  const handleCloseModal = () => {
+    setIsModalClosing(true);
+    setTimeout(() => {
+      setIsModalOpen(false);
+      setIsModalClosing(false);
+    }, 240);
+  };
+
+  useEffect(() => {
+    const handleOpenOrder = () => setIsModalOpen(true);
+    window.addEventListener('boyon:open-create-order', handleOpenOrder);
+    if (typeof window !== 'undefined' && window.location.search.includes('create=1')) {
+      setIsModalOpen(true);
+    }
+    return () => window.removeEventListener('boyon:open-create-order', handleOpenOrder);
+  }, []);
   const [source, setSource] = useState<OrderSource>('whatsapp');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -542,8 +560,8 @@ export default function SalesDashboard() {
         origin: { y: 0.6 },
       });
 
-      // Reset Form & Close
-      setIsModalOpen(false);
+      // Reset Form & Close with minimization animation
+      handleCloseModal();
       setCustomerName('');
       setCustomerPhone('');
       setShippingAddress('');
@@ -933,6 +951,7 @@ export default function SalesDashboard() {
         activeTab={activeTab}
         onTabChange={(tab: any) => setActiveTab(tab)}
         isOnline={isOnline}
+        onCreateOrder={() => setIsModalOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6">
@@ -2748,11 +2767,25 @@ export default function SalesDashboard() {
         </div>
       )}
 
-      {/* CREATE ORDER MODAL */}
+      {/* CREATE ORDER MODAL with Apple Minimization & Sheet Spring Animation */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50  animate-in fade-in p-2.5 sm:p-4">
-          <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
-            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl relative my-auto">
+        <div
+          className={`fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-2.5 sm:p-4 flex items-center justify-center ${
+            isModalClosing ? 'animate-apple-backdrop-out pointer-events-none' : 'animate-apple-backdrop-in'
+          }`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleCloseModal();
+          }}
+        >
+          <div className="min-h-full w-full flex items-center justify-center py-4 sm:py-8">
+            <div
+              className={`bg-white border border-slate-200/90 rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl relative my-auto ${
+                isModalClosing ? 'animate-apple-sheet-close' : 'animate-apple-sheet-open'
+              }`}
+            >
+              {/* iOS Sheet Drag Handle (Mobile only) */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mt-2.5 mb-1 md:hidden" />
+
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div>
                   <h3 className="font-bold text-base text-slate-900">
@@ -2764,8 +2797,9 @@ export default function SalesDashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
+                  onClick={handleCloseModal}
+                  className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200/70 transition-transform active:scale-90 motion-reduce:transition-none cursor-pointer"
+                  title="Close (Minimize)"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -3276,8 +3310,8 @@ export default function SalesDashboard() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setIsModalOpen(false)}
-                          className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-colors text-center"
+                          onClick={handleCloseModal}
+                          className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-transform active:scale-[0.98] motion-reduce:transition-none text-center cursor-pointer"
                         >
                           Cancel
                         </button>

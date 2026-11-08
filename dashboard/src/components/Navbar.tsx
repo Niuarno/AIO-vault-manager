@@ -20,6 +20,7 @@ import {
   DollarSign,
   BarChart3,
   Calendar,
+  Plus,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile, UserRole } from '@/types/database';
@@ -31,6 +32,7 @@ interface NavbarProps {
   onTabChange?: (tab: string) => void;
   tabBadges?: Record<string, number | string | undefined>;
   isOnline?: boolean;
+  onCreateOrder?: () => void;
 }
 
 export default function Navbar({
@@ -39,6 +41,7 @@ export default function Navbar({
   onTabChange,
   tabBadges = {},
   isOnline,
+  onCreateOrder,
 }: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -129,6 +132,31 @@ export default function Navbar({
   ];
 
   const navItems = role === 'admin' ? adminNavItems : role === 'packing' ? packingNavItems : salesNavItems;
+
+  const handleOpenCreateOrder = () => {
+    if (onCreateOrder) {
+      onCreateOrder();
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('boyon:open-create-order'));
+      if (pathname !== '/sales') {
+        router.push('/sales?create=1');
+      }
+    }
+  };
+
+  const leftNavItems =
+    role === 'sales'
+      ? salesNavItems.slice(0, 2)
+      : role === 'packing'
+      ? packingNavItems.slice(0, 1)
+      : adminNavItems.slice(0, 2);
+
+  const rightNavItems =
+    role === 'sales'
+      ? salesNavItems.slice(2, 4)
+      : role === 'packing'
+      ? packingNavItems.slice(1, 2)
+      : [adminNavItems[2], adminNavItems[5]];
 
   return (
     <>
@@ -433,13 +461,14 @@ export default function Navbar({
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Bar (Native App Dock) */}
+      {/* Mobile Bottom Navigation Bar (Native App Dock with Center Create Action) */}
       <nav
         aria-label="Mobile Bottom App Bar"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-paper-2 border-t border-rule shadow-lg pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="grid grid-flow-col auto-cols-fr h-14 items-center px-1">
-          {navItems.slice(0, 5).map((item) => {
+        <div className="flex items-center justify-around h-16 px-1.5 relative max-w-lg mx-auto">
+          {/* Left Navigation Items */}
+          {leftNavItems.map((item) => {
             const Icon = item.icon;
             const isCurrentActive =
               activeTab !== undefined
@@ -455,7 +484,7 @@ export default function Navbar({
                 key={item.key}
                 type="button"
                 onClick={() => onTabChange(item.key)}
-                className={`flex flex-col items-center justify-center py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
+                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
                   isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
                 }`}
               >
@@ -467,7 +496,7 @@ export default function Navbar({
                     </span>
                   ) : null}
                 </div>
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[64px]">
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
                   {item.label}
                 </span>
               </button>
@@ -475,12 +504,77 @@ export default function Navbar({
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex flex-col items-center justify-center py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
+                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
                   isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
                 }`}
               >
                 <Icon className="w-5 h-5" aria-hidden="true" />
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[64px]">
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* Center Elevated Create Order Action Button */}
+          <div className="flex flex-col items-center justify-center -mt-6 px-1 shrink-0 z-10">
+            <button
+              type="button"
+              onClick={handleOpenCreateOrder}
+              className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white shadow-lg shadow-orange-600/35 ring-4 ring-paper-2 flex items-center justify-center transition-transform active:scale-90 motion-reduce:transition-none cursor-pointer group"
+              title="Create New Order"
+              aria-label="Create New Order"
+            >
+              <Plus className="w-7 h-7 stroke-[2.75] transition-transform duration-200 group-hover:rotate-90 motion-reduce:transition-none" />
+            </button>
+            <span className="text-[10px] font-bold text-orange-600 mt-0.5 tracking-tight">
+              Create
+            </span>
+          </div>
+
+          {/* Right Navigation Items */}
+          {rightNavItems.map((item) => {
+            const Icon = item.icon;
+            const isCurrentActive =
+              activeTab !== undefined
+                ? activeTab === item.key
+                : pathname === item.href || pathname.startsWith(`${item.href}?`);
+
+            return onTabChange &&
+              (pathname === '/admin' || pathname === '/sales') &&
+              item.href !== '/admin/analytics' &&
+              item.href !== '/admin/daily-products' &&
+              item.href !== '/packing/daily-products' ? (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onTabChange(item.key)}
+                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
+                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                <div className="relative">
+                  <Icon className="w-5 h-5" aria-hidden="true" />
+                  {tabBadges[item.key] ? (
+                    <span className="absolute -top-1 -right-2 w-3.5 h-3.5 bg-orange-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+                      {tabBadges[item.key]}
+                    </span>
+                  ) : null}
+                </div>
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
+                  {item.label}
+                </span>
+              </button>
+            ) : (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
+                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                <Icon className="w-5 h-5" aria-hidden="true" />
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
                   {item.label}
                 </span>
               </Link>

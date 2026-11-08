@@ -78,3 +78,84 @@ body {
     transform: none;
   }
 }
+
+/* Apple Minimization & Sheet Spring Animations */
+@keyframes appleSheetOpen {
+  0% {
+    opacity: 0;
+    transform: scale(0.86) translateY(32px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.015) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes appleSheetClose {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.86) translateY(32px);
+  }
+}
+
+@keyframes appleBackdropFadeIn {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+  }
+}
+
+@keyframes appleBackdropFadeOut {
+  0% {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+  }
+  100% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+.animate-apple-sheet-open {
+  animation: appleSheetOpen 400ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-apple-sheet-close {
+  animation: appleSheetClose 240ms cubic-bezier(0.32, 0, 0.67, 0) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-apple-backdrop-in {
+  animation: appleBackdropFadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-apple-backdrop-out {
+  animation: appleBackdropFadeOut 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-apple-sheet-open,
+  .animate-apple-sheet-close {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .animate-apple-backdrop-in,
+  .animate-apple-backdrop-out {
+    animation: none;
+    opacity: 1;
+  }
+}
