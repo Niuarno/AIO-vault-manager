@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useRef } from 'react';
 import { Wallet, Upload, Camera, CheckCircle2, AlertCircle, X, ExternalLink } from 'lucide-react';
@@ -132,7 +132,7 @@ export default function ProcessPayoutModal({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-600 font-medium">Payout Method:</span>
-              <span className="font-bold text-emerald-800 uppercase px-2 py-0.5 rounded bg-emerald-100">
+              <span className="font-semibold text-emerald-800 px-2 py-0.5 rounded bg-emerald-100">
                 {payout.payment_method}
               </span>
             </div>
@@ -150,7 +150,7 @@ export default function ProcessPayoutModal({
 
           {/* Screenshot Upload Zone */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Proof of Payment Screenshot *
             </label>
 
@@ -188,7 +188,7 @@ export default function ProcessPayoutModal({
 
           {/* Transaction Note */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Admin Transaction ID / Notes (Optional)
             </label>
             <input
@@ -214,10 +214,10 @@ export default function ProcessPayoutModal({
             type="button"
             onClick={handleApprove}
             disabled={saving}
-            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-200 transition-all disabled:opacity-50 flex items-center space-x-1.5"
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-200 transition-colors disabled:opacity-50 flex items-center space-x-1.5"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{saving ? 'Approving...' : 'Approve & Mark Paid'}</span>
+            <span>{saving ? 'Approving…' : 'Approve & Mark Paid'}</span>
           </button>
         </div>
       </div>

@@ -6,6 +6,8 @@ import Navbar from '@/components/Navbar';
 import confetti from 'canvas-confetti';
 import {
   ShoppingBag,
+  Copy,
+  Check,
   PlusCircle,
   Boxes,
   Award,
@@ -74,19 +76,24 @@ export default function SalesDashboard() {
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'rewards' | 'payouts'>('orders');
 
-  // Orders State
+  // Orders State & Pagination
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [orderSourceFilter, setOrderSourceFilter] = useState('all');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(25);
+  const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
   const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
   const [editingCustomerOrder, setEditingCustomerOrder] = useState<Order | null>(null);
 
-  // Live Inventory State
+  // Live Inventory State & Pagination
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [invPage, setInvPage] = useState(1);
+  const [invPageSize, setInvPageSize] = useState(30);
 
   // Rewards State
   const [rewards, setRewards] = useState<UpsellReward[]>([]);
@@ -774,7 +781,7 @@ export default function SalesDashboard() {
           : o.status === orderStatusFilter;
       const matchSource =
         orderSourceFilter === 'all' ? true : o.source === orderSourceFilter;
-      const q = orderSearch.toLowerCase();
+      const q = orderSearch.toLowerCase().trim();
       const matchQuery =
         !q ||
         o.order_number.toLowerCase().includes(q) ||
@@ -784,6 +791,33 @@ export default function SalesDashboard() {
       return matchStatus && matchSource && matchQuery;
     });
   }, [orders, orderStatusFilter, orderSourceFilter, orderSearch]);
+
+  // Reset pagination on search / filter changes
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch, orderStatusFilter, orderSourceFilter]);
+
+  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / orderPageSize));
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * orderPageSize;
+    return filteredOrders.slice(start, start + orderPageSize);
+  }, [filteredOrders, orderPage, orderPageSize]);
+
+  // Copy order number helper
+  const handleCopyOrderNumber = (num: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(num);
+      setCopiedOrderNumber(num);
+      setTimeout(() => setCopiedOrderNumber(null), 2000);
+    }
+  };
+
+  // Safe WhatsApp link generator for Bangladesh phone numbers
+  const getWhatsAppUrl = (phone: string) => {
+    const digits = phone.replace(/[^0-9]/g, '');
+    const cleanNumber = digits.startsWith('880') ? digits : digits.startsWith('0') ? '88' + digits : '880' + digits;
+    return `https://wa.me/${cleanNumber}`;
+  };
 
   // Monthly Performance Graph Data (all days of selected month/year)
   const performanceGraphData = useMemo(() => {
@@ -828,13 +862,23 @@ export default function SalesDashboard() {
     return variants.filter((v) => {
       const product = v.product as any;
       if (product?.is_archived) return false;
-      const q = inventorySearch.toLowerCase();
+      const q = inventorySearch.toLowerCase().trim();
       const matchName = product?.name?.toLowerCase().includes(q) || product?.title?.toLowerCase().includes(q);
       const matchSku = (v.sku?.toLowerCase() || '').includes(q);
       const matchVariant = (v.title?.toLowerCase() || '').includes(q);
       return !q || matchName || matchSku || matchVariant;
     });
   }, [variants, inventorySearch]);
+
+  useEffect(() => {
+    setInvPage(1);
+  }, [inventorySearch]);
+
+  const totalInvPages = Math.max(1, Math.ceil(filteredVariants.length / invPageSize));
+  const paginatedVariants = useMemo(() => {
+    const start = (invPage - 1) * invPageSize;
+    return filteredVariants.slice(start, start + invPageSize);
+  }, [filteredVariants, invPage, invPageSize]);
 
   // Get Clean Status Badge Dot & Color
   const getCleanStatusBadge = (status: OrderStatus) => {
@@ -883,7 +927,7 @@ export default function SalesDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-orange-100 selection:text-orange-900">
       <Navbar
         currentProfile={currentProfile}
         activeTab={activeTab}
@@ -891,7 +935,7 @@ export default function SalesDashboard() {
         isOnline={isOnline}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6">
         {/* Top Presence & Staff Identity Bar */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -923,7 +967,7 @@ export default function SalesDashboard() {
                 >
                   <span className="relative flex h-2 w-2">
                     {isOnline && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     )}
                     <span
                       className={`relative inline-flex rounded-full h-2 w-2 ${
@@ -972,7 +1016,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Today's Earnings
                 </span>
                 <DailyResetCountdown variant="kpi" />
@@ -990,7 +1034,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Piggybank Balance
                 </span>
                 {totalPendingPayouts > 0 ? (
@@ -1016,7 +1060,7 @@ export default function SalesDashboard() {
                   setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>Request Payout</span>
@@ -1028,7 +1072,7 @@ export default function SalesDashboard() {
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-medium text-slate-500">
                   Total Settled & Paid
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
@@ -1084,7 +1128,7 @@ export default function SalesDashboard() {
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-3">
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
                     Today's Non-Website Sales
                   </span>
                   <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1093,8 +1137,8 @@ export default function SalesDashboard() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-                    Unlocked Extra Commission
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
+                    Extra Commission
                   </span>
                   <div className="text-base sm:text-xl font-extrabold text-amber-600 font-mono mt-0.5 flex items-baseline sm:items-center gap-1 flex-wrap">
                     {unlockedOtherTier ? (
@@ -1129,7 +1173,7 @@ export default function SalesDashboard() {
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 sm:h-2.5 overflow-hidden border border-slate-200/60">
                   <div
-                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                    className="bg-amber-500 h-full rounded-full transition-colors duration-500"
                     style={{ width: `${otherQuotaProgress}%` }}
                   />
                 </div>
@@ -1162,7 +1206,7 @@ export default function SalesDashboard() {
             <div>
               <div className="flex items-start sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-50 border border-orange-200/60 flex items-center justify-center shrink-0">
                     <WebsiteFlatIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   <div className="min-w-0">
@@ -1170,7 +1214,7 @@ export default function SalesDashboard() {
                       <h3 className="font-bold text-slate-900 text-sm truncate">
                         Website Sales Milestones
                       </h3>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200/60 shrink-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-900 bg-orange-50 px-1.5 py-0.5 rounded-full border border-orange-200/60 shrink-0">
                         <Clock className="w-2.5 h-2.5 text-emerald-600" /> 12 AM
                       </span>
                     </div>
@@ -1187,14 +1231,14 @@ export default function SalesDashboard() {
                   }}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer shrink-0"
                 >
-                  <Award className="w-3.5 h-3.5 text-emerald-600" />
+                  <Award className="w-3.5 h-3.5 text-orange-600" />
                   <span>Milestones</span>
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-3">
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
                     Today's Website Sales
                   </span>
                   <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1203,15 +1247,15 @@ export default function SalesDashboard() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-                    Unlocked Extra Commission
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400  block truncate">
+                    Extra Commission
                   </span>
-                  <div className="text-base sm:text-xl font-extrabold text-emerald-600 font-mono mt-0.5 flex items-baseline sm:items-center gap-1 flex-wrap">
+                  <div className="text-base sm:text-xl font-extrabold text-orange-600 font-mono mt-0.5 flex items-baseline sm:items-center gap-1 flex-wrap">
                     {unlockedWebsiteTier ? (
                       <>
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0 self-center" />
+                        <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0 self-center" />
                         <span>+৳{unlockedWebsiteTier.bonus.toLocaleString()}</span>
-                        <span className="text-[11px] sm:text-xs font-semibold text-emerald-800 font-sans whitespace-nowrap">
+                        <span className="text-[11px] sm:text-xs font-semibold text-orange-900 font-sans whitespace-nowrap">
                           ({unlockedWebsiteTier.name})
                         </span>
                       </>
@@ -1239,7 +1283,7 @@ export default function SalesDashboard() {
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 sm:h-2.5 overflow-hidden border border-slate-200/60">
                   <div
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                    className="bg-orange-500 h-full rounded-full transition-colors duration-500"
                     style={{ width: `${websiteQuotaProgress}%` }}
                   />
                 </div>
@@ -1291,7 +1335,7 @@ export default function SalesDashboard() {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-transform motion-reduce:transition-none cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Create New Order</span>
@@ -1307,10 +1351,10 @@ export default function SalesDashboard() {
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search customer, phone, order #..."
+                  placeholder="Search customer, phone, order #…"
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
               </div>
 
@@ -1320,7 +1364,7 @@ export default function SalesDashboard() {
                   <select
                     value={orderStatusFilter}
                     onChange={(e) => setOrderStatusFilter(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                   >
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -1337,7 +1381,7 @@ export default function SalesDashboard() {
                 <select
                   value={orderSourceFilter}
                   onChange={(e) => setOrderSourceFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 >
                   <option value="all">All Sources</option>
                   <option value="website">Website</option>
@@ -1349,449 +1393,868 @@ export default function SalesDashboard() {
               </div>
             </div>
 
-            {/* Orders Table */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="p-4">Order ID & Source</th>
-                      <th className="p-4">Customer Details</th>
-                      <th className="p-4">Items / Total</th>
-                      <th className="p-4">Assigned Staff</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {loadingOrders ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
-                          Loading orders...
-                        </td>
-                      </tr>
-                    ) : filteredOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
-                          No orders recorded yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredOrders.map((order) => {
-                        const isMyOrder = order.sales_rep_id === currentProfile?.id;
-                        const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
-                        const isHandedOver = isHandedOverToSteadfast(order);
-                        const canEditCustomer = (isMyOrder || currentProfile?.role === 'admin') && !isHandedOver;
-                        const hasUpsell = order.order_items?.some((i) => i.is_upsell);
-                        const hasReachout = Boolean(
-                          (order as any).is_reachout ||
-                          order.note?.toLowerCase().includes('reachout') ||
-                          order.order_items?.some((i: any) => i.is_reachout) ||
-                          (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
-                        );
-                        const statusBadge = getCleanStatusBadge(order.status);
+            {/* Orders List: Dual-Mode Mobile Cards + Desktop Table */}
+            {loadingOrders ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mb-3" />
+                <p className="text-slate-600 font-medium text-sm">Loading orders…</p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center mx-auto mb-3 text-orange-600">
+                  <ShoppingBag className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">No orders found</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  {orderSearch || orderStatusFilter !== 'all' || orderSourceFilter !== 'all'
+                    ? 'No orders match your current search query or active filter.'
+                    : 'No orders have been recorded yet. Click Create New Order to start.'}
+                </p>
+                {(orderSearch || orderStatusFilter !== 'all' || orderSourceFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderSearch('');
+                      setOrderStatusFilter('all');
+                      setOrderSourceFilter('all');
+                    }}
+                    className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* 1. Mobile Cards View (< md) */}
+                <div className="block md:hidden space-y-3.5">
+                  {paginatedOrders.map((order) => {
+                    const isMyOrder = order.sales_rep_id === currentProfile?.id;
+                    const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
+                    const isHandedOver = isHandedOverToSteadfast(order);
+                    const canEditCustomer = (isMyOrder || currentProfile?.role === 'admin') && !isHandedOver;
+                    const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                    const hasReachout = Boolean(
+                      (order as any).is_reachout ||
+                      order.note?.toLowerCase().includes('reachout') ||
+                      order.order_items?.some((i: any) => i.is_reachout) ||
+                      (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                    );
+                    const statusBadge = getCleanStatusBadge(order.status);
+                    const disc = getOrderDiscount(order);
+                    const adv = getOrderAdvance(order);
+                    const cod = Math.max(0, order.total_amount - adv);
 
-                        return (
-                          <tr
-                            key={order.id}
-                            className={`hover:bg-slate-50/70 transition-colors ${
-                              isMyOrder ? 'bg-emerald-50/20' : ''
-                            }`}
-                          >
-                            <td className="p-4">
-                              <div className="font-mono font-bold text-slate-900">
-                                {order.order_number}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-4 h-4" />}
-                                {order.source === 'messenger' && <MessengerFlatIcon className="w-4 h-4" />}
-                                {order.source === 'phone' && <PhoneCallFlatIcon className="w-4 h-4" />}
-                                {order.source === 'manual' && <WalkInFlatIcon className="w-4 h-4" />}
-                                <span className="text-xs text-slate-500 font-medium capitalize">
-                                  {order.source}
-                                </span>
-                                <span className="text-slate-300">&middot;</span>
-                                <span className="text-[11px] text-slate-400">
-                                  {formatDate(order.created_at)}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="p-4">
-                              <div className="font-semibold text-slate-900">
-                                {order.customer_name}
-                              </div>
-                              <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                <Phone className="w-3 h-3 text-slate-400" />
-                                <span>{order.customer_phone}</span>
-                              </div>
-                              {order.shipping_address && (
-                                <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5" title={order.shipping_address}>
-                                  {order.shipping_address}
-                                </div>
-                              )}
-                              {isOrderOutOfStock(order) && (
-                                <div className="mt-1">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
-                                    <Clock className="w-3 h-3 text-amber-600" />
-                                    Out of Stock (Delay Agreement)
-                                  </span>
-                                </div>
-                              )}
-                              {Boolean(order.consignment_id || order.tracking_code) && (
-                                <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
-                                  <Truck className="w-3 h-3 text-indigo-500" />
-                                  <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
-                                </div>
-                              )}
-
-                              {/* Customer Details Edit Action or Locked Indicator */}
-                              <div className="mt-1.5 flex items-center gap-1.5">
-                                {isHandedOver ? (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-2xs cursor-not-allowed"
-                                    title={`Customer details locked: Order #${order.order_number} has already been handed over to Steadfast Courier.`}
-                                  >
-                                    <Lock className="w-2.5 h-2.5 text-slate-400" />
-                                    <span>Locked with Courier</span>
-                                  </span>
-                                ) : canEditCustomer ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingCustomerOrder(order)}
-                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 px-2 py-0.5 rounded-md transition-colors cursor-pointer shadow-2xs"
-                                    title="Edit customer name, phone, delivery address, or note"
-                                  >
-                                    <Pencil className="w-3 h-3 text-emerald-600" />
-                                    <span>Edit Details</span>
-                                  </button>
-                                ) : isOtherStaffOrder ? (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400"
-                                    title="Assigned to another staff member (Read-only)"
-                                  >
-                                    <Lock className="w-2.5 h-2.5 text-slate-300" />
-                                    <span>Other Staff</span>
-                                  </span>
-                                ) : null}
-                              </div>
-                            </td>
-
-                            <td className="p-4">
-                              {(() => {
-                                const disc = getOrderDiscount(order);
-                                const adv = getOrderAdvance(order);
-                                const cod = Math.max(0, order.total_amount - adv);
-
-                                return (
-                                  <>
-                                    <div className="flex flex-col">
-                                      {adv > 0 ? (
-                                        <div className="space-y-0.5">
-                                          <div className="flex items-center gap-1.5 font-mono">
-                                            <span className="font-bold text-slate-900 text-sm">
-                                              COD: {formatCurrency(cod)}
-                                            </span>
-                                          </div>
-                                          <div className="text-[11px] text-slate-400 font-mono">
-                                            Total: {formatCurrency(order.total_amount)}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="font-semibold text-slate-900 font-mono">
-                                          {formatCurrency(order.total_amount)}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                                      <span>{order.order_items?.length || 0} items</span>
-                                      {hasUpsell && (
-                                        <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
-                                          Upsell
-                                        </span>
-                                      )}
-                                      {hasReachout && (
-                                        <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
-                                          Reachout
-                                        </span>
-                                      )}
-                                      {disc > 0 && (
-                                        <span
-                                          className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
-                                          title={`Discount applied: -৳${disc.toLocaleString()}`}
-                                        >
-                                          Disc: -৳{disc.toLocaleString()}
-                                        </span>
-                                      )}
-                                      {adv > 0 && (
-                                        <span
-                                          className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
-                                          title={`Advance paid: ৳${adv.toLocaleString()}`}
-                                        >
-                                          Adv: ৳{adv.toLocaleString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </td>
-
-                            <td className="p-4">
-                              {isMyOrder ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/70 text-xs font-semibold">
-                                  Assigned to You
-                                </span>
-                              ) : order.sales_rep_id ? (
-                                <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
-                                  <span>Other Staff</span>
-                                  <Lock className="w-3 h-3 text-slate-400" />
-                                </span>
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white rounded-2xl border p-4 shadow-xs transition-shadow space-y-3 ${
+                          isMyOrder ? 'border-orange-300/90 bg-orange-50/15' : 'border-slate-200/90'
+                        }`}
+                      >
+                        {/* Header: Order ID, Source, Date & Status */}
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyOrderNumber(order.order_number)}
+                              className="font-mono font-bold text-slate-900 text-sm hover:text-orange-600 transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Click to copy order number"
+                            >
+                              <span>{order.order_number}</span>
+                              {copiedOrderNumber === order.order_number ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
                               ) : (
-                                <span className="text-xs text-slate-400">Unassigned</span>
+                                <Copy className="w-3 h-3 text-slate-400 opacity-60" />
                               )}
-                            </td>
+                            </button>
+                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium shrink-0">
+                              {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'messenger' && <MessengerFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'phone' && <PhoneCallFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'manual' && <WalkInFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'website' && <WebsiteFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              <span className="capitalize text-[11px]">{order.source}</span>
+                            </div>
+                          </div>
 
-                            <td className="p-4">
-                              {isOtherStaffOrder ? (
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200/80 shadow-2xs"
-                                  title="Assigned to another staff member. Only they or an administrator can update status."
-                                >
-                                  <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
-                                  <span>{statusBadge.label}</span>
-                                  <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
-                                </span>
-                              ) : order.status === 'pending' || order.status === 'not_reachable' ? (
-                                <div className="space-y-1.5">
-                                  <div className="relative inline-block">
-                                    <select
-                                      value={order.status}
-                                      onChange={(e) => {
-                                        const val = e.target.value as OrderStatus;
-                                        if (val === 'confirmed' && isOrderOutOfStock(order)) {
-                                          const proceed = window.confirm(
-                                            '⚠️ Warning: This order contains OUT-OF-STOCK items!\n\nIf the customer agreed to wait for the shipment, please select "Confirm Delayed Delivery" instead.\n\nDo you still want to force normal confirmation to packing?'
-                                          );
-                                          if (!proceed) return;
-                                        }
-                                        const note =
-                                          val === 'delayed_delivery'
-                                            ? 'Customer agreed to delayed delivery'
-                                            : val === 'canceled'
-                                            ? 'Customer refused delayed delivery (Stockout)'
-                                            : undefined;
-                                        handleStatusChange(order.id, val, note);
-                                      }}
-                                      className="text-xs font-semibold pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-                                    >
-                                      <option value="pending">Pending</option>
-                                      <option value="not_reachable">Not Reachable</option>
-                                      <option value="confirmed">Confirm Order (In Stock)</option>
-                                      <option value="delayed_delivery">🕒 Confirm Delayed Delivery</option>
-                                      <option value="canceled">❌ Refused Delay (Decline)</option>
-                                    </select>
-                                    <span
-                                      className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
-                                    />
-                                  </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                                order.status === 'delivered'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : order.status === 'confirmed'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : order.status === 'delayed_delivery'
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                  : order.status === 'canceled'
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
+                              <span>{statusBadge.label}</span>
+                            </span>
+                          </div>
+                        </div>
 
-                                  {/* 1-Click Quick Action Buttons (Simple, no extra fields) */}
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          order.id,
-                                          'delayed_delivery',
-                                          'Customer agreed to delayed delivery'
-                                        )
-                                      }
-                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
-                                      title="1-Click: Customer agreed to wait for delayed delivery"
-                                    >
-                                      <Clock className="w-3 h-3 text-amber-600" />
-                                      Delay Agreed
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          order.id,
-                                          'canceled',
-                                          'Customer refused delayed delivery (Stockout)'
-                                        )
-                                      }
-                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
-                                      title="1-Click: Customer refused delay due to stockout"
-                                    >
-                                      <XCircle className="w-3 h-3 text-rose-500" />
-                                      Refused Delay
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : order.status === 'delayed_delivery' ? (
-                                <div className="space-y-1.5">
-                                  <span
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
-                                    title="Delayed delivery agreed. Order will automatically release to packing upon restock."
-                                  >
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                    <span>Delayed Delivery</span>
-                                  </span>
-                                  {!isOtherStaffOrder && (
-                                    <div>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (window.confirm('Cancel this delayed delivery order (Customer called to cancel)?')) {
-                                            handleStatusChange(order.id, 'canceled', 'Customer canceled delayed delivery');
-                                          }
-                                        }}
-                                        className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer"
-                                      >
-                                        <XCircle className="w-3 h-3 text-rose-500" />
-                                        Cancel Order
-                                      </button>
-                                    </div>
+                        {/* Customer Information & Direct 1-Tap Contact Action Bar */}
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-slate-900 text-sm truncate">{order.customer_name}</h4>
+                              <p className="text-xs text-slate-500 font-mono mt-0.5">{order.customer_phone}</p>
+                            </div>
+                            <span className="text-[11px] text-slate-400 shrink-0 font-medium">
+                              {formatDate(order.created_at)}
+                            </span>
+                          </div>
+
+                          {order.shipping_address && (
+                            <p className="text-xs text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-100 leading-relaxed">
+                              {order.shipping_address}
+                            </p>
+                          )}
+
+                          {isOrderOutOfStock(order) && (
+                            <div className="p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs font-semibold flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Out of stock item (Customer delay agreement required)</span>
+                            </div>
+                          )}
+
+                          {Boolean(order.consignment_id || order.tracking_code) && (
+                            <div className="flex items-center gap-1.5 text-xs font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/70 rounded-xl px-2.5 py-1 w-fit">
+                              <Truck className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                            </div>
+                          )}
+
+                          {/* Direct Mobile Quick Actions (Call & WhatsApp) */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <a
+                              href={`tel:${order.customer_phone}`}
+                              className="min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs transition-colors active:scale-[0.98] motion-reduce:transition-none"
+                            >
+                              <Phone className="w-4 h-4 text-slate-600" />
+                              <span>Call Customer</span>
+                            </a>
+                            <a
+                              href={getWhatsAppUrl(order.customer_phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition-colors active:scale-[0.98] motion-reduce:transition-none"
+                            >
+                              <WhatsAppFlatIcon className="w-4 h-4" />
+                              <span>WhatsApp</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Items Breakdown */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-xs font-bold text-slate-500">
+                            Ordered Items ({order.order_items?.length || 0})
+                          </div>
+                          <div className="space-y-1">
+                            {order.order_items?.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between text-xs bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold text-orange-600 shrink-0">{item.quantity}x</span>
+                                  <span className="text-slate-800 font-medium truncate">{item.title}</span>
+                                  {item.variant_title && item.variant_title !== 'Default Title' && (
+                                    <span className="text-slate-500 text-[11px] shrink-0">({item.variant_title})</span>
+                                  )}
+                                  {item.is_upsell && (
+                                    <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] shrink-0">
+                                      Upsell
+                                    </span>
                                   )}
                                 </div>
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs"
-                                  title="Confirmed orders are locked for sales staff. Contact an admin to adjust status."
-                                >
-                                  <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
-                                  <span>{statusBadge.label}</span>
-                                  <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                <span className="font-mono font-semibold text-slate-700 shrink-0">
+                                  {formatCurrency(item.price * item.quantity)}
                                 </span>
-                              )}
-                            </td>
-
-                            <td className="p-4 text-right">
-                              <div className="inline-flex items-center gap-1.5 justify-end">
-                                {isHandedOver ? (
-                                  <button
-                                    type="button"
-                                    disabled
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200/80 cursor-not-allowed"
-                                    title={`Customer details locked: Parcel #${order.order_number} has already been handed over to Steadfast Courier.`}
-                                  >
-                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="hidden sm:inline">Locked</span>
-                                  </button>
-                                ) : canEditCustomer ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingCustomerOrder(order)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200/80 transition-colors cursor-pointer shadow-2xs"
-                                    title="Edit customer details (name, phone, address, notes)"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span className="hidden sm:inline">Customer</span>
-                                  </button>
-                                ) : null}
-
-                                <button
-                                  onClick={() => setEditingOrderForItems(order)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
-                                  title={isOtherStaffOrder ? 'Assigned to another staff member (Read-only)' : 'Edit items & view history'}
-                                >
-                                  <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
-                                  <span>{isOtherStaffOrder ? 'View' : 'Items'}</span>
-                                  {isOtherStaffOrder && <Lock className="w-3 h-3 text-slate-400" />}
-                                </button>
                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+                            ))}
+                          </div>
+                        </div>
 
-        {/* TAB 2: INVENTORY */}
+                        {/* Financial Summary */}
+                        <div className="flex items-center justify-between bg-orange-50/70 border border-orange-200/60 rounded-xl p-3">
+                          <div className="space-y-0.5">
+                            <div className="text-[11px] text-slate-500 font-medium">Payment Details</div>
+                            {adv > 0 ? (
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="text-emerald-700 font-medium">Adv: {formatCurrency(adv)}</span>
+                                <span className="text-slate-300">&middot;</span>
+                                <span className="font-bold text-slate-900 font-mono">COD: {formatCurrency(cod)}</span>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-slate-600 font-medium">Cash on Delivery</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs text-slate-400 font-semibold block">Total</span>
+                            <span className="text-base font-extrabold text-orange-600 font-mono">
+                              {formatCurrency(order.total_amount)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Mobile Action Footer */}
+                        <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                          {(order.status === 'pending' || order.status === 'not_reachable') && !isOtherStaffOrder && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStatusChange(
+                                    order.id,
+                                    'delayed_delivery',
+                                    'Customer agreed to delayed delivery'
+                                  )
+                                }
+                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Delay Agreed</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStatusChange(
+                                    order.id,
+                                    'canceled',
+                                    'Customer refused delayed delivery (Stockout)'
+                                  )
+                                }
+                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                              >
+                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Refused Delay</span>
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            {canEditCustomer && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingCustomerOrder(order)}
+                                className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Edit Customer</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrderForItems(order)}
+                              className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-xs font-semibold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                            >
+                              <PackageOpen className="w-3.5 h-3.5 text-orange-600" />
+                              <span>{isOtherStaffOrder ? 'View Items' : 'Edit Items'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. Desktop High-Density Table (>= md) */}
+                <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500">
+                        <tr>
+                          <th className="p-4">Order ID & Source</th>
+                          <th className="p-4">Customer Details</th>
+                          <th className="p-4">Items / Total</th>
+                          <th className="p-4">Assigned Staff</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedOrders.map((order) => {
+                          const isMyOrder = order.sales_rep_id === currentProfile?.id;
+                          const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
+                          const isHandedOver = isHandedOverToSteadfast(order);
+                          const canEditCustomer = (isMyOrder || currentProfile?.role === 'admin') && !isHandedOver;
+                          const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                          const hasReachout = Boolean(
+                            (order as any).is_reachout ||
+                            order.note?.toLowerCase().includes('reachout') ||
+                            order.order_items?.some((i: any) => i.is_reachout) ||
+                            (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                          );
+                          const statusBadge = getCleanStatusBadge(order.status);
+
+                          return (
+                            <tr
+                              key={order.id}
+                              className={`hover:bg-slate-50/70 transition-colors ${
+                                isMyOrder ? 'bg-orange-50/20' : ''
+                              }`}
+                            >
+                              <td className="p-4">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-bold text-slate-900">
+                                    {order.order_number}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyOrderNumber(order.order_number)}
+                                    className="p-1 rounded text-slate-400 hover:text-orange-600 transition-colors cursor-pointer"
+                                    title="Copy Order #"
+                                  >
+                                    {copiedOrderNumber === order.order_number ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'messenger' && <MessengerFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'phone' && <PhoneCallFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'manual' && <WalkInFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'website' && <WebsiteFlatIcon className="w-4 h-4" />}
+                                  <span className="text-xs text-slate-500 font-medium capitalize">
+                                    {order.source}
+                                  </span>
+                                  <span className="text-slate-300">&middot;</span>
+                                  <span className="text-[11px] text-slate-400">
+                                    {formatDate(order.created_at)}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="p-4">
+                                <div className="font-semibold text-slate-900">
+                                  {order.customer_name}
+                                </div>
+                                <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                                  <a
+                                    href={`tel:${order.customer_phone}`}
+                                    className="inline-flex items-center gap-1 hover:text-orange-600 font-mono"
+                                  >
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    <span>{order.customer_phone}</span>
+                                  </a>
+                                  <a
+                                    href={getWhatsAppUrl(order.customer_phone)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-1 py-0.2"
+                                  >
+                                    WA
+                                  </a>
+                                </div>
+                                {order.shipping_address && (
+                                  <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5" title={order.shipping_address}>
+                                    {order.shipping_address}
+                                  </div>
+                                )}
+                                {isOrderOutOfStock(order) && (
+                                  <div className="mt-1">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      Out of Stock (Delay Agreement)
+                                    </span>
+                                  </div>
+                                )}
+                                {Boolean(order.consignment_id || order.tracking_code) && (
+                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
+                                    <Truck className="w-3 h-3 text-indigo-500" />
+                                    <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                                  </div>
+                                )}
+
+                                {/* Customer Details Edit Action or Locked Indicator */}
+                                <div className="mt-1.5 flex items-center gap-1.5">
+                                  {isHandedOver ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-2xs cursor-not-allowed"
+                                      title={`Customer details locked: Order #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                    >
+                                      <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                      <span>Locked with Courier</span>
+                                    </span>
+                                  ) : canEditCustomer ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCustomerOrder(order)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-800 hover:text-orange-950 bg-orange-50 hover:bg-orange-100 border border-orange-200/90 px-2 py-0.5 rounded-md transition-colors cursor-pointer shadow-2xs"
+                                      title="Edit customer name, phone, delivery address, or note"
+                                    >
+                                      <Pencil className="w-3 h-3 text-orange-600" />
+                                      <span>Edit Details</span>
+                                    </button>
+                                  ) : isOtherStaffOrder ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400"
+                                      title="Assigned to another staff member (Read-only)"
+                                    >
+                                      <Lock className="w-2.5 h-2.5 text-slate-300" />
+                                      <span>Other Staff</span>
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
+
+                              <td className="p-4">
+                                {(() => {
+                                  const disc = getOrderDiscount(order);
+                                  const adv = getOrderAdvance(order);
+                                  const cod = Math.max(0, order.total_amount - adv);
+
+                                  return (
+                                    <>
+                                      <div className="flex flex-col">
+                                        {adv > 0 ? (
+                                          <div className="space-y-0.5">
+                                            <div className="flex items-center gap-1.5 font-mono">
+                                              <span className="font-bold text-slate-900 text-sm">
+                                                COD: {formatCurrency(cod)}
+                                              </span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-400 font-mono">
+                                              Total: {formatCurrency(order.total_amount)}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="font-semibold text-slate-900 font-mono">
+                                            {formatCurrency(order.total_amount)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                        <span>{order.order_items?.length || 0} items</span>
+                                        {hasUpsell && (
+                                          <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
+                                            Upsell
+                                          </span>
+                                        )}
+                                        {hasReachout && (
+                                          <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                            Reachout
+                                          </span>
+                                        )}
+                                        {disc > 0 && (
+                                          <span
+                                            className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
+                                            title={`Discount applied: -৳${disc.toLocaleString()}`}
+                                          >
+                                            Disc: -৳{disc.toLocaleString()}
+                                          </span>
+                                        )}
+                                        {adv > 0 && (
+                                          <span
+                                            className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
+                                            title={`Advance paid: ৳${adv.toLocaleString()}`}
+                                          >
+                                            Adv: ৳{adv.toLocaleString()}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </td>
+
+                              <td className="p-4">
+                                {isMyOrder ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-orange-50 text-orange-900 border border-orange-200/70 text-xs font-semibold">
+                                    Assigned to You
+                                  </span>
+                                ) : order.sales_rep_id ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
+                                    <span>Other Staff</span>
+                                    <Lock className="w-3 h-3 text-slate-400" />
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">Unassigned</span>
+                                )}
+                              </td>
+
+                              <td className="p-4">
+                                {isOtherStaffOrder ? (
+                                  <span
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200/80 shadow-2xs"
+                                    title="Assigned to another staff member. Only they or an administrator can update status."
+                                  >
+                                    <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                                    <span>{statusBadge.label}</span>
+                                    <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                  </span>
+                                ) : order.status === 'pending' || order.status === 'not_reachable' ? (
+                                  <div className="space-y-1.5">
+                                    <div className="relative inline-block">
+                                      <select
+                                        value={order.status}
+                                        onChange={(e) => {
+                                          const val = e.target.value as OrderStatus;
+                                          if (val === 'confirmed' && isOrderOutOfStock(order)) {
+                                            const proceed = window.confirm(
+                                              '⚠️ Warning: This order contains OUT-OF-STOCK items!\n\nIf the customer agreed to wait for the shipment, please select "Confirm Delayed Delivery" instead.\n\nDo you still want to force normal confirmation to packing?'
+                                            );
+                                            if (!proceed) return;
+                                          }
+                                          const note =
+                                            val === 'delayed_delivery'
+                                              ? 'Customer agreed to delayed delivery'
+                                              : val === 'canceled'
+                                              ? 'Customer refused delayed delivery (Stockout)'
+                                              : undefined;
+                                          handleStatusChange(order.id, val, note);
+                                        }}
+                                        className="text-xs font-semibold pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="not_reachable">Not Reachable</option>
+                                        <option value="confirmed">Confirm Order (In Stock)</option>
+                                        <option value="delayed_delivery">Confirm Delayed Delivery</option>
+                                        <option value="canceled">Refused Delay (Decline)</option>
+                                      </select>
+                                      <span
+                                        className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                      />
+                                    </div>
+
+                                    {/* 1-Click Quick Action Buttons */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleStatusChange(
+                                            order.id,
+                                            'delayed_delivery',
+                                            'Customer agreed to delayed delivery'
+                                          )
+                                        }
+                                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                                        title="1-Click: Customer agreed to wait for delayed delivery"
+                                      >
+                                        <Clock className="w-3 h-3 text-amber-600" />
+                                        Delay Agreed
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleStatusChange(
+                                            order.id,
+                                            'canceled',
+                                            'Customer refused delayed delivery (Stockout)'
+                                          )
+                                        }
+                                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                                        title="1-Click: Customer refused delay due to stockout"
+                                      >
+                                        <XCircle className="w-3 h-3 text-rose-500" />
+                                        Refused Delay
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : order.status === 'delayed_delivery' ? (
+                                  <div className="space-y-1.5">
+                                    <span
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
+                                      title="Delayed delivery agreed. Order will automatically release to packing upon restock."
+                                    >
+                                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                      <span>Delayed Delivery</span>
+                                    </span>
+                                    {!isOtherStaffOrder && (
+                                      <div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (window.confirm('Cancel this delayed delivery order (Customer called to cancel)?')) {
+                                              handleStatusChange(order.id, 'canceled', 'Customer canceled delayed delivery');
+                                            }
+                                          }}
+                                          className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <XCircle className="w-3 h-3 text-rose-500" />
+                                          Cancel Order
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs"
+                                    title="Confirmed orders are locked for sales staff. Contact an admin to adjust status."
+                                  >
+                                    <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                                    <span>{statusBadge.label}</span>
+                                    <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-4 text-right">
+                                <div className="inline-flex items-center gap-1.5 justify-end">
+                                  {isHandedOver ? (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200/80 cursor-not-allowed"
+                                      title={`Customer details locked: Parcel #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                    >
+                                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                      <span className="hidden sm:inline">Locked</span>
+                                    </button>
+                                  ) : canEditCustomer ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCustomerOrder(order)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-900 text-xs font-semibold border border-orange-200/80 transition-colors cursor-pointer shadow-2xs"
+                                      title="Edit customer details (name, phone, address, notes)"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 text-orange-600" />
+                                      <span className="hidden sm:inline">Customer</span>
+                                    </button>
+                                  ) : null}
+
+                                  <button
+                                    onClick={() => setEditingOrderForItems(order)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                                    title={isOtherStaffOrder ? 'Assigned to another staff member (Read-only)' : 'Edit items & view history'}
+                                  >
+                                    <PackageOpen className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>{isOtherStaffOrder ? 'View' : 'Items'}</span>
+                                    {isOtherStaffOrder && <Lock className="w-3 h-3 text-slate-400" />}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 3. Pagination Controls Bar */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                    <span>
+                      Showing <span className="font-bold text-slate-800">{(orderPage - 1) * orderPageSize + 1}</span> to{' '}
+                      <span className="font-bold text-slate-800">
+                        {Math.min(orderPage * orderPageSize, filteredOrders.length)}
+                      </span>{' '}
+                      of <span className="font-bold text-slate-800">{filteredOrders.length}</span> orders
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>Per page:</span>
+                      <select
+                        value={orderPageSize}
+                        onChange={(e) => {
+                          setOrderPageSize(Number(e.target.value));
+                          setOrderPage(1);
+                        }}
+                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      >
+                        <option value={15}>15</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                      disabled={orderPage === 1}
+                      className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                    >
+                      Previous
+                    </button>
+
+                    <span className="text-xs font-bold text-slate-700 px-2 font-mono">
+                      Page {orderPage} of {totalOrderPages}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
+                      disabled={orderPage >= totalOrderPages}
+                      className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}{/* TAB 2: INVENTORY */}
         {activeTab === 'inventory' && (
           <div className="space-y-4">
-            <div className="relative w-80">
+            <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search products in stock..."
+                placeholder="Search products in stock…"
                 value={inventorySearch}
                 onChange={(e) => setInventorySearch(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 shadow-2xs"
               />
             </div>
 
-            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="p-4">Product & Variant</th>
-                      <th className="p-4">SKU</th>
-                      <th className="p-4">Price</th>
-                      <th className="p-4 text-right">Live Stock Available</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {loadingInventory ? (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-400">
-                          Loading inventory...
-                        </td>
-                      </tr>
-                    ) : filteredVariants.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-400">
-                          No matching inventory items found.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredVariants.map((v) => (
-                        <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="p-4">
-                            <div className="font-semibold text-slate-900 flex items-center gap-2">
-                              <span>{(v.product as any)?.name || (v.product as any)?.title || 'Product'}</span>
-                              {(v.product as any)?.is_active === false && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
-                                  Disabled
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Variant: {v.title}
-                            </div>
-                          </td>
-                          <td className="p-4 font-mono text-xs text-slate-500">{v.sku}</td>
-                          <td className="p-4 font-semibold text-slate-900 font-mono">
-                            {formatCurrency(v.price)}
-                          </td>
-                          <td className="p-4 text-right">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                                v.stock_quantity === 0
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : v.stock_quantity <= 5
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              }`}
-                            >
-                              {v.stock_quantity} available
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+            {loadingInventory ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mb-3" />
+                <p className="text-slate-600 font-medium text-sm">Loading inventory…</p>
               </div>
-            </div>
+            ) : filteredVariants.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <Boxes className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-slate-900">No matching items</h3>
+                <p className="text-xs text-slate-500 mt-1">No products or variants matched your search.</p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile Cards View (< md) */}
+                <div className="block md:hidden space-y-3">
+                  {paginatedVariants.map((v) => (
+                    <div
+                      key={v.id}
+                      className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">
+                            {(v.product as any)?.name || (v.product as any)?.title || 'Product'}
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Variant: {v.title}</p>
+                          <span className="font-mono text-[11px] text-slate-400">SKU: {v.sku}</span>
+                        </div>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border shrink-0 ${
+                            v.stock_quantity === 0
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : v.stock_quantity <= 5
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}
+                        >
+                          {v.stock_quantity} in stock
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                        <span className="text-slate-500 font-medium">Selling Price:</span>
+                        <span className="font-mono font-bold text-orange-600 text-sm">
+                          {formatCurrency(v.price)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View (>= md) */}
+                <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500">
+                        <tr>
+                          <th className="p-4">Product & Variant</th>
+                          <th className="p-4">SKU</th>
+                          <th className="p-4">Price</th>
+                          <th className="p-4 text-right">Live Stock Available</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedVariants.map((v) => (
+                          <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="p-4">
+                              <div className="font-semibold text-slate-900 flex items-center gap-2">
+                                <span>{(v.product as any)?.name || (v.product as any)?.title || 'Product'}</span>
+                                {(v.product as any)?.is_active === false && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
+                                    Disabled
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                Variant: {v.title}
+                              </div>
+                            </td>
+                            <td className="p-4 font-mono text-xs text-slate-500">{v.sku}</td>
+                            <td className="p-4 font-semibold text-slate-900 font-mono">
+                              {formatCurrency(v.price)}
+                            </td>
+                            <td className="p-4 text-right">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                  v.stock_quantity === 0
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : v.stock_quantity <= 5
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                {v.stock_quantity} available
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Inventory Pagination Bar */}
+                {filteredVariants.length > invPageSize && (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                      <span>
+                        Showing <span className="font-bold text-slate-800">{(invPage - 1) * invPageSize + 1}</span> to{' '}
+                        <span className="font-bold text-slate-800">
+                          {Math.min(invPage * invPageSize, filteredVariants.length)}
+                        </span>{' '}
+                        of <span className="font-bold text-slate-800">{filteredVariants.length}</span> items
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setInvPage((p) => Math.max(1, p - 1))}
+                        disabled={invPage === 1}
+                        className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                      >
+                        Previous
+                      </button>
+
+                      <span className="text-xs font-bold text-slate-700 px-2 font-mono">
+                        Page {invPage} of {totalInvPages}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setInvPage((p) => Math.min(totalInvPages, p + 1))}
+                        disabled={invPage >= totalInvPages}
+                        className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -1821,7 +2284,7 @@ export default function SalesDashboard() {
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-slate-400 ">
                       Today's Sales
                     </span>
                     <div className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1829,8 +2292,8 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Extra Commission Unlocked
+                    <span className="text-[11px] font-semibold text-slate-400 ">
+                      Extra Commission Tiered
                     </span>
                     <div className="text-xl font-extrabold text-amber-600 font-mono mt-0.5">
                       {unlockedOtherTier ? `+${formatCurrency(unlockedOtherTier.bonus)}` : '৳0'}
@@ -1853,7 +2316,7 @@ export default function SalesDashboard() {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
                     <div
-                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      className="bg-amber-500 h-full rounded-full transition-colors duration-500"
                       style={{ width: `${otherQuotaProgress}%` }}
                     />
                   </div>
@@ -1901,7 +2364,7 @@ export default function SalesDashboard() {
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-slate-400 ">
                       Extra Sales Today
                     </span>
                     <div className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">
@@ -1909,8 +2372,8 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Extra Commission Unlocked
+                    <span className="text-[11px] font-semibold text-slate-400 ">
+                      Extra Commission Tiered
                     </span>
                     <div className="text-xl font-extrabold text-emerald-600 font-mono mt-0.5">
                       {unlockedWebsiteTier ? `+${formatCurrency(unlockedWebsiteTier.bonus)}` : '৳0'}
@@ -1923,7 +2386,7 @@ export default function SalesDashboard() {
                     <span>
                       {nextWebsiteTier
                         ? `Next Milestone: ${nextWebsiteTier.name} (+${formatCurrency(nextWebsiteTier.bonus)} extra commission)`
-                        : 'Highest Milestone Unlocked'}
+                        : 'Highest Milestone Tiered'}
                     </span>
                     <span className="font-mono font-bold text-slate-700">
                       {nextWebsiteTier
@@ -1933,7 +2396,7 @@ export default function SalesDashboard() {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
                     <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      className="bg-emerald-500 h-full rounded-full transition-colors duration-500"
                       style={{ width: `${websiteQuotaProgress}%` }}
                     />
                   </div>
@@ -1986,7 +2449,7 @@ export default function SalesDashboard() {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                     <tr>
                       <th className="p-4">Type & Order / Milestone</th>
                       <th className="p-4">Extra Commission</th>
@@ -1998,7 +2461,7 @@ export default function SalesDashboard() {
                     {loadingRewards ? (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-slate-400">
-                          Loading rewards...
+                          Loading rewards…
                         </td>
                       </tr>
                     ) : rewards.length === 0 ? (
@@ -2086,7 +2549,7 @@ export default function SalesDashboard() {
                   setPayoutAmount(availablePiggybank.toString());
                   setIsPayoutModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-all"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>New Payout Request</span>
@@ -2095,7 +2558,7 @@ export default function SalesDashboard() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                   <tr>
                     <th className="p-4">Amount</th>
                     <th className="p-4">Method & Account</th>
@@ -2108,7 +2571,7 @@ export default function SalesDashboard() {
                   {loadingPayouts ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Loading payout requests...
+                        Loading payout requests…
                       </td>
                     </tr>
                   ) : myPayouts.length === 0 ? (
@@ -2179,12 +2642,12 @@ export default function SalesDashboard() {
 
       {/* REQUEST PAYOUT MODAL */}
       {isPayoutModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs animate-in fade-in p-2.5 sm:p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50  animate-in fade-in p-2.5 sm:p-4">
           <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
             <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative my-auto">
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-emerald-600" />
+                  <DollarSign className="w-5 h-5 text-orange-600" />
                   <span>Request Commission Payout</span>
                 </h3>
                 <button
@@ -2199,7 +2662,7 @@ export default function SalesDashboard() {
               <form onSubmit={handleSubmitPayoutRequest} className="p-4 sm:p-5 space-y-4">
                 <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between">
                   <span className="text-xs text-slate-600 font-medium">Available to Withdraw:</span>
-                  <span className="font-bold font-mono text-emerald-700 text-base">
+                  <span className="font-bold font-mono text-orange-600 text-base">
                     {formatCurrency(availablePiggybank)}
                   </span>
                 </div>
@@ -2216,7 +2679,7 @@ export default function SalesDashboard() {
                     step="any"
                     value={payoutAmount}
                     onChange={(e) => setPayoutAmount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
                 </div>
 
@@ -2227,7 +2690,7 @@ export default function SalesDashboard() {
                   <select
                     value={payoutMethod}
                     onChange={(e) => setPayoutMethod(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   >
                     <option value="bKash">bKash (Personal)</option>
                     <option value="Nagad">Nagad (Personal)</option>
@@ -2246,7 +2709,7 @@ export default function SalesDashboard() {
                     placeholder="e.g. 017XXXXXXXX"
                     value={payoutAccount}
                     onChange={(e) => setPayoutAccount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
                 </div>
 
@@ -2259,7 +2722,7 @@ export default function SalesDashboard() {
                     placeholder="e.g. Payout for this week"
                     value={payoutNote}
                     onChange={(e) => setPayoutNote(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
                 </div>
 
@@ -2274,9 +2737,9 @@ export default function SalesDashboard() {
                   <button
                     type="submit"
                     disabled={submittingPayout}
-                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xs transition-all disabled:opacity-50 text-center"
+                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-xs transition-colors disabled:opacity-50 text-center"
                   >
-                    {submittingPayout ? 'Submitting...' : 'Submit Request'}
+                    {submittingPayout ? 'Submitting…' : 'Submit Request'}
                   </button>
                 </div>
               </form>
@@ -2287,7 +2750,7 @@ export default function SalesDashboard() {
 
       {/* CREATE ORDER MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs animate-in fade-in p-2.5 sm:p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50  animate-in fade-in p-2.5 sm:p-4">
           <div className="min-h-full flex items-center justify-center py-4 sm:py-8">
             <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl relative my-auto">
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
@@ -2314,14 +2777,14 @@ export default function SalesDashboard() {
                   <div className="lg:col-span-2 space-y-4">
                     {/* ORDER SOURCE */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-medium text-slate-500 mb-2">
                         Order Source
                       </label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
                         <button
                           type="button"
                           onClick={() => setSource('whatsapp')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'whatsapp'
                               ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2338,7 +2801,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('messenger')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'messenger'
                               ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2355,7 +2818,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('phone')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'phone'
                               ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2372,7 +2835,7 @@ export default function SalesDashboard() {
                         <button
                           type="button"
                           onClick={() => setSource('manual')}
-                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                          className={`flex items-center sm:flex-col justify-center gap-2 sm:gap-1 p-2 sm:p-2.5 rounded-xl border transition-colors ${
                             source === 'manual'
                               ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/10'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -2399,7 +2862,7 @@ export default function SalesDashboard() {
                         placeholder="e.g. Shahajadi Farjana"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       />
                     </div>
 
@@ -2414,7 +2877,7 @@ export default function SalesDashboard() {
                         placeholder="e.g. 01726640689"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       />
                     </div>
 
@@ -2429,17 +2892,17 @@ export default function SalesDashboard() {
                         placeholder="House #, Road #, Area, City (e.g. 264/6, Block C, Banasree, Dhaka)"
                         value={shippingAddress}
                         onChange={(e) => setShippingAddress(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none"
                       />
                     </div>
 
                     {/* ADD PRODUCTS TO ORDER */}
                     <div className="p-3.5 sm:p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <span className="text-xs font-medium text-slate-700">
                           Add Products to Order
                         </span>
-                        <span className="text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
+                        <span className="text-xs font-medium text-emerald-700">
                           Live Stock Protected
                         </span>
                       </div>
@@ -2464,7 +2927,7 @@ export default function SalesDashboard() {
                               min="1"
                               value={itemQuantity}
                               onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500"
                             />
                           </div>
 
@@ -2501,10 +2964,10 @@ export default function SalesDashboard() {
                                 {item.variant_title && (
                                   <span className="text-slate-500 text-[11px]">({item.variant_title})</span>
                                 )}
-                                <span className="text-emerald-700 font-mono font-bold">x{item.quantity}</span>
+                                <span className="text-orange-600 font-mono font-bold">x{item.quantity}</span>
                                 {item.is_delayed_preorder && (
                                   <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] flex items-center gap-1">
-                                    🕒 Pre-Order
+                                    Pre-Order
                                   </span>
                                 )}
                                 {item.is_reachout && (
@@ -2545,7 +3008,7 @@ export default function SalesDashboard() {
                         placeholder="e.g. NUR10"
                         value={couponUsed}
                         onChange={(e) => setCouponUsed(e.target.value.toUpperCase())}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       />
                     </div>
 
@@ -2557,7 +3020,7 @@ export default function SalesDashboard() {
                       <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       >
                         <option value="Cash on Delivery (COD)">Cash on Delivery (COD)</option>
                         <option value="bKash (Prepaid)">bKash (Prepaid)</option>
@@ -2576,7 +3039,7 @@ export default function SalesDashboard() {
                         placeholder="e.g. Customer requested evening delivery"
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       />
                     </div>
                   </div>
@@ -2590,7 +3053,7 @@ export default function SalesDashboard() {
                             <Receipt className="w-3.5 h-3.5" />
                           </div>
                           <div>
-                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Order Summary</h4>
+                            <h4 className="text-xs font-semibold text-slate-900">Order Summary</h4>
                             <p className="text-[10px] text-slate-400">Total & Payment Breakdown</p>
                           </div>
                         </div>
@@ -2609,7 +3072,7 @@ export default function SalesDashboard() {
 
                       {/* Delivery Option Selection */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                        <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                           <Truck className="w-3.5 h-3.5 text-slate-400" />
                           <span>Delivery Fee:</span>
                         </label>
@@ -2617,9 +3080,9 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('inside_dhaka')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'inside_dhaka'
-                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
+                                ? 'border-orange-600 bg-orange-50 text-orange-950 ring-1 ring-orange-500 font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                             }`}
                           >
@@ -2629,9 +3092,9 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('outside_dhaka')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'outside_dhaka'
-                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500 font-bold shadow-2xs'
+                                ? 'border-orange-600 bg-orange-50 text-orange-950 ring-1 ring-orange-500 font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                             }`}
                           >
@@ -2641,9 +3104,9 @@ export default function SalesDashboard() {
                           <button
                             type="button"
                             onClick={() => setDeliveryType('free')}
-                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl border text-center transition-colors cursor-pointer ${
                               deliveryType === 'free'
-                                ? 'border-emerald-600 bg-emerald-600 text-white font-bold shadow-2xs'
+                                ? 'border-orange-600 bg-orange-600 text-white font-bold shadow-2xs'
                                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                             }`}
                           >
@@ -2656,7 +3119,7 @@ export default function SalesDashboard() {
                       {/* Custom Discount Input Box */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                             <Tag className="w-3.5 h-3.5 text-rose-500" />
                             <span>Custom Discount:</span>
                           </label>
@@ -2685,7 +3148,7 @@ export default function SalesDashboard() {
                       {/* Customer Advance / Pre-payment Box */}
                       <div className="pt-2 border-t border-slate-200/70 space-y-2">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
                             <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Advance Paid</span>
                           </label>
@@ -2702,7 +3165,7 @@ export default function SalesDashboard() {
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                            <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-colors peer-checked:bg-orange-600"></div>
                           </label>
                         </div>
 
@@ -2720,7 +3183,7 @@ export default function SalesDashboard() {
                                 placeholder="Amount (e.g. 200)"
                                 value={advancePayment}
                                 onChange={(e) => setAdvancePayment(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl pl-6 pr-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                className="w-full bg-white border border-slate-200 rounded-xl pl-6 pr-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                               />
                             </div>
 
@@ -2728,7 +3191,7 @@ export default function SalesDashboard() {
                               <select
                                 value={advanceMethod}
                                 onChange={(e) => setAdvanceMethod(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-orange-500"
                               >
                                 <option value="bKash">bKash</option>
                                 <option value="Nagad">Nagad</option>
@@ -2740,7 +3203,7 @@ export default function SalesDashboard() {
                                 placeholder="TrxID (Opt)"
                                 value={advanceTrxId}
                                 onChange={(e) => setAdvanceTrxId(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] uppercase font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-orange-500"
                               />
                             </div>
                           </div>
@@ -2750,7 +3213,7 @@ export default function SalesDashboard() {
                       {/* Grand Total */}
                       <div className="pt-3 border-t-2 border-slate-200">
                         <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Grand Total:</span>
+                          <span className="text-xs font-semibold text-slate-900">Grand Total:</span>
                           <span className="font-mono text-base font-black text-slate-900">
                             {formatCurrency(grandTotal)}
                           </span>
@@ -2759,14 +3222,14 @@ export default function SalesDashboard() {
 
                       {/* Remaining COD Box */}
                       <div
-                        className={`p-3 rounded-xl border flex flex-col gap-1 transition-all ${
+                        className={`p-3 rounded-xl border flex flex-col gap-1 transition-colors ${
                           advanceAmount > 0
                             ? 'bg-amber-50/80 border-amber-200 text-amber-950'
                             : 'bg-slate-100 border-slate-200 text-slate-800'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider">Remaining COD:</span>
+                          <span className="text-xs font-medium">Remaining COD:</span>
                           <span className="font-mono text-sm font-black">
                             {formatCurrency(remainingCod)}
                           </span>
@@ -2781,7 +3244,7 @@ export default function SalesDashboard() {
                       {/* Delayed Delivery Pre-Order Notice */}
                       {hasDelayedPreOrderItems && (
                         <div className="p-3 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2.5">
-                          <span className="text-base leading-none">🕒</span>
+                          <span className="text-base leading-none">•</span>
                           <div className="space-y-0.5">
                             <p className="font-bold text-[11px]">Delayed Delivery Pre-Order</p>
                             <p className="text-[10px] text-amber-800 leading-normal">
@@ -2796,16 +3259,16 @@ export default function SalesDashboard() {
                         <button
                           type="submit"
                           disabled={submittingOrder || orderItems.length === 0}
-                          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 text-center flex items-center justify-center gap-1.5 ${
+                          className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs transition-colors disabled:opacity-50 text-center flex items-center justify-center gap-1.5 ${
                             hasDelayedPreOrderItems
                               ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              : 'bg-orange-600 hover:bg-orange-500 text-white'
                           }`}
                         >
                           <CheckCircle2 className="w-4 h-4" />
                           <span>
                             {submittingOrder
-                              ? 'Placing Order...'
+                              ? 'Placing Order…'
                               : hasDelayedPreOrderItems
                               ? 'Confirm & Create Delayed Pre-Order 🕒'
                               : 'Confirm & Create Order'}
@@ -2872,7 +3335,7 @@ export default function SalesDashboard() {
 
       {/* QUOTA & BONUS MILESTONES MODAL */}
       {showTiersModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40  animate-in fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2909,7 +3372,7 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setTiersModalTab('other')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                   tiersModalTab === 'other'
                     ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -2920,9 +3383,9 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setTiersModalTab('website')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                   tiersModalTab === 'website'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -2936,13 +3399,13 @@ export default function SalesDashboard() {
                   <div className="mb-4 bg-amber-50/60 border border-amber-200/60 rounded-xl p-3.5 flex items-start gap-2.5">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-amber-950">
-                      <span className="font-bold">How it works:</span> Cumulative sales on non-website orders (WhatsApp, Phone, Manual) qualify for daily milestones. Crossing each milestone unlocks that tier's cash extra commission into your earnings.
+                      <span className="font-bold">How it works:</span> Cumulative sales on non-website orders (WhatsApp, Phone, Manual) qualify for daily milestones. Crossing each milestone activates that tier's cash extra commission into your earnings.
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200/80">
                     <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                         <tr>
                           <th className="p-3">Milestone Tier</th>
                           <th className="p-3">Daily Sales Required</th>
@@ -2960,7 +3423,7 @@ export default function SalesDashboard() {
                           </tr>
                         ) : (
                           otherActiveTiers.map((tier) => {
-                            const isUnlocked = todayOtherSales >= tier.min_quota;
+                            const isTiered = todayOtherSales >= tier.min_quota;
                             const isCurrentHighest = unlockedOtherTier?.id === tier.id;
                             const effectiveRate = tier.min_quota > 0 ? ((tier.bonus / tier.min_quota) * 100).toFixed(1) : '0';
                             const deficit = tier.min_quota - todayOtherSales;
@@ -2971,7 +3434,7 @@ export default function SalesDashboard() {
                                 className={`transition-colors ${
                                   isCurrentHighest
                                     ? 'bg-amber-50/60 font-semibold'
-                                    : isUnlocked
+                                    : isTiered
                                     ? 'bg-slate-50/40 text-slate-600'
                                     : 'hover:bg-slate-50/60'
                                 }`}
@@ -2989,9 +3452,9 @@ export default function SalesDashboard() {
                                   {effectiveRate}%
                                 </td>
                                 <td className="p-3 text-right">
-                                  {isUnlocked ? (
+                                  {isTiered ? (
                                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Unlocked
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tiered
                                     </span>
                                   ) : (
                                     <span className="text-xs text-slate-400 font-mono">
@@ -3012,13 +3475,13 @@ export default function SalesDashboard() {
                   <div className="mb-4 bg-emerald-50/60 border border-emerald-200/60 rounded-xl p-3.5 flex items-start gap-2.5">
                     <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-emerald-900">
-                      <span className="font-bold">How it works:</span> When you upsell on website orders, your extra sales value accumulates across all website orders today. Crossing each quota milestone unlocks that tier's cash bonus in your earnings.
+                      <span className="font-bold">How it works:</span> When you upsell on website orders, your extra sales value accumulates across all website orders today. Crossing each quota milestone activates that tier's cash bonus in your earnings.
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200/80">
                     <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <thead className="bg-slate-50 border-b border-slate-200/80 text-xs font-semibold text-slate-500 ">
                         <tr>
                           <th className="p-3">Milestone Tier</th>
                           <th className="p-3">Extra Sales Required</th>
@@ -3036,7 +3499,7 @@ export default function SalesDashboard() {
                           </tr>
                         ) : (
                           websiteActiveTiers.map((tier) => {
-                            const isUnlocked = todayWebsiteUpsells >= tier.min_quota;
+                            const isTiered = todayWebsiteUpsells >= tier.min_quota;
                             const isCurrentHighest = unlockedWebsiteTier?.id === tier.id;
                             const effectiveRate = tier.min_quota > 0 ? ((tier.bonus / tier.min_quota) * 100).toFixed(1) : '0';
                             const deficit = tier.min_quota - todayWebsiteUpsells;
@@ -3047,7 +3510,7 @@ export default function SalesDashboard() {
                                 className={`transition-colors ${
                                   isCurrentHighest
                                     ? 'bg-emerald-50/50 font-semibold'
-                                    : isUnlocked
+                                    : isTiered
                                     ? 'bg-slate-50/40 text-slate-600'
                                     : 'hover:bg-slate-50/60'
                                 }`}
@@ -3065,9 +3528,9 @@ export default function SalesDashboard() {
                                   {effectiveRate}%
                                 </td>
                                 <td className="p-3 text-right">
-                                  {isUnlocked ? (
+                                  {isTiered ? (
                                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Unlocked
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tiered
                                     </span>
                                   ) : (
                                     <span className="text-xs text-slate-400 font-mono">
@@ -3097,7 +3560,7 @@ export default function SalesDashboard() {
               <button
                 type="button"
                 onClick={() => setShowTiersModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
               >
                 Close
               </button>

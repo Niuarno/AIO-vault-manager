@@ -1,0 +1,44 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Furrow (deal 1/3, seed high-density-b2b-order-management-ff09·e31ce8f5·2026-11-08·r0) · redesign: full
+ * nav: top-bar shell & mobile app dock · signature: live logistics and fulfillment queue · states: loading, empty, error, full · furrow: manila/orange
+ * axes: light/grotesk-sans/warm · posture: committed · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · weakest: H, high-density order fulfillment with mobile card ergonomics and orange accent */
+:root {
+  color-scheme: light;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --color-error: oklch(52% 0.19 27); --color-success: oklch(52% 0.14 150);
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+  
+  /* Orange / Manila Theme Tokens */
+  --color-paper: oklch(96.8% 0.012 80);
+  --color-paper-2: oklch(99.4% 0.005 80);
+  --color-paper-3: oklch(93.2% 0.018 78);
+  --color-ink: oklch(18% 0.008 60);
+  --color-ink-2: oklch(28% 0.01 60);
+  --color-muted: oklch(46% 0.014 60);
+  --color-rule: oklch(88% 0.014 80);
+  --color-ink-rule: oklch(32% 0.012 60);
+  
+  /* Vibrant Tangerine / Cadmium Orange Accents */
+  --color-accent: oklch(56% 0.22 42);
+  --color-accent-2: oklch(75% 0.17 55);
+  --color-accent-soft: oklch(94% 0.05 50);
+  --color-accent-ink: oklch(99.5% 0.005 80);
+  --color-focus: oklch(56% 0.22 42);
+  
+  --font-display: "Red Hat Display", "Segoe UI", -apple-system, sans-serif;
+  --font-body: "Red Hat Text", "Segoe UI", -apple-system, sans-serif;
+  --font-outlier: "Red Hat Mono", ui-monospace, monospace;
+  
+  --radius-card: 10px;
+  --radius-pill: 999px;
+  --rule-hair: 1px;
+  --rule-bar: 2px;
+  --shadow-card: 0 1px 3px oklch(18% 0.008 60 / 0.08);
+  --tracking-display: -0.03em;
+  --display-weight: 700;
+}

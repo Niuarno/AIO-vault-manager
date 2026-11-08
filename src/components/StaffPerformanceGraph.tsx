@@ -113,7 +113,7 @@ export default function StaffPerformanceGraph({
             <button
               type="button"
               onClick={() => setMetric('commission')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
                 metric === 'commission'
                   ? 'bg-white text-emerald-800 shadow-2xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -124,7 +124,7 @@ export default function StaffPerformanceGraph({
             <button
               type="button"
               onClick={() => setMetric('orders')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
                 metric === 'orders'
                   ? 'bg-white text-slate-900 shadow-2xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -190,7 +190,7 @@ export default function StaffPerformanceGraph({
                   onClick={() => setHoveredIndex(hoveredIndex === idx ? null : idx)}
                 >
                   <div
-                    className={`w-full max-w-[18px] rounded-t-sm transition-all duration-200 ${barColor}`}
+                    className={`w-full max-w-[18px] rounded-t-sm transition-colors duration-200 ${barColor}`}
                     style={{ height: `${heightPercent}%` }}
                   />
                   <span className={`text-[10px] font-mono mt-2 truncate w-full text-center ${

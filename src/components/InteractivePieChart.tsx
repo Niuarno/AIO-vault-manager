@@ -67,7 +67,7 @@ export default function InteractivePieChart({
               <button
                 type="button"
                 onClick={() => handleMetricToggle('count')}
-                className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
                   activeMetric === 'count' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -76,7 +76,7 @@ export default function InteractivePieChart({
               <button
                 type="button"
                 onClick={() => handleMetricToggle('value')}
-                className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
                   activeMetric === 'value' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -134,7 +134,7 @@ export default function InteractivePieChart({
   const formatter = formatValue || defaultFormatValue;
 
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-2xs flex flex-col justify-between transition-all hover:shadow-xs">
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-2xs flex flex-col justify-between transition-colors hover:shadow-xs">
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -149,7 +149,7 @@ export default function InteractivePieChart({
                 <button
                   type="button"
                   onClick={() => handleMetricToggle('count')}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
                     activeMetric === 'count'
                       ? 'bg-white text-slate-900 shadow-2xs font-bold'
                       : 'text-slate-500 hover:text-slate-900'
@@ -162,7 +162,7 @@ export default function InteractivePieChart({
                 <button
                   type="button"
                   onClick={() => handleMetricToggle('value')}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
                     activeMetric === 'value'
                       ? 'bg-emerald-600 text-white shadow-2xs font-bold'
                       : 'text-slate-500 hover:text-slate-900'
@@ -188,6 +188,7 @@ export default function InteractivePieChart({
       {/* SVG Donut */}
       <div className="relative my-4 flex items-center justify-center">
         <svg
+          aria-hidden="true"
           viewBox="0 0 180 180"
           className="w-44 h-44 transform -rotate-90 transition-transform duration-200"
         >
@@ -216,7 +217,7 @@ export default function InteractivePieChart({
                 strokeDasharray={slice.strokeDasharray}
                 strokeDashoffset={slice.strokeDashoffset}
                 strokeLinecap="butt"
-                className="cursor-pointer transition-all duration-150"
+                className="cursor-pointer transition-colors duration-150"
                 onMouseEnter={() => setHoveredIndex(slice.idx)}
                 onMouseLeave={() => setHoveredIndex(null)}
               />
@@ -277,7 +278,7 @@ export default function InteractivePieChart({
                   {total.toLocaleString()}
                 </span>
               )}
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mt-1">
+              <span className="text-[10px] font-bold text-slate-400  block mt-1">
                 {centerLabel || (activeMetric === 'value' ? 'TOTAL VALUE' : 'TOTAL ORDERS')}
               </span>
             </div>

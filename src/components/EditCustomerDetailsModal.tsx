@@ -186,7 +186,7 @@ export default function EditCustomerDetailsModal({
             <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 flex items-start space-x-3 shadow-xs">
               <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                <h4 className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                   <span>Locked: Parcel Handed Over to Steadfast</span>
                   {order.consignment_id && (
                     <span className="font-mono text-[11px] font-black px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">
@@ -219,7 +219,7 @@ export default function EditCustomerDetailsModal({
 
           {/* Customer Name */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Customer / Recipient Name <span className="text-rose-600">*</span>
             </label>
             <div className="relative">
@@ -238,7 +238,7 @@ export default function EditCustomerDetailsModal({
 
           {/* Customer Phone */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Phone Number <span className="text-rose-600">*</span>
             </label>
             <div className="relative">
@@ -260,7 +260,7 @@ export default function EditCustomerDetailsModal({
 
           {/* Shipping / Delivery Address */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Delivery Address <span className="text-rose-600">*</span>
             </label>
             <div className="relative">
@@ -271,7 +271,7 @@ export default function EditCustomerDetailsModal({
                 disabled={isLockedBySteadfast || saving}
                 value={shippingAddress}
                 onChange={(e) => setShippingAddress(e.target.value)}
-                placeholder="House, Road, Area, Thana/Upazila, District..."
+                placeholder="House, Road, Area, Thana/Upazila, District…"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
               />
             </div>
@@ -279,7 +279,7 @@ export default function EditCustomerDetailsModal({
 
           {/* Email (Optional) */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Customer Email <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
             <div className="relative">
@@ -297,7 +297,7 @@ export default function EditCustomerDetailsModal({
 
           {/* Note / Special Instructions */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Order Notes / Delivery Instructions <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
             <div className="relative">
@@ -307,7 +307,7 @@ export default function EditCustomerDetailsModal({
                 disabled={isLockedBySteadfast || saving}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g. Call before delivery, deliver after 3pm..."
+                placeholder="e.g. Call before delivery, deliver after 3pm…"
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
               />
             </div>
@@ -316,7 +316,7 @@ export default function EditCustomerDetailsModal({
           {/* Modification Reason */}
           {!isLockedBySteadfast && (
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-slate-700 tracking-wide">
                 Reason for Change <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
@@ -324,7 +324,7 @@ export default function EditCustomerDetailsModal({
                 disabled={saving}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="e.g. Customer called to correct delivery phone or address..."
+                placeholder="e.g. Customer called to correct delivery phone or address…"
                 className="w-full px-3 py-2 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
               <p className="text-[11px] text-slate-500">
@@ -348,10 +348,10 @@ export default function EditCustomerDetailsModal({
               <button
                 type="submit"
                 disabled={saving || !customerName.trim() || !customerPhone.trim() || !shippingAddress.trim()}
-                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>{saving ? 'Saving...' : 'Save Customer Details'}</span>
+                <span>{saving ? 'Saving…' : 'Save Customer Details'}</span>
               </button>
             )}
           </div>

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
 import {
   ShoppingBag,
+  Copy,
   Boxes,
   Users,
   Award,
@@ -86,7 +87,7 @@ export default function AdminDashboard() {
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'team' | 'payouts' | 'rewards'>('orders');
 
-  // Orders State
+  // Orders State & Pagination
   const [orders, setOrders] = useState<Order[]>([]);
   const [editingOrderForItems, setEditingOrderForItems] = useState<Order | null>(null);
   const [editingCustomerOrder, setEditingCustomerOrder] = useState<Order | null>(null);
@@ -95,6 +96,9 @@ export default function AdminDashboard() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(25);
+  const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
   const [isSteadfastModalOpen, setIsSteadfastModalOpen] = useState(false);
   const [statusChartMetric, setStatusChartMetric] = useState<'count' | 'value'>('count');
   const [sourceChartMetric, setSourceChartMetric] = useState<'count' | 'value'>('count');
@@ -963,7 +967,7 @@ export default function AdminDashboard() {
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
         o.customer_name.toLowerCase().includes(q) ||
@@ -973,6 +977,30 @@ export default function AdminDashboard() {
       return matchSearch;
     });
   }, [orders, searchQuery]);
+
+  useEffect(() => {
+    setOrderPage(1);
+  }, [searchQuery, statusFilter, sourceFilter]);
+
+  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / orderPageSize));
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * orderPageSize;
+    return filteredOrders.slice(start, start + orderPageSize);
+  }, [filteredOrders, orderPage, orderPageSize]);
+
+  const handleCopyOrderNumber = (num: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(num);
+      setCopiedOrderNumber(num);
+      setTimeout(() => setCopiedOrderNumber(null), 2000);
+    }
+  };
+
+  const getWhatsAppUrl = (phone: string) => {
+    const digits = phone.replace(/[^0-9]/g, '');
+    const cleanNumber = digits.startsWith('880') ? digits : digits.startsWith('0') ? '88' + digits : '880' + digits;
+    return `https://wa.me/${cleanNumber}`;
+  };
 
   // Order Totals (Count & Monetary Amount)
   const totalOrdersCount = orders.length;
@@ -1381,8 +1409,8 @@ export default function AdminDashboard() {
             <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
+                  <h4 className="text-xs font-semibold text-slate-800">
                     Order States Value & Volume Breakdown
                   </h4>
                   <span className="text-[11px] font-mono text-slate-400 font-medium hidden sm:inline-block">
@@ -1397,7 +1425,7 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setStateBreakdownMetric('both')}
-                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                         stateBreakdownMetric === 'both'
                           ? 'bg-white text-slate-900 shadow-2xs font-bold'
                           : 'text-slate-500 hover:text-slate-800'
@@ -1408,7 +1436,7 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setStateBreakdownMetric('value')}
-                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                         stateBreakdownMetric === 'value'
                           ? 'bg-emerald-600 text-white shadow-2xs font-bold'
                           : 'text-slate-500 hover:text-slate-800'
@@ -1419,7 +1447,7 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setStateBreakdownMetric('count')}
-                      className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                      className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                         stateBreakdownMetric === 'count'
                           ? 'bg-white text-slate-900 shadow-2xs font-bold'
                           : 'text-slate-500 hover:text-slate-800'
@@ -1437,7 +1465,7 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setStatusFilter('all')}
-                  className={`flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  className={`flex flex-col p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
                     statusFilter === 'all'
                       ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-slate-900/10'
                       : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/80 text-slate-700'
@@ -1469,7 +1497,7 @@ export default function AdminDashboard() {
                       key={stKey}
                       type="button"
                       onClick={() => setStatusFilter(isSelected ? 'all' : stKey)}
-                      className={`flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      className={`flex flex-col p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
                         isSelected
                           ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-slate-900/10'
                           : 'bg-white border-slate-200/80 hover:bg-slate-50 text-slate-700'
@@ -1507,7 +1535,7 @@ export default function AdminDashboard() {
                   placeholder="Search customer, phone, order #..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                 />
               </div>
 
@@ -1517,7 +1545,7 @@ export default function AdminDashboard() {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                   >
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -1534,7 +1562,7 @@ export default function AdminDashboard() {
                 <select
                   value={sourceFilter}
                   onChange={(e) => setSourceFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 >
                   <option value="all">All Sources</option>
                   <option value="website">Website</option>
@@ -1546,7 +1574,7 @@ export default function AdminDashboard() {
 
                 <button
                   onClick={() => setIsSteadfastModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                   title="Steadfast Webhook Integration & Testing"
                 >
                   <Radio className="w-3.5 h-3.5 text-amber-600" />
@@ -1555,7 +1583,7 @@ export default function AdminDashboard() {
 
                 <Link
                   href="/admin/daily-products"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300/80 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300/80 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                   title="View which products were ordered on each date"
                 >
                   <Calendar className="w-3.5 h-3.5 text-emerald-600" />
@@ -1564,348 +1592,692 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Orders Table (Fixing Picture 4: restrained colors, clean dropdown) */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="p-4">Order ID & Source</th>
-                      <th className="p-4">Customer Details</th>
-                      <th className="p-4">Items / Total</th>
-                      <th className="p-4">Assigned Staff</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {loadingOrders ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
-                          Loading orders...
-                        </td>
-                      </tr>
-                    ) : filteredOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
-                          No orders found matching your criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredOrders.map((order) => {
-                        const hasUpsell = order.order_items?.some((i) => i.is_upsell);
-                        const hasReachout = Boolean(
-                          (order as any).is_reachout ||
-                          order.note?.toLowerCase().includes('reachout') ||
-                          order.order_items?.some((i: any) => i.is_reachout) ||
-                          (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
-                        );
-                        const statusBadge = getCleanStatusBadge(order.status);
+            {/* Orders List: Dual-Mode Mobile Cards + Desktop Table */}
+            {loadingOrders ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mb-3" />
+                <p className="text-slate-600 font-medium text-sm">Loading orders…</p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center mx-auto mb-3 text-orange-600">
+                  <ShoppingBag className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">No orders found</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  {searchQuery || statusFilter !== 'all' || sourceFilter !== 'all'
+                    ? 'No orders match your active search query or filters.'
+                    : 'No orders recorded in the system yet.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* 1. Mobile Cards View (< md) */}
+                <div className="block md:hidden space-y-3.5">
+                  {paginatedOrders.map((order) => {
+                    const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                    const hasReachout = Boolean(
+                      (order as any).is_reachout ||
+                      order.note?.toLowerCase().includes('reachout') ||
+                      order.order_items?.some((i: any) => i.is_reachout) ||
+                      (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                    );
+                    const statusBadge = getCleanStatusBadge(order.status);
+                    const disc = getOrderDiscount(order);
+                    const adv = getOrderAdvance(order);
+                    const cod = Math.max(0, order.total_amount - adv);
+                    const isManagedByCourier = Boolean(
+                      order.consignment_id ||
+                      order.courier_name === 'steadfast' ||
+                      order.note?.includes('CID: #') ||
+                      order.note?.includes('[Dispatched via Steadfast') ||
+                      (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
+                    );
+                    const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
+                    const isHandedOver = isHandedOverToSteadfast(order);
 
-                        return (
-                          <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="p-4">
-                              <div className="font-mono font-bold text-slate-900">
-                                {order.order_number}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-4 h-4" />}
-                                {order.source === 'messenger' && <MessengerFlatIcon className="w-4 h-4" />}
-                                {order.source === 'phone' && <PhoneCallFlatIcon className="w-4 h-4" />}
-                                {order.source === 'manual' && <WalkInFlatIcon className="w-4 h-4" />}
-                                {order.source === 'website' && <WebsiteFlatIcon className="w-4 h-4" />}
-                                <span className="text-xs text-slate-500 font-medium capitalize">
-                                  {order.source}
+                    return (
+                      <div
+                        key={order.id}
+                        className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3"
+                      >
+                        {/* Header: Order ID, Source & Status */}
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyOrderNumber(order.order_number)}
+                              className="font-mono font-bold text-slate-900 text-sm hover:text-orange-600 transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Click to copy order number"
+                            >
+                              <span>{order.order_number}</span>
+                              {copiedOrderNumber === order.order_number ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-slate-400 opacity-60" />
+                              )}
+                            </button>
+                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium shrink-0">
+                              {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'messenger' && <MessengerFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'phone' && <PhoneCallFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'manual' && <WalkInFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              {order.source === 'website' && <WebsiteFlatIcon className="w-3.5 h-3.5 shrink-0" />}
+                              <span className="capitalize text-[11px]">{order.source}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                                order.status === 'delivered'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : order.status === 'confirmed'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : order.status === 'delayed_delivery'
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                  : order.status === 'canceled'
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
+                              <span>{statusBadge.label}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Customer Information & Direct 1-Tap Action Row */}
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-slate-900 text-sm truncate">{order.customer_name}</h4>
+                              <p className="text-xs text-slate-500 font-mono mt-0.5">{order.customer_phone}</p>
+                            </div>
+                            <span className="text-[11px] text-slate-400 shrink-0 font-medium">
+                              {formatDate(order.created_at)}
+                            </span>
+                          </div>
+
+                          {order.shipping_address && (
+                            <p className="text-xs text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-100 leading-relaxed">
+                              {order.shipping_address}
+                            </p>
+                          )}
+
+                          {Boolean(order.consignment_id || order.tracking_code) && (
+                            <div className="flex items-center gap-1.5 text-xs font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/70 rounded-xl px-2.5 py-1 w-fit">
+                              <Truck className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                            </div>
+                          )}
+
+                          {/* 1-Tap Call & WhatsApp Direct Actions */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <a
+                              href={`tel:${order.customer_phone}`}
+                              className="min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs transition-colors active:scale-[0.98] motion-reduce:transition-none"
+                            >
+                              <Phone className="w-4 h-4 text-slate-600" />
+                              <span>Call Customer</span>
+                            </a>
+                            <a
+                              href={getWhatsAppUrl(order.customer_phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition-colors active:scale-[0.98] motion-reduce:transition-none"
+                            >
+                              <WhatsAppFlatIcon className="w-4 h-4" />
+                              <span>WhatsApp</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Items Summary */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-xs font-bold text-slate-500">
+                            Ordered Items ({order.order_items?.length || 0})
+                          </div>
+                          <div className="space-y-1">
+                            {order.order_items?.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between text-xs bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold text-orange-600 shrink-0">{item.quantity}x</span>
+                                  <span className="text-slate-800 font-medium truncate">{item.title}</span>
+                                  {item.variant_title && item.variant_title !== 'Default Title' && (
+                                    <span className="text-slate-500 text-[11px] shrink-0">({item.variant_title})</span>
+                                  )}
+                                  {item.is_upsell && (
+                                    <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] shrink-0">
+                                      Upsell
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono font-semibold text-slate-700 shrink-0">
+                                  {formatCurrency(item.price * item.quantity)}
                                 </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Financial Summary */}
+                        <div className="flex items-center justify-between bg-orange-50/70 border border-orange-200/60 rounded-xl p-3">
+                          <div className="space-y-0.5">
+                            <div className="text-[11px] text-slate-500 font-medium">Payment Details</div>
+                            {adv > 0 ? (
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="text-emerald-700 font-medium">Adv: {formatCurrency(adv)}</span>
                                 <span className="text-slate-300">&middot;</span>
-                                <span className="text-[11px] text-slate-400">
-                                  {formatDate(order.created_at)}
-                                </span>
+                                <span className="font-bold text-slate-900 font-mono">COD: {formatCurrency(cod)}</span>
                               </div>
-                            </td>
+                            ) : (
+                              <div className="text-xs text-slate-600 font-medium">Cash on Delivery</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs text-slate-400 font-semibold block">Total</span>
+                            <span className="text-base font-extrabold text-orange-600 font-mono">
+                              {formatCurrency(order.total_amount)}
+                            </span>
+                          </div>
+                        </div>
 
-                            <td className="p-4">
-                              <div className="font-semibold text-slate-900">
-                                {order.customer_name}
-                              </div>
-                              <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                <Phone className="w-3 h-3 text-slate-400" />
-                                <span>{order.customer_phone}</span>
-                              </div>
-                              {order.shipping_address && (
-                                <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5" title={order.shipping_address}>
-                                  {order.shipping_address}
-                                </div>
-                              )}
-                              {Boolean(order.consignment_id || order.tracking_code) && (
-                                <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
-                                  <Truck className="w-3 h-3 text-indigo-500" />
-                                  <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
-                                </div>
-                              )}
+                        {/* Staff Assignment & Status Bar for Admin */}
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                              Staff Assignment:
+                            </label>
+                            <select
+                              value={order.sales_rep_id || ''}
+                              onChange={(e) => handleAssignStaff(order.id, e.target.value || null)}
+                              className="w-full text-xs font-semibold px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                            >
+                              <option value="">Unassigned</option>
+                              {salesTeam.map((staff) => (
+                                <option key={staff.id} value={staff.id}>
+                                  {staff.full_name || staff.email}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                              {/* Customer Details Edit Action or Locked Indicator */}
-                              <div className="mt-1.5 flex items-center gap-1.5">
-                                {isHandedOverToSteadfast(order) ? (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-2xs cursor-not-allowed"
-                                    title={`Customer details locked: Order #${order.order_number} has already been handed over to Steadfast Courier.`}
-                                  >
-                                    <Lock className="w-2.5 h-2.5 text-slate-400" />
-                                    <span>Locked with Courier</span>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                              Order Status:
+                            </label>
+                            {isManagedByCourier && isCourierStage ? (
+                              <div className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-2 truncate">
+                                Courier Managed
+                              </div>
+                            ) : (
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
+                                className="w-full text-xs font-semibold px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="not_reachable">Not Reachable</option>
+                                <option value="delayed_delivery">Delayed Delivery</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="ready_to_ship">Ready to Ship</option>
+                                <option value="on_the_way">On the Way</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="canceled">Canceled</option>
+                              </select>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action Buttons: Customer, Items, Delete */}
+                        <div className="flex items-center gap-2 pt-1">
+                          {!isHandedOver && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingCustomerOrder(order)}
+                              className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Customer</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrderForItems(order)}
+                            className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-xs font-semibold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                          >
+                            <PackageOpen className="w-3.5 h-3.5 text-orange-600" />
+                            <span>Items</span>
+                          </button>
+                          {!(isManagedByCourier && isCourierStage) && (
+                            <button
+                              type="button"
+                              onClick={() => setDeletingOrder(order)}
+                              className="min-h-[44px] px-3.5 flex items-center justify-center rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                              title="Delete Order"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. Desktop High-Density Table (>= md) */}
+                <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-600">
+                        <tr>
+                          <th className="p-4">Order ID & Source</th>
+                          <th className="p-4">Customer Details</th>
+                          <th className="p-4">Items / Total</th>
+                          <th className="p-4">Assigned Staff</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedOrders.map((order) => {
+                          const hasUpsell = order.order_items?.some((i) => i.is_upsell);
+                          const hasReachout = Boolean(
+                            (order as any).is_reachout ||
+                            order.note?.toLowerCase().includes('reachout') ||
+                            order.order_items?.some((i: any) => i.is_reachout) ||
+                            (Array.isArray((order as any).original_items) && (order as any).original_items.some((i: any) => i.is_reachout))
+                          );
+                          const statusBadge = getCleanStatusBadge(order.status);
+
+                          return (
+                            <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="p-4">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-bold text-slate-900">
+                                    {order.order_number}
                                   </span>
-                                ) : (
                                   <button
                                     type="button"
-                                    onClick={() => setEditingCustomerOrder(order)}
-                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 px-2 py-0.5 rounded-md transition-colors cursor-pointer shadow-2xs"
-                                    title="Edit customer name, phone, delivery address, or note"
+                                    onClick={() => handleCopyOrderNumber(order.order_number)}
+                                    className="p-1 rounded text-slate-400 hover:text-orange-600 transition-colors cursor-pointer"
+                                    title="Copy Order #"
                                   >
-                                    <Pencil className="w-3 h-3 text-emerald-600" />
-                                    <span>Edit Details</span>
+                                    {copiedOrderNumber === order.order_number ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
                                   </button>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {order.source === 'whatsapp' && <WhatsAppFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'messenger' && <MessengerFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'phone' && <PhoneCallFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'manual' && <WalkInFlatIcon className="w-4 h-4" />}
+                                  {order.source === 'website' && <WebsiteFlatIcon className="w-4 h-4" />}
+                                  <span className="text-xs text-slate-500 font-medium capitalize">
+                                    {order.source}
+                                  </span>
+                                  <span className="text-slate-300">&middot;</span>
+                                  <span className="text-[11px] text-slate-400">
+                                    {formatDate(order.created_at)}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="p-4">
+                                <div className="font-semibold text-slate-900">
+                                  {order.customer_name}
+                                </div>
+                                <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                                  <a
+                                    href={`tel:${order.customer_phone}`}
+                                    className="inline-flex items-center gap-1 hover:text-orange-600 font-mono"
+                                  >
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    <span>{order.customer_phone}</span>
+                                  </a>
+                                  <a
+                                    href={getWhatsAppUrl(order.customer_phone)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-1 py-0.2"
+                                  >
+                                    WA
+                                  </a>
+                                </div>
+                                {order.shipping_address && (
+                                  <div className="text-xs text-slate-400 truncate max-w-xs mt-0.5" title={order.shipping_address}>
+                                    {order.shipping_address}
+                                  </div>
                                 )}
-                              </div>
-                            </td>
+                                {Boolean(order.consignment_id || order.tracking_code) && (
+                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5 w-fit">
+                                    <Truck className="w-3 h-3 text-indigo-500" />
+                                    <span>Steadfast: #{order.tracking_code || order.consignment_id}</span>
+                                  </div>
+                                )}
 
-                            <td className="p-4">
-                              {(() => {
-                                const disc = getOrderDiscount(order);
-                                const adv = getOrderAdvance(order);
-                                const cod = Math.max(0, order.total_amount - adv);
-
-                                return (
-                                  <>
-                                    <div className="flex flex-col">
-                                      {adv > 0 ? (
-                                        <div className="space-y-0.5">
-                                          <div className="flex items-center gap-1.5 font-mono">
-                                            <span className="font-bold text-slate-900 text-sm">
-                                              COD: {formatCurrency(cod)}
-                                            </span>
-                                          </div>
-                                          <div className="text-[11px] text-slate-400 font-mono">
-                                            Total: {formatCurrency(order.total_amount)}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="font-semibold text-slate-900 font-mono">
-                                          {formatCurrency(order.total_amount)}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                                      <span>{order.order_items?.length || 0} line items</span>
-                                      {hasUpsell && (
-                                        <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
-                                          Upsell
-                                        </span>
-                                      )}
-                                      {hasReachout && (
-                                        <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
-                                          Reachout
-                                        </span>
-                                      )}
-                                      {disc > 0 && (
-                                        <span
-                                          className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
-                                          title={`Discount applied: -৳${disc.toLocaleString()}`}
-                                        >
-                                          Disc: -৳{disc.toLocaleString()}
-                                        </span>
-                                      )}
-                                      {adv > 0 && (
-                                        <span
-                                          className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
-                                          title={`Advance paid: ৳${adv.toLocaleString()}`}
-                                        >
-                                          Adv: ৳{adv.toLocaleString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </td>
-
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 shrink-0">
-                                  {order.sales_rep?.avatar_url ? (
-                                    <img src={order.sales_rep.avatar_url} alt="" className="w-full h-full object-cover" />
+                                {/* Customer Details Edit Action or Locked Indicator */}
+                                <div className="mt-1.5 flex items-center gap-1.5">
+                                  {isHandedOverToSteadfast(order) ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-2xs cursor-not-allowed"
+                                      title={`Customer details locked: Order #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                    >
+                                      <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                      <span>Locked with Courier</span>
+                                    </span>
                                   ) : (
-                                    order.sales_rep?.full_name?.charAt(0) || 'U'
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCustomerOrder(order)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-800 hover:text-orange-950 bg-orange-50 hover:bg-orange-100 border border-orange-200/90 px-2 py-0.5 rounded-md transition-colors cursor-pointer shadow-2xs"
+                                      title="Edit customer name, phone, delivery address, or note"
+                                    >
+                                      <Pencil className="w-3 h-3 text-orange-600" />
+                                      <span>Edit Details</span>
+                                    </button>
                                   )}
                                 </div>
-                                <select
-                                  value={order.sales_rep_id || ''}
-                                  onChange={(e) =>
-                                    handleAssignStaff(order.id, e.target.value || null)
-                                  }
-                                  className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs max-w-[140px] truncate"
-                                  title="Assign staff to this order (Admin only)"
-                                >
-                                  <option value="">Unassigned</option>
-                                  {order.sales_rep_id && !salesTeam.some((s) => s.id === order.sales_rep_id) && (
-                                    <option value={order.sales_rep_id}>
-                                      {order.sales_rep?.full_name || order.sales_rep?.email || 'Assigned Staff'}
-                                    </option>
-                                  )}
-                                  {salesTeam.map((staff) => (
-                                    <option key={staff.id} value={staff.id}>
-                                      {staff.full_name || staff.email}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </td>
+                              </td>
 
-                            <td className="p-4">
-                              {(() => {
-                                const isManagedByCourier = Boolean(
-                                  order.consignment_id ||
-                                  order.courier_name === 'steadfast' ||
-                                  order.note?.includes('CID: #') ||
-                                  order.note?.includes('[Dispatched via Steadfast') ||
-                                  (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
-                                );
-                                 const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
-
-                                if (isManagedByCourier && isCourierStage) {
-                                  const parsedCourier = order.courier_status
-                                    ? parseSteadfastStatus(order.courier_status)
-                                    : null;
+                              <td className="p-4">
+                                {(() => {
+                                  const disc = getOrderDiscount(order);
+                                  const adv = getOrderAdvance(order);
+                                  const cod = Math.max(0, order.total_amount - adv);
 
                                   return (
-                                    <div className="flex flex-col gap-1 items-start">
-                                      <span
-                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
-                                        title="Steadfast Automated: This parcel has been handed over to Steadfast Courier. Status updates automatically via tracking and cannot be modified manually."
+                                    <>
+                                      <div className="flex flex-col">
+                                        {adv > 0 ? (
+                                          <div className="space-y-0.5">
+                                            <div className="flex items-center gap-1.5 font-mono">
+                                              <span className="font-bold text-slate-900 text-sm">
+                                                COD: {formatCurrency(cod)}
+                                              </span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-400 font-mono">
+                                              Total: {formatCurrency(order.total_amount)}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="font-semibold text-slate-900 font-mono">
+                                            {formatCurrency(order.total_amount)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                        <span>{order.order_items?.length || 0} line items</span>
+                                        {hasUpsell && (
+                                          <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[10px]">
+                                            Upsell
+                                          </span>
+                                        )}
+                                        {hasReachout && (
+                                          <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[10px]">
+                                            Reachout
+                                          </span>
+                                        )}
+                                        {disc > 0 && (
+                                          <span
+                                            className="px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200/80 font-bold text-[10px]"
+                                            title={`Discount applied: -৳${disc.toLocaleString()}`}
+                                          >
+                                            Disc: -৳{disc.toLocaleString()}
+                                          </span>
+                                        )}
+                                        {adv > 0 && (
+                                          <span
+                                            className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-bold text-[10px]"
+                                            title={`Advance paid: ৳${adv.toLocaleString()}`}
+                                          >
+                                            Adv: ৳{adv.toLocaleString()}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </td>
+
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 shrink-0">
+                                    {order.sales_rep?.avatar_url ? (
+                                      <img src={order.sales_rep.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      order.sales_rep?.full_name?.charAt(0) || 'U'
+                                    )}
+                                  </div>
+                                  <select
+                                    value={order.sales_rep_id || ''}
+                                    onChange={(e) =>
+                                      handleAssignStaff(order.id, e.target.value || null)
+                                    }
+                                    className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs max-w-[140px] truncate"
+                                    title="Assign staff to this order (Admin only)"
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {order.sales_rep_id && !salesTeam.some((s) => s.id === order.sales_rep_id) && (
+                                      <option value={order.sales_rep_id}>
+                                        {order.sales_rep?.full_name || order.sales_rep?.email || 'Assigned Staff'}
+                                      </option>
+                                    )}
+                                    {salesTeam.map((staff) => (
+                                      <option key={staff.id} value={staff.id}>
+                                        {staff.full_name || staff.email}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </td>
+
+                              <td className="p-4">
+                                {(() => {
+                                  const isManagedByCourier = Boolean(
+                                    order.consignment_id ||
+                                    order.courier_name === 'steadfast' ||
+                                    order.note?.includes('CID: #') ||
+                                    order.note?.includes('[Dispatched via Steadfast') ||
+                                    (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
+                                  );
+                                  const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
+
+                                  if (isManagedByCourier && isCourierStage) {
+                                    const parsedCourier = order.courier_status
+                                      ? parseSteadfastStatus(order.courier_status)
+                                      : null;
+
+                                    return (
+                                      <div className="flex flex-col gap-1 items-start">
+                                        <span
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
+                                          title="Steadfast Automated: This parcel has been handed over to Steadfast Courier. Status updates automatically via tracking and cannot be modified manually."
+                                        >
+                                          <Lock className="w-3 h-3 text-amber-600" />
+                                          <span>{statusBadge.label} (Automated)</span>
+                                        </span>
+                                        {parsedCourier && (
+                                          <span className={`px-2 py-0.5 rounded text-xs font-medium border ${parsedCourier.badgeClass}`}>
+                                            {parsedCourier.label}
+                                          </span>
+                                        )}
+                                        {order.consignment_id && (
+                                          <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                            CID: #{order.consignment_id}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="relative inline-block">
+                                      <select
+                                        value={order.status}
+                                        onChange={(e) =>
+                                          handleStatusChange(order.id, e.target.value as OrderStatus)
+                                        }
+                                        className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
                                       >
-                                        <Lock className="w-3 h-3 text-amber-600" />
-                                        <span>{statusBadge.label} (Automated)</span>
-                                      </span>
-                                      {parsedCourier && (
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${parsedCourier.badgeClass}`}>
-                                          {parsedCourier.label}
-                                        </span>
+                                        <option value="pending">Pending</option>
+                                        <option value="not_reachable">Not Reachable</option>
+                                        <option value="delayed_delivery">Delayed Delivery</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="ready_to_ship">Ready to Ship</option>
+                                        <option value="on_the_way">On the Way</option>
+                                        <option value="delivered">Delivered</option>
+                                        <option value="canceled">Canceled</option>
+                                        {order.status === 'shipped' && <option value="shipped">Shipped (Legacy)</option>}
+                                      </select>
+                                      <span
+                                        className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
+                                      />
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+
+                              <td className="p-4 text-right">
+                                {(() => {
+                                  const isManagedByCourier = Boolean(
+                                    order.consignment_id ||
+                                    order.courier_name === 'steadfast' ||
+                                    order.note?.includes('CID: #') ||
+                                    order.note?.includes('[Dispatched via Steadfast') ||
+                                    (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
+                                  );
+                                  const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
+
+                                  return (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {isHandedOverToSteadfast(order) ? (
+                                        <button
+                                          type="button"
+                                          disabled
+                                          className="p-1.5 rounded-lg bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200/80"
+                                          title={`Customer details locked: Parcel #${order.order_number} has already been handed over to Steadfast Courier.`}
+                                        >
+                                          <Lock className="w-4 h-4 text-slate-400" />
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingCustomerOrder(order)}
+                                          className="p-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-900 transition-colors border border-orange-200/80 cursor-pointer shadow-2xs"
+                                          title="Edit customer details (name, phone, address, notes)"
+                                        >
+                                          <Pencil className="w-4 h-4 text-orange-600" />
+                                        </button>
                                       )}
-                                      {order.consignment_id && (
-                                        <span className="text-[10px] font-mono text-slate-500 font-semibold">
-                                          CID: #{order.consignment_id}
-                                        </span>
+
+                                      <button
+                                        onClick={() => setEditingOrderForItems(order)}
+                                        className={`p-1.5 rounded-lg transition-colors ${
+                                          isManagedByCourier && isCourierStage
+                                            ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                                        }`}
+                                        title={isManagedByCourier && isCourierStage ? 'View items (Locked with Steadfast)' : 'Edit items & view history timeline'}
+                                      >
+                                        {isManagedByCourier && isCourierStage ? (
+                                          <Lock className="w-4 h-4 text-amber-600" />
+                                        ) : (
+                                          <PackageOpen className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                      {!(isManagedByCourier && isCourierStage) && (
+                                        <button
+                                          onClick={() => setDeletingOrder(order)}
+                                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                                          title="Delete order"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
                                       )}
                                     </div>
                                   );
-                                }
+                                })()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-                                return (
-                                  <div className="relative inline-block">
-                                    <select
-                                      value={order.status}
-                                      onChange={(e) =>
-                                        handleStatusChange(order.id, e.target.value as OrderStatus)
-                                      }
-                                      className="text-xs font-medium pl-6 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer shadow-2xs"
-                                    >
-                                      <option value="pending">Pending</option>
-                                      <option value="not_reachable">Not Reachable</option>
-                                      <option value="delayed_delivery">Delayed Delivery</option>
-                                      <option value="confirmed">Confirmed</option>
-                                      <option value="ready_to_ship">Ready to Ship</option>
-                                      <option value="on_the_way">On the Way</option>
-                                      <option value="delivered">Delivered</option>
-                                      <option value="canceled">Canceled</option>
-                                      {order.status === 'shipped' && <option value="shipped">Shipped (Legacy)</option>}
-                                    </select>
-                                    <span
-                                      className={`w-2 h-2 rounded-full absolute left-2.5 top-1/2 -translate-y-1/2 ${statusBadge.dot}`}
-                                    />
-                                  </div>
-                                );
-                              })()}
-                            </td>
+                {/* 3. Pagination Controls Bar */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                    <span>
+                      Showing <span className="font-bold text-slate-800">{(orderPage - 1) * orderPageSize + 1}</span> to{' '}
+                      <span className="font-bold text-slate-800">
+                        {Math.min(orderPage * orderPageSize, filteredOrders.length)}
+                      </span>{' '}
+                      of <span className="font-bold text-slate-800">{filteredOrders.length}</span> orders
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>Per page:</span>
+                      <select
+                        value={orderPageSize}
+                        onChange={(e) => {
+                          setOrderPageSize(Number(e.target.value));
+                          setOrderPage(1);
+                        }}
+                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      >
+                        <option value={15}>15</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
 
-                            <td className="p-4 text-right">
-                              {(() => {
-                                const isManagedByCourier = Boolean(
-                                  order.consignment_id ||
-                                  order.courier_name === 'steadfast' ||
-                                  order.note?.includes('CID: #') ||
-                                  order.note?.includes('[Dispatched via Steadfast') ||
-                                  (order.source !== 'website' && order.external_id && /^\d+$/.test(order.external_id))
-                                );
-                                const isCourierStage = order.status === 'on_the_way' || order.status === 'shipped' || order.status === 'delivered';
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                      disabled={orderPage === 1}
+                      className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                    >
+                      Previous
+                    </button>
 
-                                return (
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    {isHandedOverToSteadfast(order) ? (
-                                      <button
-                                        type="button"
-                                        disabled
-                                        className="p-1.5 rounded-lg bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200/80"
-                                        title={`Customer details locked: Parcel #${order.order_number} has already been handed over to Steadfast Courier.`}
-                                      >
-                                        <Lock className="w-4 h-4 text-slate-400" />
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditingCustomerOrder(order)}
-                                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-colors border border-emerald-200/80 cursor-pointer shadow-2xs"
-                                        title="Edit customer details (name, phone, address, notes)"
-                                      >
-                                        <Pencil className="w-4 h-4 text-emerald-600" />
-                                      </button>
-                                    )}
+                    <span className="text-xs font-bold text-slate-700 px-2 font-mono">
+                      Page {orderPage} of {totalOrderPages}
+                    </span>
 
-                                    <button
-                                      onClick={() => setEditingOrderForItems(order)}
-                                      className={`p-1.5 rounded-lg transition-colors ${
-                                        isManagedByCourier && isCourierStage
-                                          ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
-                                      }`}
-                                      title={isManagedByCourier && isCourierStage ? 'View items (Locked with Steadfast)' : 'Edit items & view history timeline'}
-                                    >
-                                      {isManagedByCourier && isCourierStage ? (
-                                        <Lock className="w-4 h-4 text-amber-600" />
-                                      ) : (
-                                        <PackageOpen className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                    {!(isManagedByCourier && isCourierStage) && (
-                                      <button
-                                        onClick={() => setDeletingOrder(order)}
-                                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                                        title="Delete order"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
+                      disabled={orderPage >= totalOrderPages}
+                      className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        )}
-
-        {/* TAB 2: INVENTORY */}
+        )}{/* TAB 2: INVENTORY */}
         {activeTab === 'inventory' && (
           <div className="space-y-6">
             {/* Inventory Valuation & Financial Overview (Admin Only) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                 <div className="flex items-center justify-between text-slate-500 mb-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider">Total Stock</span>
+                  <span className="text-xs font-medium text-slate-600">Total Stock</span>
                   <Boxes className="w-4 h-4 text-slate-400" />
                 </div>
                 <div className="text-2xl font-black text-slate-900 font-mono">
@@ -1919,7 +2291,7 @@ export default function AdminDashboard() {
               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                 <div className="flex items-center justify-between text-slate-500 mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wider">Cost Valuation</span>
+                    <span className="text-xs font-medium text-slate-600">Cost Valuation</span>
                     <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5" title="Strictly confidential to admin">
                       <Lock className="w-2.5 h-2.5" />
                       Admin
@@ -1937,7 +2309,7 @@ export default function AdminDashboard() {
 
               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                 <div className="flex items-center justify-between text-slate-500 mb-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider">Retail Value</span>
+                  <span className="text-xs font-medium text-slate-600">Retail Value</span>
                   <Tag className="w-4 h-4 text-slate-400" />
                 </div>
                 <div className="text-2xl font-black text-slate-900 font-mono">
@@ -1950,7 +2322,7 @@ export default function AdminDashboard() {
 
               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                 <div className="flex items-center justify-between text-slate-500 mb-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider">Est. Gross Profit</span>
+                  <span className="text-xs font-medium text-slate-600">Est. Gross Profit</span>
                   <TrendingUp className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="text-2xl font-black text-emerald-700 font-mono">
@@ -1968,17 +2340,17 @@ export default function AdminDashboard() {
                   <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Search product, SKU, variant..."
+                    placeholder="Search product, SKU, variant…"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                   />
                 </div>
 
                 <select
                   value={inventoryStatusFilter}
                   onChange={(e) => setInventoryStatusFilter(e.target.value as any)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 >
                   <option value="all">All Products (Active & Disabled)</option>
                   <option value="active">Active Only</option>
@@ -1989,7 +2361,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2.5">
                 <button
                   onClick={() => setShowCsvModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all shadow-2xs"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors shadow-2xs"
                 >
                   <UploadCloud className="w-4 h-4 text-slate-500" />
                   <span>Import CSV</span>
@@ -1997,7 +2369,7 @@ export default function AdminDashboard() {
 
                 <button
                   onClick={() => setShowManualModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-2xs"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-2xs"
                 >
                   <Plus className="w-4 h-4" />
                   <span>New Product</span>
@@ -2009,7 +2381,7 @@ export default function AdminDashboard() {
             <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-600">
                     <tr>
                       <th className="p-4">Product & Variant</th>
                       <th className="p-4">SKU</th>
@@ -2076,7 +2448,7 @@ export default function AdminDashboard() {
                                   </button>
                                 )}
                                 {isProductDisabled && (
-                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">
                                     Disabled
                                   </span>
                                 )}
@@ -2262,7 +2634,7 @@ export default function AdminDashboard() {
                                   );
                                 })()
                               ) : (
-                                <span className="text-xs text-slate-400">—</span>
+                                <span className="text-xs text-slate-400">N/A</span>
                               )}
                             </td>
 
@@ -2389,7 +2761,7 @@ export default function AdminDashboard() {
                                       }
                                     }}
                                     disabled={isAdjusting}
-                                    className="w-14 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                                    className="w-14 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 shadow-2xs"
                                   />
                                   <button
                                     type="button"
@@ -2443,7 +2815,7 @@ export default function AdminDashboard() {
                                       type="button"
                                       disabled={togglingProductId === product.id}
                                       onClick={() => handleToggleProductStatus(product.id, isProductDisabled ? true : false)}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-50 ${
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
                                         isProductDisabled
                                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                                           : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
@@ -2453,7 +2825,7 @@ export default function AdminDashboard() {
                                       {togglingProductId === product.id ? (
                                         <>
                                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                          <span>{isProductDisabled ? 'Enabling...' : 'Disabling...'}</span>
+                                          <span>{isProductDisabled ? 'Enabling…' : 'Disabling…'}</span>
                                         </>
                                       ) : isProductDisabled ? (
                                         <>
@@ -2478,7 +2850,7 @@ export default function AdminDashboard() {
                                           product.name || product.title || 'Product'
                                         )
                                       }
-                                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all disabled:opacity-50"
+                                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors disabled:opacity-50"
                                       title="Permanently Delete Product"
                                     >
                                       <Trash2 className="w-4 h-4" />
@@ -2527,7 +2899,7 @@ export default function AdminDashboard() {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-600">
                     <tr>
                       <th className="p-4">Staff Member</th>
                       <th className="p-4">Role</th>
@@ -2641,7 +3013,7 @@ export default function AdminDashboard() {
                                         [member.id]: e.target.value,
                                       })
                                     }
-                                    className="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800 uppercase focus:bg-white"
+                                    className="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800 focus:bg-white"
                                   />
                                   <button
                                     onClick={() => handleAssignCoupon(member.id)}
@@ -2744,7 +3116,7 @@ export default function AdminDashboard() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-600">
                   <tr>
                     <th className="p-4">Staff Member</th>
                     <th className="p-4">Amount</th>
@@ -2840,7 +3212,7 @@ export default function AdminDashboard() {
                             {payout.status === 'pending' ? (
                               <button
                                 onClick={() => setProcessingPayout(payout)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-2xs transition-all"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-2xs transition-colors"
                               >
                                 <ShieldCheck className="w-3.5 h-3.5" />
                                 <span>Pay & Upload Proof</span>
@@ -2890,7 +3262,7 @@ export default function AdminDashboard() {
 
                 <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
                   <div className="bg-slate-950/60 border border-slate-700/80 rounded-xl px-4 py-2 text-center">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Commission Rate</span>
+                    <span className="text-xs font-medium text-slate-600 block">Commission Rate</span>
                     <span className="text-xl font-black text-amber-400 font-mono">
                       {reachoutRule.percentage}%
                     </span>
@@ -2925,7 +3297,7 @@ export default function AdminDashboard() {
 
             {/* Edit Reachout Commission Modal */}
             {isEditingReachout && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 animate-in fade-in duration-150">
                 <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
@@ -3011,18 +3383,18 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => setNewTierSource('other')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                             newTierSource === 'other'
                               ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
                               : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
-                          Other Sources (Daily Sales)
+                          Other Sources (Daily)
                         </button>
                         <button
                           type="button"
                           onClick={() => setNewTierSource('website')}
-                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                          className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-colors text-center cursor-pointer ${
                             newTierSource === 'website'
                               ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                               : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -3043,7 +3415,7 @@ export default function AdminDashboard() {
                         placeholder={newTierSource === 'other' ? 'e.g. Milestone 6 or ৳60k Club' : 'e.g. Milestone 8'}
                         value={newTierName}
                         onChange={(e) => setNewTierName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                       />
                     </div>
 
@@ -3061,7 +3433,7 @@ export default function AdminDashboard() {
                           placeholder={newTierSource === 'other' ? '20000' : '3000'}
                           value={newTierQuota}
                           onChange={(e) => setNewTierQuota(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                         />
                       </div>
                     </div>
@@ -3080,7 +3452,7 @@ export default function AdminDashboard() {
                           placeholder={newTierSource === 'other' ? '200' : '100'}
                           value={newTierBonus}
                           onChange={(e) => setNewTierBonus(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                         />
                       </div>
                     </div>
@@ -3096,7 +3468,7 @@ export default function AdminDashboard() {
 
                     <button
                       type="submit"
-                      className={`w-full py-2.5 rounded-xl text-white font-semibold text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`w-full py-2.5 rounded-xl text-white font-semibold text-sm transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
                         newTierSource === 'other' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-900 hover:bg-slate-800'
                       }`}
                     >
@@ -3122,7 +3494,7 @@ export default function AdminDashboard() {
                     <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60">
                       <div className="font-bold text-emerald-900 mb-0.5">Website Sales Milestones (Upsell)</div>
                       <p className="text-emerald-800">
-                        Applies strictly to website orders where staff upsell extra products. Milestones unlock at ৳3k, ৳4k, ৳6k, ৳8k, ৳12k, ৳16k, and ৳24k.
+                        Applies strictly to website orders where staff upsell extra products. Milestones activate at ৳3k, ৳4k, ৳6k, ৳8k, ৳12k, ৳16k, and ৳24k.
                       </p>
                     </div>
                   </div>
@@ -3146,7 +3518,7 @@ export default function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => setRulesScopeTab('all')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           rulesScopeTab === 'all'
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
@@ -3157,7 +3529,7 @@ export default function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => setRulesScopeTab('other')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           rulesScopeTab === 'other'
                             ? 'bg-white text-amber-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
@@ -3168,7 +3540,7 @@ export default function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => setRulesScopeTab('website')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           rulesScopeTab === 'website'
                             ? 'bg-white text-emerald-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
@@ -3181,7 +3553,7 @@ export default function AdminDashboard() {
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <thead className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-semibold text-slate-600">
                         <tr>
                           <th className="p-4">Milestone & Target</th>
                           <th className="p-4">Extra Commission</th>
@@ -3254,7 +3626,7 @@ export default function AdminDashboard() {
                                 <button
                                   type="button"
                                   onClick={() => handleToggleTierActive(tier)}
-                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
                                     tier.is_active
                                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                                       : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
@@ -3297,7 +3669,7 @@ export default function AdminDashboard() {
 
             {/* Edit Quota Tier Modal */}
             {editingTier && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 animate-in fade-in duration-150">
                 <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
@@ -3322,7 +3694,7 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => setEditingTier({ ...editingTier, source: 'other' })}
-                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-colors text-center ${
                             editingTier.source !== 'website'
                               ? 'bg-amber-500 text-white border-amber-500'
                               : 'bg-slate-50 text-slate-700 border-slate-200'
@@ -3333,7 +3705,7 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => setEditingTier({ ...editingTier, source: 'website' })}
-                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-colors text-center ${
                             editingTier.source === 'website'
                               ? 'bg-emerald-600 text-white border-emerald-600'
                               : 'bg-slate-50 text-slate-700 border-slate-200'
@@ -3355,7 +3727,7 @@ export default function AdminDashboard() {
                         onChange={(e) =>
                           setEditingTier({ ...editingTier, name: e.target.value })
                         }
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                       />
                     </div>
 
@@ -3377,7 +3749,7 @@ export default function AdminDashboard() {
                               min_quota: parseFloat(e.target.value) || 0,
                             })
                           }
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                         />
                       </div>
                     </div>
@@ -3400,7 +3772,7 @@ export default function AdminDashboard() {
                               bonus: parseFloat(e.target.value) || 0,
                             })
                           }
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2 text-sm font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-emerald-500"
                         />
                       </div>
                     </div>
@@ -3493,7 +3865,7 @@ export default function AdminDashboard() {
 
       {/* Edit Product Name Modal */}
       {editingProductModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -3510,7 +3882,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="py-4 space-y-3">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label className="block text-xs font-medium text-slate-700">
                 Product Title / Name
               </label>
               <input
@@ -3525,7 +3897,7 @@ export default function AdminDashboard() {
                   if (e.key === 'Escape') setEditingProductModal(null);
                 }}
                 placeholder="Enter product title..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
               />
               <p className="text-[11px] text-slate-500">
                 This updates the primary display name of the product across storefront, catalog, and inventory.

@@ -20,10 +20,8 @@ export default function DailyResetCountdown({
 
   useEffect(() => {
     setMounted(true);
-    // Initial calculate
     setCountdown(getTimeUntilDhakaMidnight());
 
-    // Update every second with high accuracy
     const timer = setInterval(() => {
       setCountdown(getTimeUntilDhakaMidnight());
     }, 1000);
@@ -36,33 +34,30 @@ export default function DailyResetCountdown({
     if (variant === 'kpi') {
       return (
         <span
-          className={`inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60 ${className}`}
+          className={`inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-sm border border-emerald-200 ${className}`}
         >
-          <Clock className="w-3 h-3 text-emerald-600 animate-spin" />
+          <Clock className="w-3.5 h-3.5 text-emerald-600 animate-spin motion-reduce:animate-none motion-reduce:animate-none" aria-hidden="true" />
           <span>Resets 12 AM</span>
         </span>
       );
     }
     return (
       <div
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 font-mono ${className}`}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-ink border border-ink-rule text-xs text-paper-2 font-mono ${className}`}
       >
-        <Clock className="w-3 h-3 text-slate-500" />
+        <Clock className="w-3.5 h-3.5 text-paper-2" aria-hidden="true" />
         <span>--:--:--</span>
       </div>
     );
   }
 
-  const { hours, minutes, seconds, hh, mm, ss, totalSeconds, progressPercent } = countdown;
+  const { hours, minutes, seconds, hh, mm, ss, totalSeconds } = countdown;
 
-  // Urgency states based on time left until Dhaka midnight (GMT+6)
   const isFinalHour = totalSeconds < 3600; // Under 1 hour
   const isWarning = totalSeconds < 14400; // Under 4 hours
 
-  // Smooth circular SVG progress ring math (radius = 5.5, circumference ~ 34.55)
   const radius = 5.5;
   const circumference = 2 * Math.PI * radius;
-  // remaining percentage of the 24-hr day
   const remainingFraction = totalSeconds / 86400;
   const strokeOffset = circumference - remainingFraction * circumference;
 
@@ -73,21 +68,21 @@ export default function DailyResetCountdown({
     return (
       <span
         title={tooltipText}
-        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition-all duration-300 select-none ${
+        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-sm border transition-colors select-none ${
           isFinalHour
-            ? 'text-rose-800 bg-rose-50 border-rose-200/80 animate-pulse'
+            ? 'text-rose-800 bg-rose-50 border-rose-200'
             : isWarning
-            ? 'text-amber-800 bg-amber-50 border-amber-200/80'
-            : 'text-emerald-800 bg-emerald-50 border-emerald-200/60'
+            ? 'text-amber-800 bg-amber-50 border-amber-200'
+            : 'text-emerald-800 bg-emerald-50 border-emerald-200'
         } ${className}`}
       >
         {isFinalHour ? (
-          <Zap className="w-3 h-3 text-rose-600 animate-bounce" />
+          <Zap className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
         ) : (
-          <Clock className="w-3 h-3 text-emerald-600" />
+          <Clock className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
         )}
-        {showLabel && <span className="opacity-90">Reset in</span>}
-        <span className="font-mono font-bold tabular-nums tracking-tight">
+        {showLabel && <span className="text-ink-muted">Reset in</span>}
+        <span className="font-mono font-semibold tabular-nums text-ink">
           {hh}:{mm}:{ss}
         </span>
       </span>
@@ -100,10 +95,10 @@ export default function DailyResetCountdown({
       <span
         title={tooltipText}
         className={`inline-flex items-center gap-1 font-mono text-xs tabular-nums ${
-          isFinalHour ? 'text-rose-400 font-bold animate-pulse' : 'text-slate-300'
+          isFinalHour ? 'text-rose-600 font-semibold' : 'text-ink-muted'
         } ${className}`}
       >
-        <Clock className="w-3 h-3 text-amber-400" />
+        <Clock className="w-3 h-3 text-accent" aria-hidden="true" />
         <span>{hh}:{mm}:{ss}</span>
       </span>
     );
@@ -113,30 +108,29 @@ export default function DailyResetCountdown({
   return (
     <div
       title={tooltipText}
-      className={`group relative flex items-center gap-1.5 sm:gap-2 px-2.5 py-0.5 sm:py-1 rounded-md text-[11px] sm:text-xs font-medium transition-all duration-500 select-none shadow-xs border ${
+      className={`group relative flex items-center gap-1.5 sm:gap-2 px-2.5 py-0.5 sm:py-1 rounded-sm text-xs font-normal transition-colors select-none border ${
         isFinalHour
-          ? 'bg-rose-950/70 border-rose-500/50 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse'
+          ? 'bg-rose-950 border-rose-700 text-rose-200'
           : isWarning
-          ? 'bg-amber-950/40 border-amber-500/40 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-          : 'bg-slate-900/90 hover:bg-slate-900 border-slate-700/60 hover:border-slate-600 text-slate-200'
+          ? 'bg-ink border-amber-600 text-amber-200'
+          : 'bg-ink border-ink-rule text-paper-2'
       } ${className}`}
     >
-      {/* Smooth Animated Circular Progress Ring + Clock */}
+      {/* Animated Circular Progress Ring + Clock */}
       <div className="relative flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0">
         <svg
           className="w-full h-full -rotate-90 transform"
           viewBox="0 0 16 16"
+          aria-hidden="true"
         >
-          {/* Background circle track */}
           <circle
             cx="8"
             cy="8"
             r={radius}
-            className="stroke-slate-800"
+            className="stroke-ink-rule"
             strokeWidth="1.5"
             fill="none"
           />
-          {/* Animated active progress circle */}
           <circle
             cx="8"
             cy="8"
@@ -146,7 +140,7 @@ export default function DailyResetCountdown({
                 ? 'stroke-rose-400'
                 : isWarning
                 ? 'stroke-amber-400'
-                : 'stroke-emerald-400'
+                : 'stroke-accent-2'
             }`}
             strokeWidth="1.5"
             strokeDasharray={circumference}
@@ -155,71 +149,70 @@ export default function DailyResetCountdown({
             fill="none"
           />
         </svg>
-        {/* Pulsing center dot */}
         <span
           className={`absolute w-1 h-1 rounded-full ${
             isFinalHour
-              ? 'bg-rose-400 animate-ping'
+              ? 'bg-rose-400'
               : isWarning
-              ? 'bg-amber-400 animate-pulse'
-              : 'bg-emerald-400'
+              ? 'bg-amber-400'
+              : 'bg-accent-2'
           }`}
+          aria-hidden="true"
         />
       </div>
 
       {/* Label: Desktop/Tablet only */}
       {showLabel && (
-        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+        <span className="hidden sm:inline-flex items-center gap-1 text-xs text-paper-2 font-normal">
           <span>Reset in</span>
         </span>
       )}
 
-      {/* Digits Display with Tabular Monospace & Pulsing Separators */}
-      <div className="flex items-center font-mono font-bold text-xs tracking-wider tabular-nums">
+      {/* Digits Display with Tabular Monospace */}
+      <div className="flex items-center font-mono font-semibold text-xs tabular-nums">
         <span
           className={
             isFinalHour
-              ? 'text-rose-200 font-extrabold'
+              ? 'text-rose-200'
               : isWarning
               ? 'text-amber-200'
-              : 'text-slate-100'
+              : 'text-paper'
           }
         >
           {hh}
         </span>
-        <span className="opacity-60 text-slate-400 animate-[pulse_1s_ease-in-out_infinite] px-[1px]">
+        <span className="opacity-60 text-paper-2 px-[1px]">
           :
         </span>
         <span
           className={
             isFinalHour
-              ? 'text-rose-200 font-extrabold'
+              ? 'text-rose-200'
               : isWarning
               ? 'text-amber-200'
-              : 'text-slate-100'
+              : 'text-paper'
           }
         >
           {mm}
         </span>
-        <span className="opacity-60 text-slate-400 animate-[pulse_1s_ease-in-out_infinite] px-[1px]">
+        <span className="opacity-60 text-paper-2 px-[1px]">
           :
         </span>
         <span
           key={ss}
-          className={`transition-all duration-300 inline-block ${
+          className={`transition-colors inline-block ${
             isFinalHour
-              ? 'text-rose-300 font-extrabold scale-105'
+              ? 'text-rose-300'
               : isWarning
               ? 'text-amber-300'
-              : 'text-amber-400'
+              : 'text-accent-2'
           }`}
         >
           {ss}
         </span>
       </div>
 
-      {/* Subtle indicator of GMT+6 */}
-      <span className="hidden xl:inline text-[9px] font-semibold text-slate-400 bg-slate-800/80 px-1 py-0.2 rounded border border-slate-700/50">
+      <span className="hidden xl:inline text-xs font-normal text-paper-2 bg-ink-rule px-1 py-0.2 rounded-sm border border-ink-rule">
         BST
       </span>
     </div>

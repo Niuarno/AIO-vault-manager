@@ -675,9 +675,9 @@ export default function AdminAnalyticsPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
           <p className="text-xs font-semibold text-slate-600">
-            Loading Dhaka Business Analytics...
+            Loading Dhaka Business Analytics…
           </p>
         </div>
       </div>
@@ -764,7 +764,7 @@ export default function AdminAnalyticsPage() {
               title="Refresh Analytics Data"
             >
               <RefreshCw
-                className={`w-4 h-4 ${loadingOrders ? 'animate-spin text-blue-600' : ''}`}
+                className={`w-4 h-4 ${loadingOrders ? 'animate-spin motion-reduce:animate-none text-blue-600' : ''}`}
               />
             </button>
 
@@ -786,7 +786,7 @@ export default function AdminAnalyticsPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-semibold text-slate-500">
                   Total Revenue
                 </span>
                 <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
@@ -842,7 +842,7 @@ export default function AdminAnalyticsPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-semibold text-slate-500">
                   Daily Sales Volume
                 </span>
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
@@ -904,7 +904,7 @@ export default function AdminAnalyticsPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-semibold text-slate-500">
                   Total Shipped Orders
                 </span>
                 <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
@@ -960,7 +960,7 @@ export default function AdminAnalyticsPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-semibold text-slate-500">
                   Delivery Success Rate
                 </span>
                 <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
@@ -1030,7 +1030,7 @@ export default function AdminAnalyticsPage() {
                 <button
                   type="button"
                   onClick={() => setChartMetric('revenue')}
-                  className={`px-3 py-1 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-colors ${
                     chartMetric === 'revenue'
                       ? 'bg-white text-blue-700 shadow-2xs font-bold'
                       : 'text-slate-600 hover:text-slate-900'
@@ -1041,7 +1041,7 @@ export default function AdminAnalyticsPage() {
                 <button
                   type="button"
                   onClick={() => setChartMetric('orders')}
-                  className={`px-3 py-1 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-colors ${
                     chartMetric === 'orders'
                       ? 'bg-white text-blue-700 shadow-2xs font-bold'
                       : 'text-slate-600 hover:text-slate-900'
@@ -1057,7 +1057,7 @@ export default function AdminAnalyticsPage() {
           <div className="mt-6 relative">
             {loadingOrders ? (
               <div className="h-64 flex items-center justify-center">
-                <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+                <RefreshCw className="w-6 h-6 animate-spin motion-reduce:animate-none text-blue-600" />
               </div>
             ) : dailyChartData.length === 0 ? (
               <div className="h-64 flex items-center justify-center text-xs text-slate-400">
@@ -1067,7 +1067,7 @@ export default function AdminAnalyticsPage() {
               <div className="w-full overflow-x-auto">
                 <div className="min-w-[650px]">
                   {/* SVG Canvas */}
-                  <svg
+                  <svg aria-hidden="true"
                     viewBox="0 0 900 240"
                     className="w-full h-64 overflow-visible"
                   >
@@ -1328,7 +1328,7 @@ export default function AdminAnalyticsPage() {
                     {/* Visual Progress Bar */}
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div
-                        className="bg-blue-600 h-full rounded-full transition-all"
+                        className="bg-blue-600 h-full rounded-full transition-colors"
                         style={{ width: `${item.percent}%` }}
                       />
                     </div>
@@ -1503,7 +1503,7 @@ export default function AdminAnalyticsPage() {
                 type="text"
                 value={ledgerSearch}
                 onChange={(e) => setLedgerSearch(e.target.value)}
-                placeholder="Search date or amount..."
+                placeholder="Search date or amount…"
                 className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 w-44 sm:w-56"
               />
 
@@ -1571,7 +1571,7 @@ export default function AdminAnalyticsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold ">
                   <th className="py-3 px-4">Date (Dhaka Time)</th>
                   <th className="py-3 px-4 text-center">Orders</th>
                   <th className="py-3 px-4 text-center">Confirmed</th>
