@@ -100,6 +100,10 @@ export default function PackingDashboard() {
   // Selected Order for Packing Slip Modal / Print
   const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<Order | null>(null);
 
+  // Packing Orders Pagination State
+  const [packPage, setPackPage] = useState(1);
+  const [packPageSize, setPackPageSize] = useState(25);
+
   // Custom Steadfast Item Description per order (strictly limited to 255 chars)
   const [customItemDescs, setCustomItemDescs] = useState<Record<string, string>>({});
   const [editingDescOrderId, setEditingDescOrderId] = useState<string | null>(null);
@@ -746,6 +750,16 @@ export default function PackingDashboard() {
     return matchesFilter && matchesSearch;
   });
 
+  useEffect(() => {
+    setPackPage(1);
+  }, [activeFilter, searchQuery]);
+
+  const totalPackPages = Math.max(1, Math.ceil(filteredOrders.length / packPageSize));
+  const paginatedPackingOrders = useMemo(() => {
+    const start = (packPage - 1) * packPageSize;
+    return filteredOrders.slice(start, start + packPageSize);
+  }, [filteredOrders, packPage, packPageSize]);
+
   // Status counts for pipeline tabs: strictly based on current status
   const delayedDeliveryCount = orders.filter((o) => o.status === 'delayed_delivery').length;
   const confirmedCount = orders.filter((o) => o.status === 'confirmed').length;
@@ -855,7 +869,7 @@ export default function PackingDashboard() {
         <Navbar currentProfile={currentProfile} />
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8">
         {/* Main Tab Switcher: Fulfillment Queue vs Live Stock Management */}
         <div className="no-print flex items-center gap-2 mb-6 border-b border-slate-200 pb-3">
           <button
@@ -888,7 +902,7 @@ export default function PackingDashboard() {
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               activeMainTab === 'inventory'
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-orange-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
@@ -898,7 +912,7 @@ export default function PackingDashboard() {
               className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                 activeMainTab === 'inventory'
                   ? 'bg-white/20 text-white'
-                  : 'bg-emerald-50 text-emerald-800'
+                  : 'bg-orange-50 text-orange-900'
               }`}
             >
               Stock Control
@@ -910,9 +924,9 @@ export default function PackingDashboard() {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 cursor-pointer shadow-2xs hover:border-slate-300 ml-auto sm:ml-0"
             title="View which products were ordered on each date"
           >
-            <Calendar className="w-4 h-4 text-emerald-600" />
+            <Calendar className="w-4 h-4 text-orange-600" />
             <span>Daily Product Orders</span>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-900 border border-orange-200">
               By Date
             </span>
           </Link>
@@ -1380,8 +1394,9 @@ export default function PackingDashboard() {
             </p>
           </div>
         ) : (
+          <>
           <div className="no-print space-y-4">
-            {filteredOrders.map((order) => {
+            {paginatedPackingOrders.map((order) => {
               const badge = getStatusBadgeInfo(order.status);
               return (
                 <div
@@ -2024,6 +2039,63 @@ export default function PackingDashboard() {
               );
             })}
             </div>
+
+            {/* Packing Queue Pagination Bar */}
+            {filteredOrders.length > packPageSize && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs mt-4">
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                  <span>
+                    Showing <span className="font-bold text-slate-800">{(packPage - 1) * packPageSize + 1}</span> to{' '}
+                    <span className="font-bold text-slate-800">
+                      {Math.min(packPage * packPageSize, filteredOrders.length)}
+                    </span>{' '}
+                    of <span className="font-bold text-slate-800">{filteredOrders.length}</span> orders
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>Per page:</span>
+                    <select
+                      value={packPageSize}
+                      onChange={(e) => {
+                        setPackPageSize(Number(e.target.value));
+                        setPackPage(1);
+                      }}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPackPage((p) => Math.max(1, p - 1))}
+                    disabled={packPage === 1}
+                    className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="text-xs font-bold text-slate-700 px-2 font-mono">
+                    Page {packPage} of {totalPackPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setPackPage((p) => Math.min(totalPackPages, p + 1))}
+                    disabled={packPage >= totalPackPages}
+                    className="min-h-[38px] px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
           )}
           </>
         )}

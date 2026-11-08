@@ -82,13 +82,13 @@ export default function Navbar({
       case 'admin':
         return {
           label: 'Admin',
-          classes: 'bg-paper-2 text-ink border-rule',
+          classes: 'bg-paper-3 text-ink border-rule',
           icon: ShieldCheck,
         };
       case 'sales':
         return {
           label: 'Sales',
-          classes: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+          classes: 'bg-orange-50 text-orange-900 border-orange-200',
           icon: TrendingUp,
         };
       case 'packing':
@@ -105,8 +105,8 @@ export default function Navbar({
 
   // Admin Navigation Items
   const adminNavItems = [
-    { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
     { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/admin' },
+    { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
     { key: 'daily-products', label: 'Products by date', icon: Calendar, href: '/admin/daily-products' },
     { key: 'inventory', label: 'Inventory & stock', icon: Boxes, href: '/admin?tab=inventory' },
     { key: 'team', label: 'Staff & performance', icon: Users, href: '/admin?tab=team' },
@@ -132,7 +132,7 @@ export default function Navbar({
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-paper border-b border-rule no-print">
+      <header className="sticky top-0 z-40 bg-paper-2 border-b border-rule no-print shadow-xs">
         {/* Continuous Moving Headline Noticeboard */}
         <Noticeboard currentProfile={currentProfile} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -143,19 +143,19 @@ export default function Navbar({
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-1.5 rounded-sm text-ink-muted hover:text-ink hover:bg-paper-2 transition-colors focus-visible:outline-2 focus-visible:outline-accent"
+                className="lg:hidden p-1.5 rounded-sm text-ink-muted hover:text-ink hover:bg-paper-3 transition-colors active:scale-95 focus-visible:outline-2 focus-visible:outline-accent"
                 aria-label="Toggle navigation menu"
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
               </button>
 
-              {/* Minimal Brand */}
+              {/* Orange Boyon OMS Brand */}
               <Link href="/" className="flex items-center space-x-2 group focus-visible:outline-2 focus-visible:outline-accent">
-                <span className="text-lg font-bold tracking-tight text-ink font-display">
-                  Boyon
+                <span className="w-7 h-7 rounded-sm bg-orange-600 text-white font-black text-sm flex items-center justify-center font-display shadow-xs transition-transform motion-reduce:transition-none group-hover:scale-105">
+                  B
                 </span>
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-paper-2 text-ink border border-rule">
-                  OMS
+                <span className="text-lg font-bold tracking-tight text-ink font-display">
+                  Boyon <span className="text-orange-600">OMS</span>
                 </span>
               </Link>
 
@@ -186,19 +186,19 @@ export default function Navbar({
                       key={item.key}
                       type="button"
                       onClick={() => onTabChange(item.key)}
-                      className={`flex items-center px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                      className={`flex items-center px-3 py-1.5 rounded-sm text-xs font-medium transition-colors active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
                         isCurrentActive
-                          ? 'bg-ink text-paper font-semibold'
-                          : 'text-ink-muted hover:text-ink hover:bg-paper-2'
+                          ? 'bg-orange-600 text-white font-semibold shadow-xs'
+                          : 'text-ink-muted hover:text-ink hover:bg-paper-3'
                       }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-paper' : 'text-ink-muted'}`} aria-hidden="true" />
+                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-white' : 'text-ink-muted'}`} aria-hidden="true" />
                       <span>{item.label}</span>
                       {badgeCount !== undefined && badgeCount !== 0 && (
                         <span
                           className={`ml-1.5 px-1.5 py-0.2 rounded-full text-xs font-semibold tabular-nums ${
                             isCurrentActive
-                              ? 'bg-paper/20 text-paper'
+                              ? 'bg-white/20 text-white'
                               : 'bg-paper-3 text-ink-muted border border-rule'
                           }`}
                         >
@@ -210,13 +210,13 @@ export default function Navbar({
                     <Link
                       key={item.key}
                       href={item.href}
-                      className={`flex items-center px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                      className={`flex items-center px-3 py-1.5 rounded-sm text-xs font-medium transition-colors active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
                         isCurrentActive
-                          ? 'bg-ink text-paper font-semibold'
-                          : 'text-ink-muted hover:text-ink hover:bg-paper-2'
+                          ? 'bg-orange-600 text-white font-semibold shadow-xs'
+                          : 'text-ink-muted hover:text-ink hover:bg-paper-3'
                       }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-paper' : 'text-ink-muted'}`} aria-hidden="true" />
+                      <Icon className={`w-3.5 h-3.5 mr-1.5 ${isCurrentActive ? 'text-white' : 'text-ink-muted'}`} aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   );
@@ -226,13 +226,13 @@ export default function Navbar({
                 {role === 'admin' && (
                   <Link
                     href="/packing"
-                    className={`flex items-center px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
                       pathname === '/packing'
-                        ? 'bg-amber-100 text-amber-900 font-semibold border border-amber-300'
-                        : 'text-amber-900 hover:bg-amber-50'
+                        ? 'bg-amber-600 text-white font-semibold shadow-xs'
+                        : 'text-amber-800 hover:bg-amber-50'
                     }`}
                   >
-                    <Truck className="w-3.5 h-3.5 mr-1.5 text-amber-700" aria-hidden="true" />
+                    <Truck className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
                     <span>Packing queue</span>
                   </Link>
                 )}
@@ -246,12 +246,12 @@ export default function Navbar({
                   <button
                     type="button"
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                    className="flex items-center space-x-2 p-1 rounded-sm hover:bg-paper-2 transition-colors text-left focus-visible:outline-2 focus-visible:outline-accent"
+                    className="flex items-center space-x-2 p-1 rounded-sm hover:bg-paper-3 transition-colors text-left active:scale-95 focus-visible:outline-2 focus-visible:outline-accent"
                     aria-expanded={profileDropdownOpen}
                     aria-label="User profile menu"
                   >
                     <div className="relative">
-                      <div className="w-7 h-7 rounded-sm overflow-hidden bg-paper-2 border border-rule flex items-center justify-center">
+                      <div className="w-7 h-7 rounded-sm overflow-hidden bg-paper-3 border border-rule flex items-center justify-center">
                         {currentProfile.avatar_url ? (
                           <img
                             src={currentProfile.avatar_url}
@@ -259,7 +259,7 @@ export default function Navbar({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-paper-2 flex items-center justify-center text-ink font-semibold text-xs">
+                          <div className="w-full h-full bg-paper-3 flex items-center justify-center text-ink font-semibold text-xs">
                             {(currentProfile.full_name || currentProfile.email || 'U')[0].toUpperCase()}
                           </div>
                         )}
@@ -284,7 +284,7 @@ export default function Navbar({
 
                   {/* Desktop Dropdown */}
                   {profileDropdownOpen && (
-                    <div className="absolute right-0 mt-1.5 w-56 bg-paper-3 border border-rule rounded-sm shadow-md py-1 z-50">
+                    <div className="absolute right-0 mt-1.5 w-56 bg-paper-2 border border-rule rounded-sm shadow-md py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                       <div className="px-3 py-2 border-b border-rule flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-ink truncate">
@@ -315,7 +315,7 @@ export default function Navbar({
                         <Link
                           href="/profile"
                           onClick={() => setProfileDropdownOpen(false)}
-                          className="flex items-center px-3 py-1.5 text-xs font-medium text-ink hover:bg-paper-2 transition-colors focus-visible:outline-2 focus-visible:outline-accent"
+                          className="flex items-center px-3 py-1.5 text-xs font-medium text-ink hover:bg-paper-3 transition-colors focus-visible:outline-2 focus-visible:outline-accent"
                         >
                           <User className="w-3.5 h-3.5 mr-2 text-ink-muted" aria-hidden="true" />
                           Profile, avatars & banking
@@ -341,17 +341,22 @@ export default function Navbar({
         </div>
       </header>
 
-      {/* Mobile Menu Drawer */}
+      {/* Mobile Drawer (Left) */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-ink/70 flex justify-start">
-          <div className="w-64 bg-paper-3 h-full border-r border-rule p-4 flex flex-col justify-between shadow-lg">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-rule">
-                <span className="text-base font-bold text-ink font-display">Boyon OMS</span>
+        <div className="lg:hidden fixed inset-0 z-50 bg-ink/75 flex justify-start animate-in fade-in duration-150">
+          <div className="w-68 bg-paper-2 h-full border-r border-rule p-4 flex flex-col justify-between shadow-lg">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-rule">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-sm bg-orange-600 text-white font-black text-sm flex items-center justify-center font-display">
+                    B
+                  </span>
+                  <span className="text-base font-bold text-ink font-display">Boyon OMS</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-1 rounded-sm text-ink-muted hover:text-ink hover:bg-paper-2 focus-visible:outline-2 focus-visible:outline-accent"
+                  className="p-1 rounded-sm text-ink-muted hover:text-ink hover:bg-paper-3 focus-visible:outline-2 focus-visible:outline-accent"
                   aria-label="Close menu"
                 >
                   <X className="w-5 h-5" aria-hidden="true" />
@@ -381,13 +386,13 @@ export default function Navbar({
                         }
                         setMobileMenuOpen(false);
                       }}
-                      className={`flex items-center w-full px-3 py-2 rounded-sm text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                      className={`flex items-center w-full px-3 py-2.5 rounded-sm text-xs font-medium transition-colors active:scale-98 focus-visible:outline-2 focus-visible:outline-accent ${
                         isCurrentActive
-                          ? 'bg-ink text-paper font-semibold'
-                          : 'text-ink hover:bg-paper-2'
+                          ? 'bg-orange-600 text-white font-semibold shadow-xs'
+                          : 'text-ink hover:bg-paper-3'
                       }`}
                     >
-                      <Icon className="w-4 h-4 mr-2 text-ink-muted" aria-hidden="true" />
+                      <Icon className={`w-4 h-4 mr-2.5 ${isCurrentActive ? 'text-white' : 'text-ink-muted'}`} aria-hidden="true" />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -397,9 +402,9 @@ export default function Navbar({
                   <Link
                     href="/packing"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center w-full px-3 py-2 rounded-sm text-xs font-medium text-amber-900 hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-accent"
+                    className="flex items-center w-full px-3 py-2.5 rounded-sm text-xs font-medium text-amber-900 hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-accent"
                   >
-                    <Truck className="w-4 h-4 mr-2 text-amber-700" aria-hidden="true" />
+                    <Truck className="w-4 h-4 mr-2.5 text-amber-700" aria-hidden="true" />
                     <span>Packing queue</span>
                   </Link>
                 )}
@@ -410,7 +415,7 @@ export default function Navbar({
               <Link
                 href="/profile"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center px-3 py-2 rounded-sm text-xs font-medium text-ink hover:bg-paper-2 focus-visible:outline-2 focus-visible:outline-accent"
+                className="flex items-center px-3 py-2 rounded-sm text-xs font-medium text-ink hover:bg-paper-3 focus-visible:outline-2 focus-visible:outline-accent"
               >
                 <User className="w-4 h-4 mr-2 text-ink-muted" aria-hidden="true" />
                 Profile settings
@@ -427,6 +432,62 @@ export default function Navbar({
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Navigation Bar (Native App Dock) */}
+      <nav
+        aria-label="Mobile Bottom App Bar"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-paper-2 border-t border-rule shadow-lg pb-[env(safe-area-inset-bottom)]"
+      >
+        <div className="grid grid-flow-col auto-cols-fr h-14 items-center px-1">
+          {navItems.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const isCurrentActive =
+              activeTab !== undefined
+                ? activeTab === item.key
+                : pathname === item.href || pathname.startsWith(`${item.href}?`);
+
+            return onTabChange &&
+              (pathname === '/admin' || pathname === '/sales') &&
+              item.href !== '/admin/analytics' &&
+              item.href !== '/admin/daily-products' &&
+              item.href !== '/packing/daily-products' ? (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onTabChange(item.key)}
+                className={`flex flex-col items-center justify-center py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
+                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                <div className="relative">
+                  <Icon className="w-5 h-5" aria-hidden="true" />
+                  {tabBadges[item.key] ? (
+                    <span className="absolute -top-1 -right-2 w-3.5 h-3.5 bg-orange-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+                      {tabBadges[item.key]}
+                    </span>
+                  ) : null}
+                </div>
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[64px]">
+                  {item.label}
+                </span>
+              </button>
+            ) : (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`flex flex-col items-center justify-center py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent ${
+                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                <Icon className="w-5 h-5" aria-hidden="true" />
+                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[64px]">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </>
   );
 }
