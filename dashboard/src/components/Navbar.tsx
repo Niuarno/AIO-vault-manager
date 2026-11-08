@@ -33,6 +33,7 @@ interface NavbarProps {
   tabBadges?: Record<string, number | string | undefined>;
   isOnline?: boolean;
   onCreateOrder?: () => void;
+  isCreateOrderOpen?: boolean;
 }
 
 export default function Navbar({
@@ -42,6 +43,7 @@ export default function Navbar({
   tabBadges = {},
   isOnline,
   onCreateOrder,
+  isCreateOrderOpen,
 }: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -144,19 +146,72 @@ export default function Navbar({
     }
   };
 
-  const leftNavItems =
-    role === 'sales'
-      ? salesNavItems.slice(0, 2)
-      : role === 'packing'
-      ? packingNavItems.slice(0, 1)
-      : adminNavItems.slice(0, 2);
+  // Mobile 5-Tab Navigation Destinations (Dedicated 5-column ergonomics)
+  const mobileNavItems = React.useMemo(() => {
+    if (role === 'admin') {
+      return [
+        { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/admin' },
+        { key: 'inventory', label: 'Stock', icon: Boxes, href: '/admin?tab=inventory' },
+        { key: 'create', label: 'Create', icon: Plus, isCreateAction: true },
+        { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
+        { key: 'payouts', label: 'Payouts', icon: DollarSign, href: '/admin?tab=payouts' },
+      ];
+    }
+    if (role === 'packing') {
+      return [
+        { key: 'queue', label: 'Queue', icon: Package, href: '/packing' },
+        { key: 'daily-products', label: 'Products', icon: Calendar, href: '/packing/daily-products' },
+        { key: 'create', label: 'Create', icon: Plus, isCreateAction: true },
+        { key: 'inventory', label: 'Stock', icon: Boxes, href: '/sales?tab=inventory' },
+        { key: 'profile', label: 'Profile', icon: User, href: '/profile' },
+      ];
+    }
+    // Default: Sales role
+    return [
+      { key: 'orders', label: 'Orders', icon: ShoppingBag, href: '/sales' },
+      { key: 'inventory', label: 'Stock', icon: Boxes, href: '/sales?tab=inventory' },
+      { key: 'create', label: 'Create', icon: Plus, isCreateAction: true },
+      { key: 'rewards', label: 'Rewards', icon: Award, href: '/sales?tab=rewards' },
+      { key: 'payouts', label: 'Payouts', icon: DollarSign, href: '/sales?tab=payouts' },
+    ];
+  }, [role]);
 
-  const rightNavItems =
-    role === 'sales'
-      ? salesNavItems.slice(2, 4)
-      : role === 'packing'
-      ? packingNavItems.slice(1, 2)
-      : [adminNavItems[2], adminNavItems[5]];
+  // Track active state for Create action
+  const [internalCreateActive, setInternalCreateActive] = useState(false);
+  const isCreateActive = isCreateOrderOpen !== undefined ? isCreateOrderOpen : internalCreateActive;
+
+  useEffect(() => {
+    const handleOpen = () => setInternalCreateActive(true);
+    const handleClose = () => setInternalCreateActive(false);
+    window.addEventListener('boyon:open-create-order', handleOpen);
+    window.addEventListener('boyon:close-create-order', handleClose);
+    return () => {
+      window.removeEventListener('boyon:open-create-order', handleOpen);
+      window.removeEventListener('boyon:close-create-order', handleClose);
+    };
+  }, []);
+
+  // Compute active mobile tab index (0 to 4)
+  const activeIndex = React.useMemo(() => {
+    if (isCreateActive) return 2; // Center "Create" slot is index 2
+
+    // Check explicit activeTab
+    if (activeTab !== undefined) {
+      const idx = mobileNavItems.findIndex((item) => item.key === activeTab);
+      if (idx !== -1) return idx;
+    }
+
+    // Check pathname match
+    const pathIdx = mobileNavItems.findIndex(
+      (item) => item.href && (pathname === item.href || pathname.startsWith(item.href + '?'))
+    );
+    if (pathIdx !== -1) return pathIdx;
+
+    return 0; // Default to first tab (Orders)
+  }, [isCreateActive, activeTab, mobileNavItems, pathname]);
+
+  const activeMobileItem = mobileNavItems[activeIndex] || mobileNavItems[0];
+  const ActiveBubbleIcon = activeMobileItem.icon;
 
   return (
     <>
@@ -461,125 +516,134 @@ export default function Navbar({
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Bar (Native App Dock with Center Create Action) */}
+      {/* Mobile Bottom Navigation Bar (Curved Floating Bubble Dock) */}
       <nav
-        aria-label="Mobile Bottom App Bar"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-paper-2 border-t border-rule shadow-lg pb-[env(safe-area-inset-bottom)]"
+        aria-label="Mobile Navigation Bar"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-paper-2 border-t border-rule shadow-lg pb-[env(safe-area-inset-bottom)] overflow-visible"
       >
-        <div className="flex items-center justify-around h-16 px-1.5 relative max-w-lg mx-auto">
-          {/* Left Navigation Items */}
-          {leftNavItems.map((item) => {
-            const Icon = item.icon;
-            const isCurrentActive =
-              activeTab !== undefined
-                ? activeTab === item.key
-                : pathname === item.href || pathname.startsWith(`${item.href}?`);
-
-            return onTabChange &&
-              (pathname === '/admin' || pathname === '/sales') &&
-              item.href !== '/admin/analytics' &&
-              item.href !== '/admin/daily-products' &&
-              item.href !== '/packing/daily-products' ? (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onTabChange(item.key)}
-                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
-                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
-                }`}
+        <div className="relative max-w-lg mx-auto h-16 overflow-visible">
+          {/* Fluid Sliding Curved Hill & Elevated Bubble Indicator */}
+          <div
+            className="absolute top-0 left-0 w-1/5 h-full pointer-events-none nav-bubble-spring"
+            style={{ transform: `translateX(${activeIndex * 100}%)` }}
+          >
+            {/* Organic Curved Hill Arch (Welds seamlessly into the bar's top border) */}
+            <div className="absolute -top-[25px] left-1/2 -translate-x-1/2 w-[82px] h-[28px] overflow-visible pointer-events-none">
+              <svg
+                viewBox="0 0 100 32"
+                className="w-full h-full overflow-visible"
+                preserveAspectRatio="none"
+                aria-hidden="true"
               >
-                <div className="relative">
-                  <Icon className="w-5 h-5" aria-hidden="true" />
-                  {tabBadges[item.key] ? (
-                    <span className="absolute -top-1 -right-2 w-3.5 h-3.5 bg-orange-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                      {tabBadges[item.key]}
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
-                  {item.label}
-                </span>
-              </button>
-            ) : (
-              <Link
-                key={item.key}
-                href={item.href}
-                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
-                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <Icon className="w-5 h-5" aria-hidden="true" />
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
+                {/* Solid white fill overlapping the top edge of the bar */}
+                <path
+                  d="M 0,26 C 20,26 32,4 50,4 C 68,4 80,26 100,26 L 100,34 L 0,34 Z"
+                  className="fill-paper-2"
+                />
+                {/* Curved top stroke connecting tangentially to the bar's top border */}
+                <path
+                  d="M 0,26 C 20,26 32,4 50,4 C 68,4 80,26 100,26"
+                  className="stroke-rule"
+                  strokeWidth="1.2"
+                  fill="none"
+                />
+              </svg>
+            </div>
 
-          {/* Center Elevated Create Order Action Button */}
-          <div className="flex flex-col items-center justify-center -mt-6 px-1 shrink-0 z-10">
+            {/* Elevated Circular Bubble with Colored Ring & Soft Tinted Icon */}
             <button
               type="button"
-              onClick={handleOpenCreateOrder}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white shadow-lg shadow-orange-600/35 ring-4 ring-paper-2 flex items-center justify-center transition-transform active:scale-90 motion-reduce:transition-none cursor-pointer group"
-              title="Create New Order"
-              aria-label="Create New Order"
+              onClick={() => {
+                if (activeMobileItem.isCreateAction) {
+                  handleOpenCreateOrder();
+                } else if (onTabChange && (role === 'sales' || role === 'admin') && activeMobileItem.key) {
+                  onTabChange(activeMobileItem.key);
+                } else if (activeMobileItem.href) {
+                  router.push(activeMobileItem.href);
+                }
+              }}
+              className="absolute -top-[28px] left-1/2 -translate-x-1/2 w-[52px] h-[52px] rounded-full border-[3.5px] border-orange-500 bg-paper-2 shadow-md shadow-orange-950/15 flex items-center justify-center pointer-events-auto transition-transform active:scale-90 motion-reduce:transition-none z-20 cursor-pointer focus-visible:outline-2 focus-visible:outline-accent"
+              aria-label={`Active: ${activeMobileItem.label}`}
             >
-              <Plus className="w-7 h-7 stroke-[2.75] transition-transform duration-200 group-hover:rotate-90 motion-reduce:transition-none" />
+              <div className="w-full h-full rounded-full bg-orange-50/90 flex items-center justify-center text-orange-600">
+                <ActiveBubbleIcon
+                  className="w-6 h-6 stroke-[2.2] text-orange-600 transition-transform duration-200 motion-reduce:transition-none"
+                  aria-hidden="true"
+                />
+              </div>
             </button>
-            <span className="text-[10px] font-bold text-orange-600 mt-0.5 tracking-tight">
-              Create
-            </span>
           </div>
 
-          {/* Right Navigation Items */}
-          {rightNavItems.map((item) => {
-            const Icon = item.icon;
-            const isCurrentActive =
-              activeTab !== undefined
-                ? activeTab === item.key
-                : pathname === item.href || pathname.startsWith(`${item.href}?`);
+          {/* 5-Column Navigation Grid */}
+          <div className="grid grid-cols-5 h-16 w-full relative z-10" role="tablist">
+            {mobileNavItems.map((item, index) => {
+              const Icon = item.icon;
+              const isCurrentActive = index === activeIndex;
+              const badgeCount = tabBadges[item.key];
 
-            return onTabChange &&
-              (pathname === '/admin' || pathname === '/sales') &&
-              item.href !== '/admin/analytics' &&
-              item.href !== '/admin/daily-products' &&
-              item.href !== '/packing/daily-products' ? (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onTabChange(item.key)}
-                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
-                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <div className="relative">
-                  <Icon className="w-5 h-5" aria-hidden="true" />
-                  {tabBadges[item.key] ? (
-                    <span className="absolute -top-1 -right-2 w-3.5 h-3.5 bg-orange-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                      {tabBadges[item.key]}
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
-                  {item.label}
-                </span>
-              </button>
-            ) : (
-              <Link
-                key={item.key}
-                href={item.href}
-                className={`flex flex-col items-center justify-center flex-1 py-1 transition-transform motion-reduce:transition-none active:scale-95 focus-visible:outline-2 focus-visible:outline-accent min-w-0 ${
-                  isCurrentActive ? 'text-orange-600 font-semibold' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <Icon className="w-5 h-5" aria-hidden="true" />
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[62px]">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
+              const handleClick = () => {
+                if (item.isCreateAction) {
+                  setInternalCreateActive(true);
+                  handleOpenCreateOrder();
+                  return;
+                }
+
+                setInternalCreateActive(false);
+
+                if (
+                  onTabChange &&
+                  (pathname === '/admin' || pathname === '/sales') &&
+                  item.href !== '/admin/analytics' &&
+                  item.href !== '/admin/daily-products' &&
+                  item.href !== '/packing/daily-products'
+                ) {
+                  onTabChange(item.key);
+                } else if (item.href) {
+                  router.push(item.href);
+                }
+              };
+
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={handleClick}
+                  className="flex flex-col items-center justify-end h-full pb-2 pt-1 relative transition-transform active:scale-95 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-accent min-w-0 select-none group"
+                  aria-label={item.label}
+                  role="tab"
+                  aria-selected={isCurrentActive}
+                >
+                  {/* Inactive Icon: Faded out when active since elevated bubble holds the active icon */}
+                  <div
+                    className={`relative mb-1 transition-[transform,opacity] duration-200 motion-reduce:transition-none flex items-center justify-center ${
+                      isCurrentActive ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
+                    }`}
+                  >
+                    <Icon
+                      className="w-5 h-5 text-slate-400 group-hover:text-slate-600 stroke-[1.8] transition-colors duration-150 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                    {badgeCount !== undefined && badgeCount !== 0 && (
+                      <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 bg-orange-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center tabular-nums leading-none shadow-2xs">
+                        {badgeCount}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Label: Bold text-ink when active, muted slate when inactive */}
+                  <span
+                    className={`text-center tracking-tight truncate max-w-[62px] transition-colors duration-150 motion-reduce:transition-none ${
+                      isCurrentActive
+                        ? 'text-[11px] font-bold text-ink'
+                        : 'text-[10px] font-medium text-slate-500 group-hover:text-slate-700'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </>

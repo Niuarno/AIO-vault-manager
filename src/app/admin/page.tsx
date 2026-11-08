@@ -1369,7 +1369,7 @@ export default function AdminDashboard() {
         }}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6">
         {/* TAB 1: ORDERS */}
         {activeTab === 'orders' && (
           <div className="space-y-6">

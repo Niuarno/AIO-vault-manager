@@ -124,6 +124,9 @@ export default function SalesDashboard() {
     setTimeout(() => {
       setIsModalOpen(false);
       setIsModalClosing(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('boyon:close-create-order'));
+      }
     }, 240);
   };
 
@@ -951,6 +954,7 @@ export default function SalesDashboard() {
         activeTab={activeTab}
         onTabChange={(tab: any) => setActiveTab(tab)}
         isOnline={isOnline}
+        isCreateOrderOpen={isModalOpen}
         onCreateOrder={() => setIsModalOpen(true)}
       />
 
