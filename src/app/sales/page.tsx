@@ -655,6 +655,7 @@ export default function SalesDashboard() {
   }, [rewards, todayStr]);
 
   // Website Upsells (Extra Sales) achieved today by this staff member (Dhaka 12 AM reset)
+  // Rule: Website orders do not have any commission unless it is a website upsell (is_upsell === true)
   const todayWebsiteUpsells = useMemo(() => {
     if (!currentProfile?.id) return 0;
     return orders
@@ -662,6 +663,7 @@ export default function SalesDashboard() {
         (o) =>
           o.sales_rep_id === currentProfile.id &&
           o.source === 'website' &&
+          o.status !== 'canceled' &&
           isSameDhakaDay(o.created_at, todayStr)
       )
       .reduce((sum, order) => {

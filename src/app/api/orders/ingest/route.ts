@@ -277,37 +277,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Calculate Salesperson Upsell Reward if attributed
-    if (salesRepId) {
-      const { data: activeRule } = await supabase
-        .from('reward_rules')
-        .select('*')
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-
-      if (activeRule) {
-        let bonusAmount = 0;
-        if (activeRule.rule_type === 'percentage') {
-          bonusAmount = (totalAmount * (activeRule.value / 100));
-        } else if (activeRule.rule_type === 'fixed_per_order') {
-          bonusAmount = activeRule.value;
-        } else if (activeRule.rule_type === 'fixed_per_item') {
-          const totalQty = itemsToInsert.reduce((sum, it) => sum + (it.quantity || 1), 0);
-          bonusAmount = activeRule.value * totalQty;
-        }
-
-        if (bonusAmount > 0) {
-          await supabase.from('upsell_rewards').insert({
-            sales_rep_id: salesRepId,
-            order_id: newOrder.id,
-            bonus_amount: bonusAmount,
-            status: 'pending',
-            note: `Reward via coupon ${finalCouponUsed || 'matched'} (${activeRule.name})`,
-          });
-        }
-      }
-    }
+    // 4. Staff Attribution (Website orders have ZERO commission unless an upsell is added)
+    // Rule: "website orders dont have any comission unless if its website upsell. if its a upsell then follows under the current comission rule"
+    // When an order is placed on the website (even with a coupon), it has 0 commission.
+    // Commission is only awarded when staff actively performs a website upsell (is_upsell: true).
 
     console.log(`✅ [Dashboard API] Order ${orderNumber} ingested and stored in Supabase!`);
     return NextResponse.json({ success: true, orderId: newOrder.id, orderNumber });
