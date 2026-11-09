@@ -138,6 +138,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         }
       } else {
         // Sales Staff:
+        // Rule: Orders can only be edited by the specific order creator and admins.
+        // Other staff cannot edit other staff orders.
+        // Only an unassigned order can be edited by any staff (e.g. website orders).
+        const isCreator = Boolean(order.sales_rep_id && order.sales_rep_id === currentUserId);
+        const isUnassigned = !order.sales_rep_id;
+
+        if (!isCreator && !isUnassigned) {
+          return NextResponse.json(
+            {
+              error: 'Permission denied: This order was created by another staff member and can only be edited by them or an administrator.',
+            },
+            { status: 403 }
+          );
+        }
+
         // Sales staff can update pending, not_reachable, delayed_delivery, and pre-courier confirmed orders
         const salesAllowedCurrentStatuses: OrderStatus[] = [
           'pending',
@@ -182,9 +197,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updateData.note = (order as any).note ? `${(order as any).note} | ${note}` : note;
     }
 
-    // When an unassigned order is confirmed by a sales staff member, attribute the sale to them!
+    // When an unassigned order is updated by any staff member, attribute the sale to them!
     let effectiveSalesRepId = order.sales_rep_id;
-    if (!order.sales_rep_id && currentUserId && (status === 'confirmed' || status === 'delayed_delivery')) {
+    if (!order.sales_rep_id && currentUserId) {
       updateData.sales_rep_id = currentUserId;
       effectiveSalesRepId = currentUserId;
     }

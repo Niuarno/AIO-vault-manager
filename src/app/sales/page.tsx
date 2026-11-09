@@ -609,10 +609,23 @@ export default function SalesDashboard() {
       const data = await res.json();
       if (data.success) {
         setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, note: data.order?.note || o.note } : o))
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  ...(data.order || {}),
+                  status: newStatus,
+                  note: data.order?.note || o.note,
+                }
+              : o
+          )
         );
         fetchInventory();
         fetchRewards();
+        // If this order was unassigned, refresh the orders list so server attribution is completely synced
+        if (data.order?.sales_rep_id && !orders.find((o) => o.id === orderId)?.sales_rep_id) {
+          fetchOrders();
+        }
       } else {
         alert(data.error);
       }
@@ -1465,15 +1478,19 @@ export default function SalesDashboard() {
                 {/* 1. Mobile Cards View (< md) */}
                 <div className="block md:hidden space-y-3.5">
                   {paginatedOrders.map((order) => {
-                    const isMyOrder = order.sales_rep_id === currentProfile?.id;
-                    const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
+                    const isOrderCreator = Boolean(order.sales_rep_id && order.sales_rep_id === currentProfile?.id);
+                    const isUnassigned = !order.sales_rep_id;
+                    const isAdmin = currentProfile?.role === 'admin';
+                    const isMyOrder = isOrderCreator;
+                    const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id && !isAdmin);
                     const isHandedOver = isHandedOverToSteadfast(order);
                     const isCourierStage =
                       order.status === 'on_the_way' ||
                       order.status === 'shipped' ||
                       order.status === 'delivered';
                     const isManagedByCourier = isHandedOver && isCourierStage;
-                    const canEditCustomer = !isHandedOver;
+                    const canEditOrder = (isOrderCreator || isUnassigned || isAdmin) && !isHandedOver;
+                    const canEditCustomer = canEditOrder;
                     const hasUpsell = order.order_items?.some((i) => i.is_upsell);
                     const hasReachout = Boolean(
                       (order as any).is_reachout ||
@@ -1647,133 +1664,165 @@ export default function SalesDashboard() {
 
                         {/* Mobile Order Status & Action Footer */}
                         <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                          {/* Order Status Selector */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-[11px] font-semibold text-slate-500">
-                                Order Status:
-                              </label>
-                              {order.sales_rep_id && !isMyOrder && (
-                                <span className="text-[10px] text-slate-400 font-medium">
-                                  Other staff order
+                          {isOtherStaffOrder ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                                <span className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Assigned to Other Staff (Read-Only)</span>
                                 </span>
-                              )}
-                            </div>
-                            {isManagedByCourier && isCourierStage ? (
-                              <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-2 flex items-center justify-between">
-                                <span>Courier Managed</span>
-                                <Lock className="w-3.5 h-3.5 text-amber-700" />
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadge.bg} ${statusBadge.color} border ${statusBadge.border}`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
+                                  {statusBadge.label}
+                                </span>
                               </div>
-                            ) : (
-                              <select
-                                value={order.status}
-                                onChange={(e) => {
-                                  const val = e.target.value as OrderStatus;
-                                  if (val === 'confirmed') {
-                                    handleConfirmOrder(order);
-                                  } else {
-                                    const note =
-                                      val === 'delayed_delivery'
-                                        ? 'Customer agreed to delayed delivery'
-                                        : val === 'canceled'
-                                        ? 'Customer refused delayed delivery (Stockout)'
-                                        : undefined;
-                                    handleStatusChange(order.id, val, note);
-                                  }
-                                }}
-                                className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-2xs"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="not_reachable">Not Reachable</option>
-                                <option value="confirmed">Confirm Order (In Stock)</option>
-                                <option value="delayed_delivery">Confirm Delayed Delivery</option>
-                                <option value="canceled">Refused Delay / Cancel</option>
-                              </select>
-                            )}
-                          </div>
-
-                          {/* 1-Tap Fast Actions for Pending / Not Reachable */}
-                          {(order.status === 'pending' || order.status === 'not_reachable') && !isManagedByCourier && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleConfirmOrder(order)}
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer shadow-xs"
-                              >
-                                <CheckCircle2 className="w-4 h-4 text-white" />
-                                <span>Confirm Order</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleStatusChange(order.id, 'not_reachable')}
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
-                              >
-                                <PhoneOff className="w-4 h-4 text-slate-600" />
-                                <span>Not Reachable</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(
-                                    order.id,
-                                    'delayed_delivery',
-                                    'Customer agreed to delayed delivery'
-                                  )
-                                }
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
-                              >
-                                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                <span>Delay Agreed</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(
-                                    order.id,
-                                    'canceled',
-                                    'Customer refused delayed delivery (Stockout)'
-                                  )
-                                }
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
-                              >
-                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
-                                <span>Refused Delay</span>
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingOrderForItems(order)}
+                                  className="w-full min-h-[42px] flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                                >
+                                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>View Items & History (Read-Only)</span>
+                                </button>
+                              </div>
                             </div>
-                          )}
+                          ) : (
+                            <>
+                              {/* Order Status Selector */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[11px] font-semibold text-slate-500">
+                                    Order Status:
+                                  </label>
+                                  {isUnassigned ? (
+                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                      <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                                      <span>Unassigned · Claimable</span>
+                                    </span>
+                                  ) : isMyOrder ? (
+                                    <span className="text-[10px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-md">
+                                      Your Order
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {isManagedByCourier && isCourierStage ? (
+                                  <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-2 flex items-center justify-between">
+                                    <span>Courier Managed</span>
+                                    <Lock className="w-3.5 h-3.5 text-amber-700" />
+                                  </div>
+                                ) : (
+                                  <select
+                                    value={order.status}
+                                    onChange={(e) => {
+                                      const val = e.target.value as OrderStatus;
+                                      if (val === 'confirmed') {
+                                        handleConfirmOrder(order);
+                                      } else {
+                                        const note =
+                                          val === 'delayed_delivery'
+                                            ? 'Customer agreed to delayed delivery'
+                                            : val === 'canceled'
+                                            ? 'Customer refused delayed delivery (Stockout)'
+                                            : undefined;
+                                        handleStatusChange(order.id, val, note);
+                                      }
+                                    }}
+                                    className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="not_reachable">Not Reachable</option>
+                                    <option value="confirmed">Confirm Order (In Stock)</option>
+                                    <option value="delayed_delivery">Confirm Delayed Delivery</option>
+                                    <option value="canceled">Refused Delay / Cancel</option>
+                                  </select>
+                                )}
+                              </div>
 
-                          {/* Fast Actions for Delayed Delivery */}
-                          {order.status === 'delayed_delivery' && !isManagedByCourier && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleConfirmOrder(order)}
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer shadow-xs"
-                              >
-                                <CheckCircle2 className="w-4 h-4 text-white" />
-                                <span>Confirm Now</span>
-                              </button>
+                              {/* 1-Tap Fast Actions for Pending / Not Reachable */}
+                              {(order.status === 'pending' || order.status === 'not_reachable') && !isManagedByCourier && (
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmOrder(order)}
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer shadow-xs"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                    <span>Confirm Order</span>
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (window.confirm('Cancel this delayed delivery order (Customer called to cancel)?')) {
-                                    handleStatusChange(order.id, 'canceled', 'Customer canceled delayed delivery');
-                                  }
-                                }}
-                                className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
-                              >
-                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
-                                <span>Cancel Order</span>
-                              </button>
-                            </div>
-                          )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStatusChange(order.id, 'not_reachable')}
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                                  >
+                                    <PhoneOff className="w-4 h-4 text-slate-600" />
+                                    <span>Not Reachable</span>
+                                  </button>
 
-                          {/* Fast Actions for Confirmed (Pre-Courier) */}
-                          {order.status === 'confirmed' && !isManagedByCourier && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleStatusChange(
+                                        order.id,
+                                        'delayed_delivery',
+                                        'Customer agreed to delayed delivery'
+                                      )
+                                    }
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Delay Agreed</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleStatusChange(
+                                        order.id,
+                                        'canceled',
+                                        'Customer refused delayed delivery (Stockout)'
+                                      )
+                                    }
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Refused Delay</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Fast Actions for Delayed Delivery */}
+                              {order.status === 'delayed_delivery' && !isManagedByCourier && (
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmOrder(order)}
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer shadow-xs"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                    <span>Confirm Now</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm('Cancel this delayed delivery order (Customer called to cancel)?')) {
+                                        handleStatusChange(order.id, 'canceled', 'Customer canceled delayed delivery');
+                                      }
+                                    }}
+                                    className="min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors active:scale-[0.98] motion-reduce:transition-none cursor-pointer"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Cancel Order</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Fast Actions for Confirmed (Pre-Courier) */}
+                              {order.status === 'confirmed' && !isManagedByCourier && (
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -1823,6 +1872,8 @@ export default function SalesDashboard() {
                               <span>Edit Items</span>
                             </button>
                           </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -1845,15 +1896,19 @@ export default function SalesDashboard() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedOrders.map((order) => {
-                          const isMyOrder = order.sales_rep_id === currentProfile?.id;
-                          const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id);
+                          const isOrderCreator = Boolean(order.sales_rep_id && order.sales_rep_id === currentProfile?.id);
+                          const isUnassigned = !order.sales_rep_id;
+                          const isAdmin = currentProfile?.role === 'admin';
+                          const isMyOrder = isOrderCreator;
+                          const isOtherStaffOrder = Boolean(order.sales_rep_id && order.sales_rep_id !== currentProfile?.id && !isAdmin);
                           const isHandedOver = isHandedOverToSteadfast(order);
                           const isCourierStage =
                             order.status === 'on_the_way' ||
                             order.status === 'shipped' ||
                             order.status === 'delivered';
                           const isManagedByCourier = isHandedOver && isCourierStage;
-                          const canEditCustomer = !isHandedOver;
+                          const canEditOrder = (isOrderCreator || isUnassigned || isAdmin) && !isHandedOver;
+                          const canEditCustomer = canEditOrder;
                           const hasUpsell = order.order_items?.some((i) => i.is_upsell);
                           const hasReachout = Boolean(
                             (order as any).is_reachout ||
@@ -2042,12 +2097,22 @@ export default function SalesDashboard() {
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-orange-50 text-orange-900 border border-orange-200/70 text-xs font-semibold">
                                     Assigned to You
                                   </span>
-                                ) : order.sales_rep_id ? (
-                                  <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
-                                    <span>Other Staff</span>
+                                ) : isUnassigned ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full"
+                                    title="Unassigned website order: First staff to confirm or edit claims this lead"
+                                  >
+                                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                                    <span>Unassigned (Website)</span>
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-slate-400">Unassigned</span>
+                                  <span
+                                    className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full"
+                                    title="Assigned to another staff member (Read-only)"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                    <span>Other Staff</span>
+                                  </span>
                                 )}
                               </td>
 
@@ -2061,7 +2126,19 @@ export default function SalesDashboard() {
                                     <span>{statusBadge.label}</span>
                                     <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
                                   </span>
-                                ) : order.status === 'pending' || order.status === 'not_reachable' ? (
+                                ) : isOtherStaffOrder ? (
+                                  <div className="space-y-1">
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${statusBadge.bg} ${statusBadge.color} border ${statusBadge.border} shadow-2xs`}
+                                      title="Created by another staff member (Read-only)"
+                                    >
+                                      <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                                      <span>{statusBadge.label}</span>
+                                      <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                    </span>
+                                    <div className="text-[10px] text-slate-400 font-medium">Read-only</div>
+                                  </div>
+                                ) : canEditOrder && (order.status === 'pending' || order.status === 'not_reachable') ? (
                                   <div className="space-y-1.5">
                                     <div className="relative inline-block">
                                       <select
@@ -2145,7 +2222,7 @@ export default function SalesDashboard() {
                                       </button>
                                     </div>
                                   </div>
-                                ) : order.status === 'delayed_delivery' ? (
+                                ) : canEditOrder && order.status === 'delayed_delivery' ? (
                                   <div className="space-y-1.5">
                                     <span
                                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
@@ -2177,7 +2254,7 @@ export default function SalesDashboard() {
                                       </button>
                                     </div>
                                   </div>
-                                ) : order.status === 'confirmed' && !isManagedByCourier ? (
+                                ) : canEditOrder && order.status === 'confirmed' && !isManagedByCourier ? (
                                   <div className="space-y-1.5">
                                     <span
                                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs"
@@ -2248,14 +2325,25 @@ export default function SalesDashboard() {
                                     </button>
                                   ) : null}
 
-                                  <button
-                                    onClick={() => setEditingOrderForItems(order)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-xs font-semibold transition-colors cursor-pointer"
-                                    title="Edit items & view history"
-                                  >
-                                    <PackageOpen className="w-3.5 h-3.5 text-orange-600" />
-                                    <span>Items</span>
-                                  </button>
+                                  {canEditOrder ? (
+                                    <button
+                                      onClick={() => setEditingOrderForItems(order)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-xs font-semibold transition-colors cursor-pointer"
+                                      title="Edit items & view history"
+                                    >
+                                      <PackageOpen className="w-3.5 h-3.5 text-orange-600" />
+                                      <span>Items</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => setEditingOrderForItems(order)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                                      title="View items & order history (Read-only)"
+                                    >
+                                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>View</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>

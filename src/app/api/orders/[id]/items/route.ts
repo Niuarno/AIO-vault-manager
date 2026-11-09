@@ -77,6 +77,64 @@ export async function PATCH(
       );
     }
 
+    // 2. Identify requester & enforce staff edit permissions
+    let isAdmin = false;
+    let requesterUserId: string | null = null;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data: { user } } = await serverSupabase.auth.getUser();
+      if (user) {
+        requesterUserId = user.id;
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        isAdmin = prof?.role === 'admin';
+      }
+    } catch {
+      // ignore
+    }
+
+    // Fallback: Check Authorization Bearer Token
+    if (!requesterUserId) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1].trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          requesterUserId = user.id;
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          isAdmin = prof?.role === 'admin';
+        }
+      }
+    }
+
+    if (!requesterUserId) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Please log in to edit order items.' },
+        { status: 401 }
+      );
+    }
+
+    // Rule: Orders can only be edited by the specific order creator and admins.
+    // Other staff cannot edit other staff orders.
+    // Only an unassigned order can be edited by any staff (e.g. website orders).
+    const isCreator = Boolean(order.sales_rep_id && order.sales_rep_id === requesterUserId);
+    const isUnassigned = !order.sales_rep_id;
+    if (!isAdmin && !isCreator && !isUnassigned) {
+      return NextResponse.json(
+        {
+          error: 'Permission denied: This order was created by another staff member and can only be edited by them or an administrator.',
+        },
+        { status: 403 }
+      );
+    }
+
     // 2. Fetch existing order items
     const { data: oldItems, error: oldItemsErr } = await supabase
       .from('order_items')
@@ -269,53 +327,7 @@ export async function PATCH(
     const recalculatedGrandTotal = Math.max(0, recalculatedItemsSubtotal + finalDeliveryFee - finalDiscount);
     const recalculatedRemainingCod = Math.max(0, recalculatedGrandTotal - finalAdvance);
 
-    // 7. Determine requester role & staff assignment rules
-    let isAdmin = false;
-    let requesterUserId: string | null = null;
-    try {
-      const serverSupabase = await createServerClient();
-      const { data: { user } } = await serverSupabase.auth.getUser();
-      if (user) {
-        requesterUserId = user.id;
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        isAdmin = prof?.role === 'admin';
-      }
-    } catch {
-      // ignore
-    }
-
-    // Fallback: Check Authorization Bearer Token
-    if (!requesterUserId) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.split('Bearer ')[1].trim();
-        const { data: { user } } = await supabase.auth.getUser(token);
-        if (user) {
-          requesterUserId = user.id;
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-          isAdmin = prof?.role === 'admin';
-        }
-      }
-    }
-
-    // Rule: "when any order has already been assigned to a staff member it will only editable for that specifc staff member and admins no one else"
-    if (!isAdmin && order.sales_rep_id && order.sales_rep_id !== requesterUserId) {
-      return NextResponse.json(
-        {
-          error: 'Permission denied: This order is assigned to another staff member and can only be edited by them or an administrator.',
-        },
-        { status: 403 }
-      );
-    }
-
+    // 7. Resolve staff assignment rules
     let resolvedSalesRepId = order.sales_rep_id;
     const hasUpsellItem = itemsToInsert.some((i) => i.is_upsell);
 
@@ -327,10 +339,10 @@ export async function PATCH(
     } else {
       // Non-admin sales staff:
       if (order.sales_rep_id) {
-        // PERMANENTLY LOCKED: Staff cannot change or steal already assigned orders
+        // Locked: Staff cannot change or steal already assigned orders
         resolvedSalesRepId = order.sales_rep_id;
-      } else if (isWebsite && hasUpsellItem) {
-        // Staff who upsells on an unassigned website order is auto-assigned
+      } else {
+        // Staff who edits an unassigned order is auto-assigned
         resolvedSalesRepId = requesterUserId || body.sales_rep_id || null;
       }
     }

@@ -131,13 +131,15 @@ export async function PATCH(
       );
     }
 
-    // Rule: Sales dashboard should have the ability to edit the customer details of THEIR CREATED ORDERS
-    // Only the creator (or admin) can edit customer details
-    const isCreator = order.sales_rep_id === currentUserId;
-    if (!isAdmin && !isCreator) {
+    // Rule: Orders can only be edited by the specific order creator and admins.
+    // Other staff cannot edit other staff orders.
+    // Only an unassigned order can be edited by any staff (e.g. website orders).
+    const isCreator = Boolean(order.sales_rep_id && order.sales_rep_id === currentUserId);
+    const isUnassigned = !order.sales_rep_id;
+    if (!isAdmin && !isCreator && !isUnassigned) {
       return NextResponse.json(
         {
-          error: 'Permission denied: You can only edit customer details for orders created by you.',
+          error: 'Permission denied: This order was created by another staff member and can only be edited by them or an administrator.',
         },
         { status: 403 }
       );
@@ -186,6 +188,11 @@ export async function PATCH(
       edit_history: updatedHistory,
       updated_at: nowIso,
     };
+
+    // When an unassigned order is edited by a staff member, attribute the order to them!
+    if (isUnassigned && currentUserId) {
+      updatePayload.sales_rep_id = currentUserId;
+    }
 
     const { data: updatedOrder, error: updateErr } = await supabase
       .from('orders')
