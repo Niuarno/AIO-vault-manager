@@ -138,22 +138,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         }
       } else {
         // Sales Staff:
-        // Order assignment check: if assigned, only the assigned staff member can change status
-        if (order.sales_rep_id && order.sales_rep_id !== currentUserId) {
-          return NextResponse.json(
-            {
-              error: 'Permission denied: This order is assigned to another staff member and can only be updated by them or an administrator.',
-            },
-            { status: 403 }
-          );
-        }
-
-        // Sales staff can act if current status is 'pending', 'not_reachable', or 'delayed_delivery'
-        if (
-          order.status !== 'pending' &&
-          order.status !== 'not_reachable' &&
-          order.status !== 'delayed_delivery'
-        ) {
+        // Sales staff can update pending, not_reachable, delayed_delivery, and pre-courier confirmed orders
+        const salesAllowedCurrentStatuses: OrderStatus[] = [
+          'pending',
+          'not_reachable',
+          'delayed_delivery',
+          'confirmed',
+        ];
+        if (!salesAllowedCurrentStatuses.includes(order.status)) {
           return NextResponse.json(
             {
               error: `Order is already '${order.status}' and locked for sales staff. Delivery and fulfillment team will process this order.`,
@@ -162,7 +154,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           );
         }
 
-        // Sales staff can transition to 'confirmed', 'not_reachable', 'pending', 'delayed_delivery', or 'canceled' (e.g. refused delay)
+        // Sales staff can transition to 'confirmed', 'not_reachable', 'pending', 'delayed_delivery', or 'canceled'
         const salesAllowedTargets: OrderStatus[] = [
           'pending',
           'not_reachable',
@@ -190,6 +182,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updateData.note = (order as any).note ? `${(order as any).note} | ${note}` : note;
     }
 
+    // When an unassigned order is confirmed by a sales staff member, attribute the sale to them!
+    let effectiveSalesRepId = order.sales_rep_id;
+    if (!order.sales_rep_id && currentUserId && (status === 'confirmed' || status === 'delayed_delivery')) {
+      updateData.sales_rep_id = currentUserId;
+      effectiveSalesRepId = currentUserId;
+    }
+
     const { data: updatedOrder, error: updateErr } = await supabase
       .from('orders')
       .update(updateData)
@@ -202,11 +201,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     // 5. Synchronize staff commission rewards on status changes (e.g. confirmation, cancellation)
-    if (order.sales_rep_id) {
+    if (effectiveSalesRepId) {
       try {
         await syncStaffCommissionRewards(
           supabase,
-          order.sales_rep_id,
+          effectiveSalesRepId,
           order.id,
           order.source
         );
