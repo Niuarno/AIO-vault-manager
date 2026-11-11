@@ -44,6 +44,7 @@ import EditCustomerDetailsModal from '@/components/EditCustomerDetailsModal';
 import DeleteOrderModal from '@/components/DeleteOrderModal';
 import CsvUploadModal from '@/components/CsvUploadModal';
 import ManualProductModal from '@/components/ManualProductModal';
+import ShopifySyncModal from '@/components/ShopifySyncModal';
 import InteractivePieChart from '@/components/InteractivePieChart';
 import StaffPerformanceGraph from '@/components/StaffPerformanceGraph';
 import ProcessPayoutModal from '@/components/ProcessPayoutModal';
@@ -110,6 +111,7 @@ export default function AdminDashboard() {
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
+  const [showShopifySyncModal, setShowShopifySyncModal] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [customRestockInputs, setCustomRestockInputs] = useState<Record<string, string>>({});
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
@@ -2358,7 +2360,16 @@ export default function AdminDashboard() {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowShopifySyncModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-semibold transition-colors shadow-2xs"
+                >
+                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                  <span>Sync with Shopify</span>
+                </button>
+
                 <button
                   onClick={() => setShowCsvModal(true)}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors shadow-2xs"
@@ -3859,6 +3870,16 @@ export default function AdminDashboard() {
           onClose={() => setShowManualModal(false)}
           onCreated={() => {
             fetchInventory();
+          }}
+        />
+      )}
+
+      {showShopifySyncModal && (
+        <ShopifySyncModal
+          isOpen={true}
+          onClose={() => setShowShopifySyncModal(false)}
+          onProductAdded={() => {
+            fetchInventory(true);
           }}
         />
       )}

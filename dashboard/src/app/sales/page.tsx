@@ -933,25 +933,25 @@ export default function SalesDashboard() {
   const getCleanStatusBadge = (status: OrderStatus) => {
     switch (status) {
       case 'pending':
-        return { dot: 'bg-amber-400', label: 'Pending' };
+        return { dot: 'bg-amber-400', label: 'Pending', bg: 'bg-amber-50', color: 'text-amber-800', border: 'border-amber-200' };
       case 'not_reachable':
-        return { dot: 'bg-orange-500', label: 'Not Reachable' };
+        return { dot: 'bg-orange-500', label: 'Not Reachable', bg: 'bg-orange-50', color: 'text-orange-800', border: 'border-orange-200' };
       case 'delayed_delivery':
-        return { dot: 'bg-amber-600', label: 'Delayed Delivery' };
+        return { dot: 'bg-amber-600', label: 'Delayed Delivery', bg: 'bg-amber-50', color: 'text-amber-800', border: 'border-amber-200' };
       case 'confirmed':
-        return { dot: 'bg-blue-500', label: 'Confirmed' };
+        return { dot: 'bg-blue-500', label: 'Confirmed', bg: 'bg-blue-50', color: 'text-blue-800', border: 'border-blue-200' };
       case 'ready_to_ship':
-        return { dot: 'bg-indigo-500', label: 'Ready to Ship' };
+        return { dot: 'bg-indigo-500', label: 'Ready to Ship', bg: 'bg-indigo-50', color: 'text-indigo-800', border: 'border-indigo-200' };
       case 'shipped':
-        return { dot: 'bg-sky-500', label: 'Shipped' };
+        return { dot: 'bg-sky-500', label: 'Shipped', bg: 'bg-sky-50', color: 'text-sky-800', border: 'border-sky-200' };
       case 'on_the_way':
-        return { dot: 'bg-purple-500', label: 'On the Way' };
+        return { dot: 'bg-purple-500', label: 'On the Way', bg: 'bg-purple-50', color: 'text-purple-800', border: 'border-purple-200' };
       case 'delivered':
-        return { dot: 'bg-emerald-500', label: 'Delivered' };
+        return { dot: 'bg-emerald-500', label: 'Delivered', bg: 'bg-emerald-50', color: 'text-emerald-800', border: 'border-emerald-200' };
       case 'canceled':
-        return { dot: 'bg-rose-500', label: 'Canceled' };
+        return { dot: 'bg-rose-500', label: 'Canceled', bg: 'bg-rose-50', color: 'text-rose-800', border: 'border-rose-200' };
       default:
-        return { dot: 'bg-slate-400', label: status };
+        return { dot: 'bg-slate-400', label: status, bg: 'bg-slate-50', color: 'text-slate-800', border: 'border-slate-200' };
     }
   };
 
