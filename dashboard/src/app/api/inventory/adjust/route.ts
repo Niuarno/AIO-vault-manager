@@ -44,14 +44,13 @@ export async function POST(req: NextRequest) {
 
     if (updateErr) throw updateErr;
 
-    // 3. Log to inventory_logs
+    // 3. Log to inventory_logs (using actual DB column names)
     await supabase.from('inventory_logs').insert({
       variant_id,
-      previous_stock: prevStock,
-      change_amount: finalChangeAmount,
-      new_stock: newStock,
+      change_quantity: finalChangeAmount,
+      new_quantity: newStock,
       reason: reason || (finalChangeAmount > 0 ? 'restock' : 'manual_adjustment'),
-      adjusted_by: adjusted_by || null,
+      reference_id: adjusted_by || null,
     });
 
     // 4. Auto-disable product if cumulative stock of all variants is 0 or below, or re-enable if stock added

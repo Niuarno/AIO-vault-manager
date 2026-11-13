@@ -172,6 +172,37 @@ export default function PackingDashboard() {
     loadUser();
   }, [router]);
 
+  const PACKING_ORDER_SELECT_COLS = [
+    'id',
+    'order_number',
+    'source',
+    'customer_name',
+    'customer_phone',
+    'customer_email',
+    'shipping_address',
+    'payment_method',
+    'payment_status',
+    'status',
+    'total_amount',
+    'currency',
+    'delivery_charge',
+    'discount_amount',
+    'advance_payment',
+    'courier_name',
+    'consignment_id',
+    'tracking_code',
+    'tracking_message',
+    'courier_status',
+    'courier_updated_at',
+    'sales_rep_id',
+    'coupon_used',
+    'note',
+    'external_id',
+    'created_at',
+    'updated_at',
+    'order_items(id, order_id, product_id, variant_id, title, variant_title, quantity, price, is_upsell)',
+  ].join(',');
+
   // Fetch packing pipeline orders (including delayed_delivery) via server endpoint to bypass RLS restrictions
   const fetchPackingOrders = async (isInitial = false) => {
     if (isInitial) {
@@ -192,24 +223,24 @@ export default function PackingDashboard() {
         // Fallback to client query if endpoint fails
         const { data: clientOrders, error } = await supabase
           .from('orders')
-          .select('*, order_items(*)')
+          .select(PACKING_ORDER_SELECT_COLS)
           .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
           .order('created_at', { ascending: false });
 
         if (!error && clientOrders) {
-          setOrders(clientOrders as Order[]);
+          setOrders((clientOrders as unknown) as Order[]);
         }
       }
     } catch {
       // Fallback to client query
       const { data: clientOrders } = await supabase
         .from('orders')
-        .select('*, order_items(*)')
+        .select(PACKING_ORDER_SELECT_COLS)
         .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
         .order('created_at', { ascending: false });
 
       if (clientOrders) {
-        setOrders(clientOrders as Order[]);
+        setOrders((clientOrders as unknown) as Order[]);
       }
     } finally {
       if (isInitial) {
@@ -237,12 +268,12 @@ export default function PackingDashboard() {
 
     const { data: clientOrders, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select(PACKING_ORDER_SELECT_COLS)
       .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
       .order('created_at', { ascending: false });
 
     if (!error && clientOrders) {
-      setOrders(clientOrders as Order[]);
+      setOrders((clientOrders as unknown) as Order[]);
     }
   };
 
@@ -391,7 +422,7 @@ export default function PackingDashboard() {
           if (debounceTimer) clearTimeout(debounceTimer);
           debounceTimer = setTimeout(() => {
             silentRefreshOrders();
-          }, 400);
+          }, 800);
         }
       )
       .subscribe();
@@ -437,9 +468,14 @@ export default function PackingDashboard() {
     setRefreshingQueue(false);
   };
 
-  // Update Status Progression
+  // Update Status Progression with Instant Optimistic UI Update
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     setUpdatingId(orderId);
+    const previousOrders = orders;
+    setOrders((prev) =>
+      prev.map((ord) => (ord.id === orderId ? { ...ord, status: nextStatus } : ord))
+    );
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -454,15 +490,14 @@ export default function PackingDashboard() {
       });
 
       if (res.ok) {
-        // Update local state smoothly
-        setOrders((prev) =>
-          prev.map((ord) => (ord.id === orderId ? { ...ord, status: nextStatus } : ord))
-        );
+        // Confirmed on server
       } else {
         const data = await res.json();
+        setOrders(previousOrders);
         alert(`Status update failed: ${data.error || 'Server error'}`);
       }
     } catch (err: any) {
+      setOrders(previousOrders);
       alert(`Error updating status: ${err.message}`);
     } finally {
       setUpdatingId(null);

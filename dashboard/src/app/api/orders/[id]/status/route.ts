@@ -189,6 +189,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     // 4. Update status (trigger automatically handles restock if status is set to 'canceled')
+    // Safety guard: Ensure all items of this order have valid variant_ids before updating status
+    // (prevents DB triggers like trg_order_cancellation_restock from violating not-null constraint on inventory_logs)
+    if (status === 'canceled') {
+      try {
+        const { data: nullItems } = await supabase
+          .from('order_items')
+          .select('id')
+          .eq('order_id', id)
+          .is('variant_id', null);
+
+        if (nullItems && nullItems.length > 0) {
+          const { data: fb } = await supabase
+            .from('products')
+            .select('id, product_variants(id)')
+            .eq('title', 'Custom / Unlinked Items')
+            .maybeSingle();
+          const fallbackVarId = fb?.product_variants?.[0]?.id;
+          if (fallbackVarId) {
+            await supabase
+              .from('order_items')
+              .update({ variant_id: fallbackVarId })
+              .eq('order_id', id)
+              .is('variant_id', null);
+          }
+        }
+      } catch (guardErr) {
+        console.warn('[Status Route] Pre-cancel variant guard warning:', guardErr);
+      }
+    }
+
     const updateData: Record<string, any> = {
       status,
       updated_at: new Date().toISOString(),

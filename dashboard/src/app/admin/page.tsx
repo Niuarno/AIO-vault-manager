@@ -229,12 +229,44 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  // Fetch Orders
+  // Fetch Orders (Optimized column selection excluding bloated original_items raw JSON)
   const fetchOrders = async (silent = false) => {
     if (!silent && orders.length === 0) setLoadingOrders(true);
+    const adminOrderCols = [
+      'id',
+      'order_number',
+      'source',
+      'customer_name',
+      'customer_phone',
+      'customer_email',
+      'shipping_address',
+      'payment_method',
+      'payment_status',
+      'status',
+      'total_amount',
+      'currency',
+      'delivery_charge',
+      'discount_amount',
+      'advance_payment',
+      'courier_name',
+      'consignment_id',
+      'tracking_code',
+      'tracking_message',
+      'courier_status',
+      'courier_updated_at',
+      'sales_rep_id',
+      'coupon_used',
+      'note',
+      'external_id',
+      'created_at',
+      'updated_at',
+      'order_items(id, order_id, product_id, variant_id, title, variant_title, quantity, price, is_upsell)',
+      'sales_rep:profiles(*)',
+    ].join(',');
+
     let query = supabase
       .from('orders')
-      .select('*, order_items(*), sales_rep:profiles(*)')
+      .select(adminOrderCols)
       .order('created_at', { ascending: false });
 
     if (statusFilter !== 'all') {
@@ -250,7 +282,7 @@ export default function AdminDashboard() {
 
     const { data, error } = await query;
     if (!error && data) {
-      setOrders(data as Order[]);
+      setOrders((data as unknown) as Order[]);
     }
     setLoadingOrders(false);
   };
@@ -350,7 +382,7 @@ export default function AdminDashboard() {
       orderDebounceTimer = setTimeout(() => {
         fetchOrders(true);
         fetchTeamAndRewards(true);
-      }, 400);
+      }, 800);
     };
 
     let inventoryDebounceTimer: NodeJS.Timeout | null = null;
@@ -438,8 +470,13 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  // Order Status Change Handler
+  // Order Status Change Handler with Instant Optimistic UI Update
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    const previousOrders = orders;
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+    );
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -458,9 +495,11 @@ export default function AdminDashboard() {
           prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
         );
       } else {
+        setOrders(previousOrders);
         alert(data.error || 'Failed to update status');
       }
     } catch (err: any) {
+      setOrders(previousOrders);
       alert(err.message);
     }
   };

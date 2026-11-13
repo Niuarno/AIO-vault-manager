@@ -222,10 +222,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Insert Order Items (Rule: only website orders can have is_upsell true)
+    // Resolve fallback variant to ensure variant_id is never null (prevents trigger not-null errors)
+    let fallbackVarId: string | null = null;
+    const hasNullVariant = items.some((it: any) => !it.variant_id);
+    if (hasNullVariant) {
+      try {
+        const { data: fb } = await supabase
+          .from('products')
+          .select('id, product_variants(id)')
+          .eq('title', 'Custom / Unlinked Items')
+          .maybeSingle();
+        fallbackVarId = fb?.product_variants?.[0]?.id || null;
+      } catch (fbErr) {
+        console.warn('Failed to resolve fallback variant:', fbErr);
+      }
+    }
+
     const itemsToInsert = items.map((item: any) => ({
       order_id: newOrder.id,
       product_id: item.product_id || null,
-      variant_id: item.variant_id || null,
+      variant_id: item.variant_id || fallbackVarId,
       title: item.title,
       variant_title: item.variant_title || null,
       quantity: parseInt(item.quantity, 10) || 1,

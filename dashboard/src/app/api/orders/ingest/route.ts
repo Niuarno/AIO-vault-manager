@@ -258,6 +258,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // 4. Resolve fallback variant if no catalog variant matched (prevents trigger not-null errors)
+      if (!matchedVariantId) {
+        try {
+          const { data: fb } = await supabase
+            .from('products')
+            .select('id, product_variants(id)')
+            .eq('title', 'Custom / Unlinked Items')
+            .maybeSingle();
+          matchedVariantId = fb?.product_variants?.[0]?.id || null;
+          matchedProductId = fb?.id || null;
+        } catch (fbErr) {
+          console.warn('Failed to resolve fallback variant on ingest:', fbErr);
+        }
+      }
+
       itemsToInsert.push({
         order_id: newOrder.id,
         product_id: matchedProductId,

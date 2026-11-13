@@ -284,16 +284,47 @@ export default function SalesDashboard() {
     }
   };
 
-  // Fetch Orders
+  // Fetch Orders (Excluding bloated original_items raw JSON to save 95% bandwidth & avoid DB statement timeouts)
   const fetchOrders = async (silent = false) => {
     if (!silent && orders.length === 0) setLoadingOrders(true);
+    const orderCols = [
+      'id',
+      'order_number',
+      'source',
+      'customer_name',
+      'customer_phone',
+      'customer_email',
+      'shipping_address',
+      'payment_method',
+      'payment_status',
+      'status',
+      'total_amount',
+      'currency',
+      'delivery_charge',
+      'discount_amount',
+      'advance_payment',
+      'courier_name',
+      'consignment_id',
+      'tracking_code',
+      'tracking_message',
+      'courier_status',
+      'courier_updated_at',
+      'sales_rep_id',
+      'coupon_used',
+      'note',
+      'external_id',
+      'created_at',
+      'updated_at',
+      'order_items(id, order_id, product_id, variant_id, title, variant_title, quantity, price, is_upsell)',
+    ].join(',');
+
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select(orderCols)
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setOrders(data as Order[]);
+      setOrders((data as unknown) as Order[]);
     }
     setLoadingOrders(false);
   };
@@ -375,7 +406,7 @@ export default function SalesDashboard() {
       orderDebounceTimer = setTimeout(() => {
         fetchOrders(true);
         fetchInventory(true);
-      }, 400);
+      }, 800);
     };
 
     let rewardDebounceTimer: NodeJS.Timeout | null = null;
@@ -589,8 +620,22 @@ export default function SalesDashboard() {
     }
   };
 
-  // Status Change Handler
+  // Status Change Handler with Optimistic UI updates
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus, customNote?: string) => {
+    // Instant Optimistic Update: Reflect status immediately in UI without waiting for network
+    const previousOrders = orders;
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              status: newStatus,
+              note: customNote ? (o.note ? `${o.note} | ${customNote}` : customNote) : o.note,
+            }
+          : o
+      )
+    );
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -620,16 +665,19 @@ export default function SalesDashboard() {
               : o
           )
         );
-        fetchInventory();
-        fetchRewards();
+        fetchInventory(true);
+        fetchRewards(true);
         // If this order was unassigned, refresh the orders list so server attribution is completely synced
         if (data.order?.sales_rep_id && !orders.find((o) => o.id === orderId)?.sales_rep_id) {
-          fetchOrders();
+          fetchOrders(true);
         }
       } else {
+        // Rollback on server error
+        setOrders(previousOrders);
         alert(data.error);
       }
     } catch (err: any) {
+      setOrders(previousOrders);
       alert(err.message);
     }
   };

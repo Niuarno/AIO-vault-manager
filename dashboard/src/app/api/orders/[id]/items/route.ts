@@ -239,16 +239,15 @@ export async function PATCH(
         })
         .eq('id', variantId);
 
-      // Audit log
+      // Audit log (using actual DB column names)
       const actualChange = nextStock - prevStock;
       if (actualChange !== 0) {
         await supabase.from('inventory_logs').insert({
           variant_id: variantId,
-          previous_stock: prevStock,
-          change_amount: actualChange,
-          new_stock: nextStock,
+          change_quantity: actualChange,
+          new_quantity: nextStock,
           reason: delta > 0 ? 'order_created' : 'restock',
-          order_id: orderId,
+          reference_id: orderId,
         });
       }
 

@@ -48,10 +48,41 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch packing orders using admin client (bypasses restrictive RLS on delayed_delivery)
+    // Fetch packing orders using admin client (optimized column selection excluding bloated original_items raw JSON)
+    const orderCols = [
+      'id',
+      'order_number',
+      'source',
+      'customer_name',
+      'customer_phone',
+      'customer_email',
+      'shipping_address',
+      'payment_method',
+      'payment_status',
+      'status',
+      'total_amount',
+      'currency',
+      'delivery_charge',
+      'discount_amount',
+      'advance_payment',
+      'courier_name',
+      'consignment_id',
+      'tracking_code',
+      'tracking_message',
+      'courier_status',
+      'courier_updated_at',
+      'sales_rep_id',
+      'coupon_used',
+      'note',
+      'external_id',
+      'created_at',
+      'updated_at',
+      'order_items(id, order_id, product_id, variant_id, title, variant_title, quantity, price, is_upsell)',
+    ].join(',');
+
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select(orderCols)
       .in('status', ['delayed_delivery', 'confirmed', 'ready_to_ship', 'on_the_way', 'delivered', 'shipped'])
       .order('created_at', { ascending: false });
 
